@@ -1,0 +1,10 @@
+[package]
+name = "balddog-netplay"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "LAN and GGRS P2P rollback netplay transport for bald.dog ARCADE Android"
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true

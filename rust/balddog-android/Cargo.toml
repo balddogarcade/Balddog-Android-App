@@ -1,0 +1,20 @@
+[package]
+name = "balddog-android"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "UniFFI Android bridge for bald.dog ARCADE"
+
+[lib]
+name = "balddog_android"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+balddog-core = { path = "../balddog-core" }
+balddog-netplay = { path = "../balddog-netplay" }
+uniffi = { version = "0.28", features = ["cli"] }
+thiserror.workspace = true

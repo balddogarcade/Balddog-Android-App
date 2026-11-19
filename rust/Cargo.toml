@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = [
+    "balddog-core",
+    "balddog-netplay",
+    "balddog-android",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["bald.dog ARCADE Team"]
+license = "MIT"
+
+[workspace.dependencies]
+thiserror = "2.0"
+anyhow = "1.0"
+tracing = "0.1"
+crossbeam-channel = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true
