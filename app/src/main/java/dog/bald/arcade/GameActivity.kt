@@ -200,14 +200,18 @@ class GameActivity : ComponentActivity() {
                         AndroidView(
                             factory = { ctx ->
                                 SurfaceView(ctx).apply {
+                                    var attached = false
                                     holder.addCallback(object : SurfaceHolder.Callback {
                                         override fun surfaceCreated(holder: SurfaceHolder) {
                                             val rect = holder.surfaceFrame
-                                            NativeSurfaceBridge.attachSurface(
-                                                holder.surface,
-                                                rect.width().coerceAtLeast(1),
-                                                rect.height().coerceAtLeast(1)
-                                            )
+                                            if (rect.width() > 1 && rect.height() > 1) {
+                                                NativeSurfaceBridge.attachSurface(
+                                                    holder.surface,
+                                                    rect.width(),
+                                                    rect.height()
+                                                )
+                                                attached = true
+                                            }
                                         }
 
                                         override fun surfaceChanged(
@@ -216,10 +220,16 @@ class GameActivity : ComponentActivity() {
                                             width: Int,
                                             height: Int
                                         ) {
-                                            NativeSurfaceBridge.resizeSurface(width, height)
+                                            if (!attached && width > 0 && height > 0) {
+                                                NativeSurfaceBridge.attachSurface(holder.surface, width, height)
+                                                attached = true
+                                            } else {
+                                                NativeSurfaceBridge.resizeSurface(width, height)
+                                            }
                                         }
 
                                         override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                            attached = false
                                             NativeSurfaceBridge.detachSurface()
                                         }
                                     })

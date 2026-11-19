@@ -36,7 +36,7 @@ pub struct WgpuRenderer {
 impl WgpuRenderer {
     pub fn new(game_aspect: f32) -> Self {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
+            backends: wgpu::Backends::VULKAN,
             ..Default::default()
         });
         Self {
@@ -81,16 +81,57 @@ impl WgpuRenderer {
             raw_window_handle: raw_window,
         };
 
-        // SAFETY: `native_window` permanece vivo hasta `detach()` en `surfaceDestroyed`.
-        let surface = unsafe { self.instance.create_surface_unsafe(target) }
-            .map_err(|e| CoreError::Init(format!("Error creando wgpu::Surface: {e}")))?;
-
-        let adapter = pollster::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        }))
-        .ok_or_else(|| CoreError::Init("No se encontró adaptador GPU compatible".into()))?;
+        // Intentar Vulkan primero y caer a OpenGL ES si el dispositivo/superficie falla
+        let (surface, adapter) = match unsafe { self.instance.create_surface_unsafe(target) } {
+            Ok(surf) => {
+                match pollster::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: Some(&surf),
+                    force_fallback_adapter: false,
+                })) {
+                    Some(adp) => (surf, adp),
+                    None => {
+                        drop(surf);
+                        self.instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                            backends: wgpu::Backends::GL,
+                            ..Default::default()
+                        });
+                        let gl_target = wgpu::SurfaceTargetUnsafe::RawHandle {
+                            raw_display_handle: raw_display,
+                            raw_window_handle: raw_window,
+                        };
+                        let gl_surf = unsafe { self.instance.create_surface_unsafe(gl_target) }
+                            .map_err(|e| CoreError::Init(format!("Error creando wgpu::Surface GL: {e}")))?;
+                        let gl_adp = pollster::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
+                            power_preference: wgpu::PowerPreference::HighPerformance,
+                            compatible_surface: Some(&gl_surf),
+                            force_fallback_adapter: false,
+                        }))
+                        .ok_or_else(|| CoreError::Init("No se encontró adaptador GPU Vulkan ni GL".into()))?;
+                        (gl_surf, gl_adp)
+                    }
+                }
+            }
+            Err(_) => {
+                self.instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+                    backends: wgpu::Backends::GL,
+                    ..Default::default()
+                });
+                let gl_target = wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: raw_display,
+                    raw_window_handle: raw_window,
+                };
+                let gl_surf = unsafe { self.instance.create_surface_unsafe(gl_target) }
+                    .map_err(|e| CoreError::Init(format!("Error creando wgpu::Surface GL: {e}")))?;
+                let gl_adp = pollster::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::HighPerformance,
+                    compatible_surface: Some(&gl_surf),
+                    force_fallback_adapter: false,
+                }))
+                .ok_or_else(|| CoreError::Init("No se encontró adaptador GPU Vulkan ni GL".into()))?;
+                (gl_surf, gl_adp)
+            }
+        };
 
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
@@ -113,6 +154,14 @@ impl WgpuRenderer {
             .or_else(|| caps.formats.first().copied())
             .ok_or_else(|| CoreError::Init("La superficie no reportó formatos".into()))?;
 
+        let alpha_mode = caps
+            .alpha_modes
+            .iter()
+            .copied()
+            .find(|m| *m == wgpu::CompositeAlphaMode::Opaque || *m == wgpu::CompositeAlphaMode::Inherit)
+            .or_else(|| caps.alpha_modes.first().copied())
+            .unwrap_or(wgpu::CompositeAlphaMode::Auto);
+
         let safe_w = width.max(1);
         let safe_h = height.max(1);
         let config = wgpu::SurfaceConfiguration {
@@ -121,7 +170,7 @@ impl WgpuRenderer {
             width: safe_w,
             height: safe_h,
             present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
