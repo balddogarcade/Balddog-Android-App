@@ -717,6 +717,20 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -732,12 +746,26 @@ internal interface UniffiLib : Library {
         
     }
 
+    fun uniffi_balddog_android_fn_func_get_current_fps(uniffi_out_err: UniffiRustCallStatus, 
+    ): Float
     fun uniffi_balddog_android_fn_func_get_recent_logs(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_balddog_android_fn_func_load_game_state(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_balddog_android_fn_func_log_from_android(`level`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_ping_engine(`nativeLibDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_balddog_android_fn_func_save_game_state(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_balddog_android_fn_func_set_game_paused(`paused`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_balddog_android_fn_func_set_player_input(`port`: Byte,`mask`: Short,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_balddog_android_fn_func_start_game(`nativeLibDir`: RustBuffer.ByValue,`romPath`: RustBuffer.ByValue,`systemDir`: RustBuffer.ByValue,`saveDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_balddog_android_fn_func_stop_game(uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun ffi_balddog_android_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun ffi_balddog_android_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -850,11 +878,25 @@ internal interface UniffiLib : Library {
     ): Unit
     fun ffi_balddog_android_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_balddog_android_checksum_func_get_current_fps(
+    ): Short
     fun uniffi_balddog_android_checksum_func_get_recent_logs(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_load_game_state(
     ): Short
     fun uniffi_balddog_android_checksum_func_log_from_android(
     ): Short
     fun uniffi_balddog_android_checksum_func_ping_engine(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_save_game_state(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_set_game_paused(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_set_player_input(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_start_game(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_stop_game(
     ): Short
     fun ffi_balddog_android_uniffi_contract_version(
     ): Int
@@ -873,13 +915,34 @@ private fun uniffiCheckContractApiVersion(lib: UniffiLib) {
 
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: UniffiLib) {
+    if (lib.uniffi_balddog_android_checksum_func_get_current_fps() != 62321.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_balddog_android_checksum_func_get_recent_logs() != 19578.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_load_game_state() != 1487.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_log_from_android() != 65045.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_ping_engine() != 36880.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_save_game_state() != 60917.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_set_game_paused() != 28207.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_set_player_input() != 1666.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_start_game() != 50351.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_stop_game() != 41624.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -928,6 +991,75 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
  * @suppress
  * */
 object NoPointer
+
+/**
+ * @suppress
+ */
+public object FfiConverterUByte: FfiConverter<UByte, Byte> {
+    override fun lift(value: Byte): UByte {
+        return value.toUByte()
+    }
+
+    override fun read(buf: ByteBuffer): UByte {
+        return lift(buf.get())
+    }
+
+    override fun lower(value: UByte): Byte {
+        return value.toByte()
+    }
+
+    override fun allocationSize(value: UByte) = 1UL
+
+    override fun write(value: UByte, buf: ByteBuffer) {
+        buf.put(value.toByte())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUShort: FfiConverter<UShort, Short> {
+    override fun lift(value: Short): UShort {
+        return value.toUShort()
+    }
+
+    override fun read(buf: ByteBuffer): UShort {
+        return lift(buf.getShort())
+    }
+
+    override fun lower(value: UShort): Short {
+        return value.toShort()
+    }
+
+    override fun allocationSize(value: UShort) = 2UL
+
+    override fun write(value: UShort, buf: ByteBuffer) {
+        buf.putShort(value.toShort())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterFloat: FfiConverter<Float, Float> {
+    override fun lift(value: Float): Float {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Float {
+        return buf.getFloat()
+    }
+
+    override fun lower(value: Float): Float {
+        return value
+    }
+
+    override fun allocationSize(value: Float) = 4UL
+
+    override fun write(value: Float, buf: ByteBuffer) {
+        buf.putFloat(value)
+    }
+}
 
 /**
  * @suppress
@@ -1130,7 +1262,16 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
             FfiConverterString.write(it, buf)
         }
     }
-} fun `getRecentLogs`(): List<kotlin.String> {
+} fun `getCurrentFps`(): kotlin.Float {
+            return FfiConverterFloat.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_get_current_fps(
+        _status)
+}
+    )
+    }
+    
+ fun `getRecentLogs`(): List<kotlin.String> {
             return FfiConverterSequenceString.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_get_recent_logs(
@@ -1138,6 +1279,15 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
 }
     )
     }
+    
+
+    @Throws(EngineBridgeException::class) fun `loadGameState`(`path`: kotlin.String)
+        = 
+    uniffiRustCallWithError(EngineBridgeException) { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_load_game_state(
+        FfiConverterString.lower(`path`),_status)
+}
+    
     
  fun `logFromAndroid`(`level`: kotlin.String, `message`: kotlin.String)
         = 
@@ -1156,6 +1306,48 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
 }
     )
     }
+    
+
+    @Throws(EngineBridgeException::class) fun `saveGameState`(`path`: kotlin.String)
+        = 
+    uniffiRustCallWithError(EngineBridgeException) { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_save_game_state(
+        FfiConverterString.lower(`path`),_status)
+}
+    
+    
+ fun `setGamePaused`(`paused`: kotlin.Boolean)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_set_game_paused(
+        FfiConverterBoolean.lower(`paused`),_status)
+}
+    
+    
+ fun `setPlayerInput`(`port`: kotlin.UByte, `mask`: kotlin.UShort)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_set_player_input(
+        FfiConverterUByte.lower(`port`),FfiConverterUShort.lower(`mask`),_status)
+}
+    
+    
+
+    @Throws(EngineBridgeException::class) fun `startGame`(`nativeLibDir`: kotlin.String, `romPath`: kotlin.String, `systemDir`: kotlin.String, `saveDir`: kotlin.String)
+        = 
+    uniffiRustCallWithError(EngineBridgeException) { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_start_game(
+        FfiConverterString.lower(`nativeLibDir`),FfiConverterString.lower(`romPath`),FfiConverterString.lower(`systemDir`),FfiConverterString.lower(`saveDir`),_status)
+}
+    
+    
+ fun `stopGame`()
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_stop_game(
+        _status)
+}
+    
     
 
 
