@@ -6,21 +6,30 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -28,12 +37,27 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import dog.bald.arcade.engine.NativeSurfaceBridge
+import dog.bald.arcade.input.ControllerManager
+import dog.bald.arcade.input.TouchLayoutConfig
+import dog.bald.arcade.input.TouchLayoutPrefs
+import dog.bald.arcade.ui.game.ArcadeTouchOverlay
+import dog.bald.arcade.ui.game.InGameQuickMenu
 import dog.bald.arcade.ui.theme.ArcadeBlack
+import dog.bald.arcade.ui.theme.ArcadeMagenta
 import dog.bald.arcade.ui.theme.ArcadeOrange
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
+import dog.bald.arcade.ui.theme.CoinYellow
+import dog.bald.arcade.ui.theme.LeatherBlack
+import dog.bald.arcade.ui.theme.RetroIvory
+import kotlinx.coroutines.delay
+import uniffi.balddog_android.getCurrentFps
+import uniffi.balddog_android.loadGameState
+import uniffi.balddog_android.saveGameState
 import uniffi.balddog_android.setGamePaused
+import uniffi.balddog_android.setPlayerInput
 import uniffi.balddog_android.startGame
 import uniffi.balddog_android.stopGame
+import java.io.File
 
 class GameActivity : ComponentActivity() {
     companion object {
@@ -45,14 +69,25 @@ class GameActivity : ComponentActivity() {
 
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
+    private var controllerManager: ControllerManager? = null
+
     private var engineError by mutableStateOf<String?>(null)
+    private var showMenu by mutableStateOf(false)
+    private var editLayoutMode by mutableStateOf(false)
+    private var hasPhysicalController by mutableStateOf(false)
+    private var touchConfig by mutableStateOf(TouchLayoutConfig())
+    private var menuStatusMsg by mutableStateOf<String?>(null)
+    private var currentFps by mutableFloatStateOf(0f)
+
+    private var touchMaskP1: Int = 0
+    private val physicalMasks = IntArray(4)
 
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> setGamePaused(true)
-            AudioManager.AUDIOFOCUS_GAIN -> setGamePaused(false)
+            AudioManager.AUDIOFOCUS_GAIN -> if (!showMenu) setGamePaused(false)
         }
     }
 
@@ -63,9 +98,25 @@ class GameActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         enableImmersiveMode()
 
+        touchConfig = TouchLayoutPrefs.load(this)
+
         val romPath = intent.getStringExtra(EXTRA_ROM_PATH).orEmpty()
         val systemDir = intent.getStringExtra(EXTRA_SYSTEM_DIR).orEmpty()
         val saveDir = intent.getStringExtra(EXTRA_SAVE_DIR).orEmpty()
+        val gameTitle = intent.getStringExtra(EXTRA_GAME_TITLE).orEmpty()
+
+        val stateDir = File(filesDir, "savestates").apply { mkdirs() }
+        val romSlug = File(romPath).nameWithoutExtension.ifBlank { "default" }
+        val stateFile = File(stateDir, "$romSlug.state")
+
+        controllerManager = ControllerManager(
+            context = this,
+            onControllerPresenceChanged = { present -> hasPhysicalController = present },
+            onPortMaskChanged = { port, mask ->
+                physicalMasks[port] = mask
+                pushInputToEngine(port)
+            }
+        ).also { it.start() }
 
         requestAudioFocus()
 
@@ -86,6 +137,23 @@ class GameActivity : ComponentActivity() {
 
         setContent {
             BaldDogArcadeTheme {
+                LaunchedEffect(showMenu) {
+                    while (true) {
+                        currentFps = getCurrentFps()
+                        delay(500)
+                    }
+                }
+
+                BackHandler {
+                    if (editLayoutMode) {
+                        editLayoutMode = false
+                        TouchLayoutPrefs.save(this@GameActivity, touchConfig)
+                    } else {
+                        showMenu = !showMenu
+                        setGamePaused(showMenu)
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -122,6 +190,95 @@ class GameActivity : ComponentActivity() {
                             },
                             modifier = Modifier.fillMaxSize()
                         )
+
+                        val shouldShowTouch = !hasPhysicalController || touchConfig.forceShowTouch || editLayoutMode
+                        if (shouldShowTouch && !showMenu) {
+                            ArcadeTouchOverlay(
+                                config = touchConfig,
+                                editMode = editLayoutMode,
+                                onConfigChange = { updated -> touchConfig = updated },
+                                onMaskChanged = { mask ->
+                                    touchMaskP1 = mask
+                                    pushInputToEngine(0)
+                                }
+                            )
+                        }
+
+                        if (!showMenu) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 8.dp)
+                                    .background(LeatherBlack.copy(alpha = 0.75f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, if (editLayoutMode) CoinYellow else ArcadeMagenta.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        if (editLayoutMode) {
+                                            editLayoutMode = false
+                                            TouchLayoutPrefs.save(this@GameActivity, touchConfig)
+                                        } else {
+                                            menuStatusMsg = null
+                                            showMenu = true
+                                            setGamePaused(true)
+                                        }
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = if (editLayoutMode) "GUARDAR LAYOUT" else "MENU · ${"%.0f".format(currentFps)} FPS",
+                                    color = if (editLayoutMode) CoinYellow else RetroIvory,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            InGameQuickMenu(
+                                gameTitle = gameTitle,
+                                fps = currentFps,
+                                statusMessage = menuStatusMsg,
+                                hasPhysicalController = hasPhysicalController,
+                                touchConfig = touchConfig,
+                                editLayoutMode = editLayoutMode,
+                                onTouchConfigChange = { updated ->
+                                    touchConfig = updated
+                                    TouchLayoutPrefs.save(this@GameActivity, updated)
+                                },
+                                onToggleEditLayout = {
+                                    editLayoutMode = true
+                                    showMenu = false
+                                    setGamePaused(false)
+                                },
+                                onResetLayout = {
+                                    touchConfig = TouchLayoutConfig(forceShowTouch = touchConfig.forceShowTouch)
+                                    TouchLayoutPrefs.save(this@GameActivity, touchConfig)
+                                    menuStatusMsg = "Layout restaurado"
+                                },
+                                onSaveState = {
+                                    try {
+                                        saveGameState(stateFile.absolutePath)
+                                        menuStatusMsg = "Partida guardada"
+                                    } catch (t: Throwable) {
+                                        menuStatusMsg = t.message ?: "Error al guardar"
+                                    }
+                                },
+                                onLoadState = {
+                                    try {
+                                        if (stateFile.exists()) {
+                                            loadGameState(stateFile.absolutePath)
+                                            menuStatusMsg = "Partida cargada"
+                                        } else {
+                                            menuStatusMsg = "No hay estado guardado aún"
+                                        }
+                                    } catch (t: Throwable) {
+                                        menuStatusMsg = t.message ?: "Error al cargar"
+                                    }
+                                },
+                                onResume = {
+                                    showMenu = false
+                                    setGamePaused(false)
+                                },
+                                onExit = { finish() }
+                            )
+                        }
                     } else {
                         Text(
                             text = engineError ?: "",
@@ -135,6 +292,29 @@ class GameActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun pushInputToEngine(port: Int) {
+        val mask = if (port == 0) {
+            touchMaskP1 or physicalMasks[0]
+        } else {
+            physicalMasks[port]
+        }
+        setPlayerInput(port.toUByte(), mask.toUShort())
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (controllerManager?.handleKeyEvent(event) == true) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        if (controllerManager?.handleMotionEvent(ev) == true) {
+            return true
+        }
+        return super.dispatchGenericMotionEvent(ev)
     }
 
     private fun enableImmersiveMode() {
@@ -168,11 +348,14 @@ class GameActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         enableImmersiveMode()
-        setGamePaused(false)
+        if (!showMenu) {
+            setGamePaused(false)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        controllerManager?.stop()
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
         NativeSurfaceBridge.detachSurface()
         stopGame()
