@@ -123,16 +123,21 @@ fun MainShellScreen(
     fun refreshAll() {
         scope.launch {
             syncError = null
-            try {
+            runCatching {
                 engineStatus = pingEngine(nativeLibDir)
                 logs = getRecentLogs()
+            }.onFailure { t ->
+                syncError = t.message ?: "Error conectando con motor nativo"
+            }
+            try {
                 games = repo.fetchGames()
                 biosList = repo.fetchBios()
                 rooms = repo.fetchOpenRooms()
                 profile = repo.fetchMyProfile()
                 refreshLocalState()
             } catch (t: Throwable) {
-                syncError = t.message ?: "Error sincronizando datos"
+                val msg = t.message ?: "Error sincronizando catálogo"
+                syncError = if (syncError == null) msg else "$syncError\n$msg"
             }
         }
     }
