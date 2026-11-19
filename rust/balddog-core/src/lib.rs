@@ -1,3 +1,8 @@
+pub mod audio;
+pub mod retro;
+pub mod session;
+pub mod video;
+
 use std::collections::VecDeque;
 use std::sync::{OnceLock, RwLock};
 use thiserror::Error;

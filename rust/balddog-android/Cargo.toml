@@ -18,3 +18,7 @@ balddog-core = { path = "../balddog-core" }
 balddog-netplay = { path = "../balddog-netplay" }
 uniffi = { version = "0.28", features = ["cli"] }
 thiserror.workspace = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-sys = "0.6"
