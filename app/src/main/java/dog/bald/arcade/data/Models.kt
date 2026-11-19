@@ -1,0 +1,56 @@
+package dog.bald.arcade.data
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class GameBiosDto(
+    val id: String,
+    val system: String,
+    val filename: String,
+    @SerialName("ipfs_cid") val ipfsCid: String,
+    val sha256: String,
+    val crc32: String,
+    @SerialName("size_bytes") val sizeBytes: Long = 0L
+)
+
+@Serializable
+data class GameDto(
+    val id: String,
+    val slug: String,
+    val title: String,
+    val system: String,
+    @SerialName("rom_filename") val romFilename: String,
+    @SerialName("ipfs_cid") val ipfsCid: String,
+    val sha256: String,
+    val crc32: String,
+    @SerialName("size_bytes") val sizeBytes: Long = 0L,
+    @SerialName("max_players") val maxPlayers: Int = 2,
+    @SerialName("is_coop") val isCoop: Boolean = true,
+    @SerialName("parent_game_id") val parentGameId: String? = null,
+    @SerialName("bios_id") val biosId: String? = null,
+    @SerialName("cover_url") val coverUrl: String? = null
+)
+
+@Serializable
+data class ProfileDto(
+    val id: String,
+    val username: String,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("total_plays") val totalPlays: Int = 0,
+    @SerialName("is_anonymous") val isAnonymous: Boolean = false
+)
+
+@Serializable
+data class RoomDto(
+    val id: String,
+    val code: String,
+    @SerialName("host_id") val hostId: String,
+    @SerialName("game_id") val gameId: String,
+    val mode: String,
+    val status: String,
+    @SerialName("max_players") val maxPlayers: Int = 2,
+    @SerialName("host_endpoint") val hostEndpoint: String? = null,
+    @SerialName("local_ip") val localIp: String? = null,
+    @SerialName("local_port") val localPort: Int? = null
+)
