@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SportsEsports
@@ -26,6 +27,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -35,7 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,7 +53,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.ui.theme.ArcadeBlack
@@ -74,6 +81,7 @@ private enum class MainTab(val label: String, val icon: ImageVector) {
 @Composable
 fun MainShellScreen(
     repo: ArcadeRepository,
+    romManager: IpfsRomManager,
     nativeLibDir: String,
     onSignedOut: () -> Unit,
     onLaunchLocalRom: (GameDto) -> Unit
@@ -81,11 +89,23 @@ fun MainShellScreen(
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
+    var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
     var profile by remember { mutableStateOf<ProfileDto?>(null) }
     var engineStatus by remember { mutableStateOf<EngineStatus?>(null) }
     var logs by remember { mutableStateOf<List<String>>(emptyList()) }
     var syncError by remember { mutableStateOf<String?>(null) }
+
+    var downloadingGameId by remember { mutableStateOf<String?>(null) }
+    var downloadStage by remember { mutableStateOf("") }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var downloadedFiles by remember { mutableStateOf(romManager.listDownloadedFilenames()) }
+    var cacheBytes by remember { mutableLongStateOf(romManager.totalCacheBytes()) }
+
+    fun refreshLocalState() {
+        downloadedFiles = romManager.listDownloadedFilenames()
+        cacheBytes = romManager.totalCacheBytes()
+    }
 
     fun refreshAll() {
         scope.launch {
@@ -94,10 +114,38 @@ fun MainShellScreen(
                 engineStatus = pingEngine(nativeLibDir)
                 logs = getRecentLogs()
                 games = repo.fetchGames()
+                biosList = repo.fetchBios()
                 rooms = repo.fetchOpenRooms()
                 profile = repo.fetchMyProfile()
+                refreshLocalState()
             } catch (t: Throwable) {
                 syncError = t.message ?: "Error sincronizando datos"
+            }
+        }
+    }
+
+    fun downloadAndPlay(game: GameDto) {
+        if (downloadingGameId != null) return
+        scope.launch {
+            downloadingGameId = game.id
+            downloadProgress = 0f
+            downloadStage = "Preparando..."
+            syncError = null
+            try {
+                romManager.ensureGameReady(
+                    game = game,
+                    allGames = games,
+                    allBios = biosList
+                ) { stage, progress ->
+                    downloadStage = stage
+                    downloadProgress = progress
+                }
+                refreshLocalState()
+                onLaunchLocalRom(game)
+            } catch (t: Throwable) {
+                syncError = t.message ?: "Error descargando ROM"
+            } finally {
+                downloadingGameId = null
             }
         }
     }
@@ -158,19 +206,55 @@ fun MainShellScreen(
                 Text(text = syncError ?: "", color = ArcadeOrange, fontSize = 12.sp)
             }
 
+            if (downloadingGameId != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "$downloadStage (${(downloadProgress * 100).toInt()}%)",
+                    color = CoinYellow,
+                    fontSize = 12.sp
+                )
+                LinearProgressIndicator(
+                    progress = { downloadProgress },
+                    color = CoinYellow,
+                    trackColor = DeepPurple,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             when (MainTab.entries[selectedTab]) {
-                MainTab.CATALOG -> CatalogTab(games = games, onRefresh = { refreshAll() }, onPlay = onLaunchLocalRom)
+                MainTab.CATALOG -> CatalogTab(
+                    games = games,
+                    downloadedFiles = downloadedFiles,
+                    busy = downloadingGameId != null,
+                    onRefresh = { refreshAll() },
+                    onPlay = { downloadAndPlay(it) }
+                )
+
                 MainTab.ROOMS -> RoomsTab(rooms = rooms, onRefresh = { refreshAll() })
-                MainTab.LIBRARY -> LibraryTab()
+
+                MainTab.LIBRARY -> LibraryTab(
+                    games = games.filter { downloadedFiles.contains(it.romFilename) },
+                    onPlay = { downloadAndPlay(it) },
+                    onDelete = { game ->
+                        romManager.deleteRom(game.romFilename)
+                        refreshLocalState()
+                    }
+                )
+
                 MainTab.PROFILE -> ProfileTab(
                     profile = profile,
                     engineStatus = engineStatus,
+                    cacheBytes = cacheBytes,
                     logs = logs,
                     onRefreshLogs = {
                         engineStatus = runCatching { pingEngine(nativeLibDir) }.getOrNull()
                         logs = getRecentLogs()
+                    },
+                    onClearCache = {
+                        romManager.clearAllCache()
+                        refreshLocalState()
                     },
                     onSignOut = {
                         scope.launch {
@@ -187,6 +271,8 @@ fun MainShellScreen(
 @Composable
 private fun CatalogTab(
     games: List<GameDto>,
+    downloadedFiles: Set<String>,
+    busy: Boolean,
     onRefresh: () -> Unit,
     onPlay: (GameDto) -> Unit
 ) {
@@ -227,7 +313,7 @@ private fun CatalogTab(
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Catálogo vacío por ahora", color = RetroIvory, fontWeight = FontWeight.Bold)
                     Text(
-                        "Conecta juegos en la tabla `games` de Supabase para descargarlos vía IPFS.",
+                        "Agrega juegos en la tabla `games` de Supabase para descargarlos vía IPFS.",
                         color = SteelGray,
                         fontSize = 13.sp
                     )
@@ -239,6 +325,7 @@ private fun CatalogTab(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(filtered, key = { it.id }) { game ->
+                    val isLocal = downloadedFiles.contains(game.romFilename)
                     Card(
                         colors = CardDefaults.cardColors(containerColor = LeatherBlack),
                         border = BorderStroke(1.dp, ArcadeMagenta.copy(alpha = 0.6f)),
@@ -261,10 +348,18 @@ private fun CatalogTab(
                                 )
                             }
                             Button(
+                                enabled = !busy,
                                 onClick = { onPlay(game) },
-                                colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isLocal) CoinYellow else ArcadeOrange,
+                                    contentColor = ArcadeBlack
+                                )
                             ) {
-                                Text("JUGAR", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                Text(
+                                    if (isLocal) "JUGAR" else "DESCARGAR",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp
+                                )
                             }
                         }
                     }
@@ -320,18 +415,58 @@ private fun RoomsTab(rooms: List<RoomDto>, onRefresh: () -> Unit) {
 }
 
 @Composable
-private fun LibraryTab() {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Biblioteca Local", color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(
-                "Aquí aparecerán tus ROMs verificadas (SHA256/CRC32), BIOS y partidas recientes (Fase 5).",
-                color = SteelGray,
-                fontSize = 13.sp
-            )
+private fun LibraryTab(
+    games: List<GameDto>,
+    onPlay: (GameDto) -> Unit,
+    onDelete: (GameDto) -> Unit
+) {
+    if (games.isEmpty()) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Biblioteca Local vacía", color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    "Descarga un juego desde el Catálogo para verlo aquí y jugarlo sin conexión.",
+                    color = SteelGray,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    } else {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(games, key = { it.id }) { game ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+                    border = BorderStroke(1.dp, CoinYellow.copy(alpha = 0.6f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(game.title, color = RetroIvory, fontWeight = FontWeight.Bold)
+                            Text("${game.system} · Verificado SHA256", color = SteelGray, fontSize = 12.sp)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { onDelete(game) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Borrar ROM", tint = ArcadeOrange)
+                            }
+                            Button(
+                                onClick = { onPlay(game) },
+                                colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                            ) {
+                                Text("JUGAR", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -340,10 +475,14 @@ private fun LibraryTab() {
 private fun ProfileTab(
     profile: ProfileDto?,
     engineStatus: EngineStatus?,
+    cacheBytes: Long,
     logs: List<String>,
     onRefreshLogs: () -> Unit,
+    onClearCache: () -> Unit,
     onSignOut: () -> Unit
 ) {
+    val cacheMb = cacheBytes / (1024.0 * 1024.0)
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
         Card(
             colors = CardDefaults.cardColors(containerColor = LeatherBlack),
@@ -357,12 +496,20 @@ private fun ProfileTab(
                     color = RetroIvory,
                     fontSize = 12.sp
                 )
+                Text(
+                    "Caché local (ROMs/BIOS/States): ${"%.1f".format(cacheMb)} MB",
+                    color = SteelGray,
+                    fontSize = 12.sp
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onRefreshLogs, border = BorderStroke(1.dp, CoinYellow)) {
-                        Text("PING MOTOR", color = CoinYellow, fontSize = 11.sp)
+                        Text("PING", color = CoinYellow, fontSize = 11.sp)
+                    }
+                    OutlinedButton(onClick = onClearCache, border = BorderStroke(1.dp, ArcadeMagenta)) {
+                        Text("LIMPIAR CACHÉ", color = ArcadeMagenta, fontSize = 11.sp)
                     }
                     OutlinedButton(onClick = onSignOut, border = BorderStroke(1.dp, ArcadeOrange)) {
-                        Text("CERRAR SESIÓN", color = ArcadeOrange, fontSize = 11.sp)
+                        Text("SALIR", color = ArcadeOrange, fontSize = 11.sp)
                     }
                 }
             }

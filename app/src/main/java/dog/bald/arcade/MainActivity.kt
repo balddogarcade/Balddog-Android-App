@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.ui.screens.AuthScreen
 import dog.bald.arcade.ui.screens.MainShellScreen
 import dog.bald.arcade.ui.theme.ArcadeBlack
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         val repo = ArcadeRepository(applicationContext)
+        val romManager = IpfsRomManager(applicationContext)
         val nativeLibDir = applicationInfo.nativeLibraryDir
         val romsDir = File(filesDir, "roms").apply { mkdirs() }
         val systemDir = File(filesDir, "system").apply { mkdirs() }
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
                     else -> {
                         MainShellScreen(
                             repo = repo,
+                            romManager = romManager,
                             nativeLibDir = nativeLibDir,
                             onSignedOut = { isAuthenticated = false },
                             onLaunchLocalRom = { game ->
