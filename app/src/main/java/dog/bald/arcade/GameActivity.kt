@@ -50,12 +50,15 @@ import dog.bald.arcade.ui.theme.CoinYellow
 import dog.bald.arcade.ui.theme.LeatherBlack
 import dog.bald.arcade.ui.theme.RetroIvory
 import kotlinx.coroutines.delay
+import uniffi.balddog_android.NetplayHudInfo
 import uniffi.balddog_android.getCurrentFps
+import uniffi.balddog_android.getNetplayHudStats
 import uniffi.balddog_android.loadGameState
 import uniffi.balddog_android.saveGameState
 import uniffi.balddog_android.setGamePaused
 import uniffi.balddog_android.setPlayerInput
 import uniffi.balddog_android.startGame
+import uniffi.balddog_android.startNetplayGame
 import uniffi.balddog_android.stopGame
 import java.io.File
 
@@ -65,6 +68,13 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_SYSTEM_DIR = "system_dir"
         const val EXTRA_SAVE_DIR = "save_dir"
         const val EXTRA_GAME_TITLE = "game_title"
+        const val EXTRA_NETPLAY_ENABLED = "netplay_enabled"
+        const val EXTRA_LOCAL_PORT = "local_port"
+        const val EXTRA_LOCAL_HANDLE = "local_handle"
+        const val EXTRA_NUM_PLAYERS = "num_players"
+        const val EXTRA_PEER_HANDLES = "peer_handles"
+        const val EXTRA_PEER_ADDRS = "peer_addrs"
+        const val EXTRA_INPUT_DELAY = "input_delay"
     }
 
     private var audioManager: AudioManager? = null
@@ -78,6 +88,8 @@ class GameActivity : ComponentActivity() {
     private var touchConfig by mutableStateOf(TouchLayoutConfig())
     private var menuStatusMsg by mutableStateOf<String?>(null)
     private var currentFps by mutableFloatStateOf(0f)
+    private var isNetplay by mutableStateOf(false)
+    private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u))
 
     private var touchMaskP1: Int = 0
     private val physicalMasks = IntArray(4)
@@ -120,9 +132,31 @@ class GameActivity : ComponentActivity() {
 
         requestAudioFocus()
 
+        isNetplay = intent.getBooleanExtra(EXTRA_NETPLAY_ENABLED, false)
+
         try {
             if (romPath.isBlank()) {
                 engineError = "No se especificó ruta de ROM"
+            } else if (isNetplay) {
+                val localPort = intent.getIntExtra(EXTRA_LOCAL_PORT, 7000)
+                val localHandle = intent.getIntExtra(EXTRA_LOCAL_HANDLE, 0)
+                val numPlayers = intent.getIntExtra(EXTRA_NUM_PLAYERS, 2)
+                val rawHandles = intent.getIntArrayExtra(EXTRA_PEER_HANDLES) ?: intArrayOf()
+                val peerHandles = ByteArray(rawHandles.size) { rawHandles[it].toByte() }
+                val peerAddrs = intent.getStringArrayListExtra(EXTRA_PEER_ADDRS) ?: arrayListOf()
+                val inputDelay = intent.getIntExtra(EXTRA_INPUT_DELAY, 2)
+                startNetplayGame(
+                    nativeLibDir = applicationInfo.nativeLibraryDir,
+                    romPath = romPath,
+                    systemDir = systemDir,
+                    saveDir = saveDir,
+                    localPort = localPort.toUShort(),
+                    localPlayerHandle = localHandle.toUByte(),
+                    numPlayers = numPlayers.toUByte(),
+                    peerHandles = peerHandles,
+                    peerAddrs = peerAddrs,
+                    inputDelay = inputDelay.toUByte()
+                )
             } else {
                 startGame(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
@@ -140,6 +174,9 @@ class GameActivity : ComponentActivity() {
                 LaunchedEffect(showMenu) {
                     while (true) {
                         currentFps = getCurrentFps()
+                        if (isNetplay) {
+                            netplayHud = getNetplayHudStats()
+                        }
                         delay(500)
                     }
                 }
@@ -224,11 +261,31 @@ class GameActivity : ComponentActivity() {
                                     .padding(horizontal = 14.dp, vertical = 5.dp)
                             ) {
                                 Text(
-                                    text = if (editLayoutMode) "GUARDAR LAYOUT" else "MENU · ${"%.0f".format(currentFps)} FPS",
+                                    text = when {
+                                        editLayoutMode -> "GUARDAR LAYOUT"
+                                        isNetplay -> "MENU · ${"%.0f".format(currentFps)} FPS · ${netplayHud.pingMs} ms"
+                                        else -> "MENU · ${"%.0f".format(currentFps)} FPS"
+                                    },
                                     color = if (editLayoutMode) CoinYellow else RetroIvory,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
+                            }
+                            if (isNetplay && netplayHud.reconnecting) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(top = 42.dp)
+                                        .background(ArcadeOrange.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "RECONECTANDO PAR... ${netplayHud.reconnectSecsLeft}s",
+                                        color = ArcadeBlack,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
                             }
                         } else {
                             InGameQuickMenu(

@@ -42,6 +42,14 @@ data class ProfileDto(
 )
 
 @Serializable
+data class RoomSlotInfo(
+    @SerialName("user_id") val userId: String,
+    val username: String,
+    val endpoint: String,
+    val ready: Boolean = false
+)
+
+@Serializable
 data class RoomDto(
     val id: String,
     val code: String,
@@ -50,7 +58,27 @@ data class RoomDto(
     val mode: String,
     val status: String,
     @SerialName("max_players") val maxPlayers: Int = 2,
+    @SerialName("slots_json") val slotsJson: Map<String, RoomSlotInfo> = emptyMap(),
     @SerialName("host_endpoint") val hostEndpoint: String? = null,
     @SerialName("local_ip") val localIp: String? = null,
     @SerialName("local_port") val localPort: Int? = null
+)
+
+@Serializable
+data class RoomMessageDto(
+    val id: String,
+    @SerialName("room_id") val roomId: String,
+    @SerialName("user_id") val userId: String,
+    val username: String,
+    val message: String,
+    @SerialName("created_at") val createdAt: String = ""
+)
+
+@Serializable
+data class HighScoreDto(
+    val id: String,
+    @SerialName("game_id") val gameId: String,
+    @SerialName("user_id") val userId: String,
+    val score: Long,
+    @SerialName("achieved_at") val achievedAt: String = ""
 )

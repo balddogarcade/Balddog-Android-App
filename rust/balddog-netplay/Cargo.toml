@@ -8,3 +8,5 @@ description = "LAN and GGRS P2P rollback netplay transport for bald.dog ARCADE A
 [dependencies]
 thiserror.workspace = true
 serde.workspace = true
+ggrs = "0.10"
+bytemuck = { version = "1.16", features = ["derive"] }

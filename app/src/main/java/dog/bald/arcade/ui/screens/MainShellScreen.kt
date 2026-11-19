@@ -36,7 +36,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -58,6 +60,8 @@ import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
+import dog.bald.arcade.net.DiscoveredLanRoom
+import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.theme.ArcadeBlack
 import dog.bald.arcade.ui.theme.ArcadeMagenta
 import dog.bald.arcade.ui.theme.ArcadeOrange
@@ -66,8 +70,11 @@ import dog.bald.arcade.ui.theme.DeepPurple
 import dog.bald.arcade.ui.theme.LeatherBlack
 import dog.bald.arcade.ui.theme.RetroIvory
 import dog.bald.arcade.ui.theme.SteelGray
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.balddog_android.EngineStatus
+import uniffi.balddog_android.discoverPublicUdpEndpoint
 import uniffi.balddog_android.getRecentLogs
 import uniffi.balddog_android.pingEngine
 
@@ -82,9 +89,11 @@ private enum class MainTab(val label: String, val icon: ImageVector) {
 fun MainShellScreen(
     repo: ArcadeRepository,
     romManager: IpfsRomManager,
+    lanNsd: LanNsdManager,
     nativeLibDir: String,
     onSignedOut: () -> Unit,
-    onLaunchLocalRom: (GameDto) -> Unit
+    onLaunchLocalRom: (GameDto) -> Unit,
+    onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -95,6 +104,10 @@ fun MainShellScreen(
     var engineStatus by remember { mutableStateOf<EngineStatus?>(null) }
     var logs by remember { mutableStateOf<List<String>>(emptyList()) }
     var syncError by remember { mutableStateOf<String?>(null) }
+
+    var activeRoom by remember { mutableStateOf<RoomDto?>(null) }
+    var myUdpPort by remember { mutableIntStateOf(7000) }
+    var myEndpoint by remember { mutableStateOf("") }
 
     var downloadingGameId by remember { mutableStateOf<String?>(null) }
     var downloadStage by remember { mutableStateOf("") }
@@ -152,6 +165,38 @@ fun MainShellScreen(
 
     LaunchedEffect(Unit) {
         refreshAll()
+    }
+
+    val currentRoom = activeRoom
+    if (currentRoom != null) {
+        val roomGame = games.firstOrNull { it.id == currentRoom.gameId }
+        RoomLobbyScreen(
+            repo = repo,
+            lanNsd = lanNsd,
+            initialRoom = currentRoom,
+            game = roomGame,
+            myUsername = profile?.username ?: "Jugador",
+            myEndpoint = myEndpoint,
+            onLeave = {
+                activeRoom = null
+                refreshAll()
+            },
+            onStartMatch = { startedRoom, mySlot ->
+                if (roomGame != null) {
+                    scope.launch {
+                        runCatching {
+                            romManager.ensureGameReady(roomGame, games, biosList) { stage, p ->
+                                downloadStage = stage
+                                downloadProgress = p
+                            }
+                            activeRoom = null
+                            onLaunchNetplayMatch(roomGame, startedRoom, mySlot, myUdpPort)
+                        }.onFailure { syncError = it.message }
+                    }
+                }
+            }
+        )
+        return
     }
 
     Scaffold(
@@ -232,7 +277,59 @@ fun MainShellScreen(
                     onPlay = { downloadAndPlay(it) }
                 )
 
-                MainTab.ROOMS -> RoomsTab(rooms = rooms, onRefresh = { refreshAll() })
+                MainTab.ROOMS -> RoomsTab(
+                    rooms = rooms,
+                    games = games,
+                    lanNsd = lanNsd,
+                    onRefresh = { refreshAll() },
+                    onCreateRoom = { game, mode ->
+                        scope.launch {
+                            syncError = null
+                            try {
+                                val port = (7000..7099).random()
+                                myUdpPort = port
+                                val localIp = lanNsd.getLocalIpv4Address()
+                                val endpoint = if (mode == "lan") {
+                                    "${localIp ?: "127.0.0.1"}:$port"
+                                } else {
+                                    withContext(Dispatchers.IO) {
+                                        runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
+                                            .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
+                                    }
+                                }
+                                myEndpoint = endpoint
+                                val created = repo.createRoom(
+                                    gameId = game.id,
+                                    mode = mode,
+                                    maxPlayers = game.maxPlayers,
+                                    username = profile?.username ?: "Host",
+                                    endpoint = endpoint,
+                                    localIp = localIp,
+                                    localPort = port
+                                )
+                                activeRoom = created
+                            } catch (t: Throwable) {
+                                syncError = t.message ?: "Error creando sala"
+                            }
+                        }
+                    },
+                    onJoinRoom = { room ->
+                        scope.launch {
+                            val port = (7100..7199).random()
+                            myUdpPort = port
+                            val localIp = lanNsd.getLocalIpv4Address()
+                            myEndpoint = if (room.mode == "lan") {
+                                "${localIp ?: "127.0.0.1"}:$port"
+                            } else {
+                                withContext(Dispatchers.IO) {
+                                    runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
+                                        .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
+                                }
+                            }
+                            activeRoom = room
+                        }
+                    }
+                )
 
                 MainTab.LIBRARY -> LibraryTab(
                     games = games.filter { downloadedFiles.contains(it.romFilename) },
@@ -370,7 +467,22 @@ private fun CatalogTab(
 }
 
 @Composable
-private fun RoomsTab(rooms: List<RoomDto>, onRefresh: () -> Unit) {
+private fun RoomsTab(
+    rooms: List<RoomDto>,
+    games: List<GameDto>,
+    lanNsd: LanNsdManager,
+    onRefresh: () -> Unit,
+    onCreateRoom: (GameDto, String) -> Unit,
+    onJoinRoom: (RoomDto) -> Unit
+) {
+    val discoveredLan by lanNsd.discoveredRooms.collectAsState()
+    val firstGame = games.firstOrNull()
+
+    DisposableEffect(Unit) {
+        lanNsd.startDiscovery()
+        onDispose { lanNsd.stopDiscovery() }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -383,13 +495,63 @@ private fun RoomsTab(rooms: List<RoomDto>, onRefresh: () -> Unit) {
             }
         }
 
+        if (firstGame != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { onCreateRoom(firstGame, "lan") },
+                    colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("CREAR LAN", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                }
+                Button(
+                    onClick = { onCreateRoom(firstGame, "online") },
+                    colors = ButtonDefaults.buttonColors(containerColor = ArcadeMagenta, contentColor = RetroIvory),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("CREAR ONLINE", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                }
+            }
+        }
+
+        if (discoveredLan.isNotEmpty()) {
+            Text("SALAS DETECTADAS EN WIFI (NSD):", color = CoinYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            discoveredLan.forEach { lan ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DeepPurple),
+                    border = BorderStroke(1.dp, CoinYellow),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("${lan.gameTitle} · #${lan.roomCode}", color = RetroIvory, fontWeight = FontWeight.Bold)
+                            Text("${lan.hostIp}:${lan.udpPort}", color = SteelGray, fontSize = 11.sp)
+                        }
+                        val matching = rooms.firstOrNull { it.code == lan.roomCode }
+                        if (matching != null) {
+                            Button(
+                                onClick = { onJoinRoom(matching) },
+                                colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                            ) {
+                                Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (rooms.isEmpty()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = LeatherBlack),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "No hay salas abiertas. En las Fases 6 y 7 activaremos el descubrimiento WiFi (NsdManager) y Netplay P2P.",
+                    text = "No hay salas abiertas. Crea una sala LAN o Online para jugar con amigos.",
                     color = SteelGray,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(16.dp)
@@ -403,9 +565,25 @@ private fun RoomsTab(rooms: List<RoomDto>, onRefresh: () -> Unit) {
                         border = BorderStroke(1.dp, ArcadeOrange.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Text("Sala #${room.code} (${room.mode.uppercase()})", color = CoinYellow, fontWeight = FontWeight.Bold)
-                            Text("Estado: ${room.status} · Máx ${room.maxPlayers}P", color = SteelGray, fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Sala #${room.code} (${room.mode.uppercase()})", color = CoinYellow, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Jugadores: ${room.slotsJson.size}/${room.maxPlayers} · ${room.status}",
+                                    color = SteelGray,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            Button(
+                                onClick = { onJoinRoom(room) },
+                                colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack)
+                            ) {
+                                Text("ENTRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
