@@ -1,0 +1,28 @@
+# Cache & tool downloads
+.cache/
+*.tmp
+scripts/env.sh
+
+# Secrets & local config
+.env
+.env.*
+local.properties
+*.keystore
+*.jks
+google-services.json
+
+# Gradle & Android build outputs
+app/build/
+app/.cxx/
+.gradle/
+build/
+captures/
+*.apk
+*.aab
+*.ap_
+
+# Rust build outputs
+rust/target/
+
+# Compiled native libs (reproduced by scripts)
+app/src/main/jniLibs/arm64-v8a/*.so
