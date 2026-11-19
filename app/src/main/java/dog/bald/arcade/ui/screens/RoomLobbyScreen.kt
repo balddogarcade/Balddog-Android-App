@@ -11,7 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -72,6 +75,7 @@ fun RoomLobbyScreen(
     var messages by remember { mutableStateOf<List<RoomMessageDto>>(emptyList()) }
     var chatInput by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var matchLaunched by remember { mutableStateOf(false) }
 
     val isHost = room.hostId == myUid
     val mySlot = room.slotsJson.entries.firstOrNull { it.value.userId == myUid }?.key?.toIntOrNull()
@@ -88,14 +92,19 @@ fun RoomLobbyScreen(
         }
     }
 
-    // Polling ligero de sala y chat (complementa Realtime sin depender de configuración extra)
+    // Polling ligero de sala y chat (con guardia de disparo único para iniciar partida)
     LaunchedEffect(room.id) {
-        while (true) {
+        while (!matchLaunched) {
             runCatching {
                 repo.fetchRoomById(room.id)?.let { updated ->
                     room = updated
-                    if (updated.status == "playing" && mySlot != null) {
-                        onStartMatch(updated, mySlot)
+                    val updatedSlot = updated.slotsJson.entries
+                        .firstOrNull { it.value.userId == myUid }
+                        ?.key
+                        ?.toIntOrNull()
+                    if (updated.status == "playing" && updatedSlot != null && !matchLaunched) {
+                        matchLaunched = true
+                        onStartMatch(updated, updatedSlot)
                     }
                 }
                 messages = repo.fetchRoomMessages(room.id)
@@ -147,6 +156,9 @@ fun RoomLobbyScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(ArcadeBlack)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -185,47 +197,56 @@ fun RoomLobbyScreen(
             Text(errorMsg ?: "", color = ArcadeOrange, fontSize = 12.sp)
         }
 
-        // Slots 1P..4P
-        Text("SLOTS DE JUGADORES (Toca un slot libre):", color = SteelGray, fontSize = 11.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            for (slot in 0 until room.maxPlayers) {
-                val occupant = room.slotsJson[slot.toString()]
-                val isMine = occupant?.userId == myUid
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isMine) DeepPurple else LeatherBlack
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        when {
-                            occupant == null -> SteelGray.copy(alpha = 0.4f)
-                            occupant.ready -> CoinYellow
-                            else -> ArcadeMagenta
+        // Slots 1P..4P (en grilla de 2 columnas si son 3 o 4 jugadores)
+        Text("SLOTS DE JUGADORES (${room.maxPlayers}P · Toca un slot libre):", color = SteelGray, fontSize = 11.sp)
+        val slotIndices = (0 until room.maxPlayers).toList()
+        val rows = slotIndices.chunked(2)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            rows.forEach { rowSlots ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    rowSlots.forEach { slot ->
+                        val occupant = room.slotsJson[slot.toString()]
+                        val isMine = occupant?.userId == myUid
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isMine) DeepPurple else LeatherBlack
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                when {
+                                    occupant == null -> SteelGray.copy(alpha = 0.4f)
+                                    occupant.ready -> CoinYellow
+                                    else -> ArcadeMagenta
+                                }
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(enabled = occupant == null) { claimSlot(slot) }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("${slot + 1}P", color = CoinYellow, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                Text(
+                                    text = occupant?.username ?: "LIBRE",
+                                    color = if (occupant != null) RetroIvory else SteelGray,
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                                if (occupant != null) {
+                                    Text(
+                                        text = if (occupant.ready) "READY" else "...",
+                                        color = if (occupant.ready) CoinYellow else ArcadeOrange,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable(enabled = occupant == null) { claimSlot(slot) }
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("${slot + 1}P", color = CoinYellow, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
-                        Text(
-                            text = occupant?.username ?: "LIBRE",
-                            color = if (occupant != null) RetroIvory else SteelGray,
-                            fontSize = 11.sp,
-                            maxLines = 1
-                        )
-                        if (occupant != null) {
-                            Text(
-                                text = if (occupant.ready) "READY" else "...",
-                                color = if (occupant.ready) CoinYellow else ArcadeOrange,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                    }
+                    if (rowSlots.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -314,9 +335,11 @@ fun RoomLobbyScreen(
                 Button(
                     enabled = canStart,
                     onClick = {
+                        if (matchLaunched) return@Button
                         scope.launch {
                             runCatching {
                                 repo.updateRoomSlots(room.id, room.slotsJson, status = "playing")
+                                matchLaunched = true
                                 onStartMatch(room.copy(status = "playing"), mySlot)
                             }
                         }

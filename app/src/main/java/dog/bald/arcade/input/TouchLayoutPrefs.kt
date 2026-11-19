@@ -11,7 +11,7 @@ data class TouchLayoutConfig(
     val dpadOffsetY: Float = 0f,
     val buttonsOffsetX: Float = 0f,
     val buttonsOffsetY: Float = 0f,
-    val forceShowTouch: Boolean = false
+    val forceShowTouch: Boolean = true
 )
 
 object TouchLayoutPrefs {
@@ -33,7 +33,7 @@ object TouchLayoutPrefs {
             dpadOffsetY = p.getFloat(KEY_DPAD_Y, 0f),
             buttonsOffsetX = p.getFloat(KEY_BTN_X, 0f),
             buttonsOffsetY = p.getFloat(KEY_BTN_Y, 0f),
-            forceShowTouch = p.getBoolean(KEY_FORCE_SHOW, false)
+            forceShowTouch = p.getBoolean(KEY_FORCE_SHOW, true)
         )
     }
 

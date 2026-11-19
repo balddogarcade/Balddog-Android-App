@@ -47,7 +47,7 @@ make -C "$FBNEO_DIR/src/burner/libretro" -j"$NPROC" \
   USE_CYCLONE=0 \
   HAVE_NEON=0 \
   EXTERNAL_ZLIB=0 \
-  LDFLAGS="-shared -Wl,-no-undefined -Wl,--version-script=$FBNEO_DIR/src/burner/libretro/link.T -lm -llog -static-libstdc++"
+  LDFLAGS="-shared -Wl,-no-undefined -Wl,-z,max-page-size=16384 -Wl,--version-script=$FBNEO_DIR/src/burner/libretro/link.T -lm -llog -static-libstdc++"
 
 mkdir -p "$OUT_DIR"
 cp "$FBNEO_DIR/src/burner/libretro/fbneo_libretro.so" "$OUT_SO"

@@ -48,12 +48,12 @@ export ANDROID_HOME="$ANDROID_SDK_DIR"
 export ANDROID_SDK_ROOT="$ANDROID_SDK_DIR"
 export PATH="$CMDLINE_BIN:$ANDROID_SDK_DIR/platform-tools:$PATH"
 
-echo "=== [3/5] Instalando SDK Platform 34, Build-Tools 34 y NDK $NDK_VERSION ==="
+echo "=== [3/5] Instalando SDK Platform 36, Build-Tools 36 y NDK $NDK_VERSION ==="
 yes | sdkmanager --licenses >/dev/null 2>&1 || true
 sdkmanager --install \
   "platform-tools" \
-  "platforms;android-34" \
-  "build-tools;34.0.0" \
+  "platforms;android-36" \
+  "build-tools;36.0.0" \
   "ndk;$NDK_VERSION"
 
 export ANDROID_NDK_HOME="$ANDROID_SDK_DIR/ndk/$NDK_VERSION"

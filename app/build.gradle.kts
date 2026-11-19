@@ -20,12 +20,12 @@ fun propOrEnv(key: String): String {
 
 android {
     namespace = "dog.bald.arcade"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dog.bald.arcade"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
@@ -39,12 +39,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("BALDDOG_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank()) {
+            val keystorePath = propOrEnv("BALDDOG_KEYSTORE_PATH")
+            if (keystorePath.isNotBlank()) {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("BALDDOG_KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("BALDDOG_KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("BALDDOG_KEY_PASSWORD") ?: ""
+                storePassword = propOrEnv("BALDDOG_KEYSTORE_PASSWORD")
+                keyAlias = propOrEnv("BALDDOG_KEY_ALIAS")
+                keyPassword = propOrEnv("BALDDOG_KEY_PASSWORD")
             }
         }
     }
@@ -57,8 +57,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            val keystorePath = System.getenv("BALDDOG_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank()) {
+            val keystorePath = propOrEnv("BALDDOG_KEYSTORE_PATH")
+            if (keystorePath.isNotBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }

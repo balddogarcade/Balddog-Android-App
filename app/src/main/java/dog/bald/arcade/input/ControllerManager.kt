@@ -41,10 +41,13 @@ class ControllerManager(
         var nextPort = 0
         for (id in InputDevice.getDeviceIds()) {
             val dev = InputDevice.getDevice(id) ?: continue
+            if (!dev.isEnabled || dev.isVirtual) continue
             val sources = dev.sources
-            val isGamepad = (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-                (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
-            if (isGamepad && !dev.isVirtual && nextPort < 4) {
+            val hasGamepad = (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+            val hasJoystick = (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK &&
+                dev.getMotionRange(MotionEvent.AXIS_X) != null &&
+                dev.getMotionRange(MotionEvent.AXIS_Y) != null
+            if ((hasGamepad || hasJoystick) && nextPort < 4) {
                 deviceToPort[id] = nextPort
                 nextPort++
             }

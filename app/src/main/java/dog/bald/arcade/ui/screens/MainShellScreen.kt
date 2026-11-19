@@ -2,6 +2,7 @@ package dog.bald.arcade.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,8 +35,11 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -481,11 +486,76 @@ private fun RoomsTab(
     onJoinRoom: (RoomDto) -> Unit
 ) {
     val discoveredLan by lanNsd.discoveredRooms.collectAsState()
-    val firstGame = games.firstOrNull()
+    var selectedGame by remember(games) { mutableStateOf(games.firstOrNull()) }
+    var showGamePicker by remember { mutableStateOf(false) }
+    var pickerQuery by remember { mutableStateOf("") }
+    var joinCode by remember { mutableStateOf("") }
+    var joinError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         lanNsd.startDiscovery()
         onDispose { lanNsd.stopDiscovery() }
+    }
+
+    if (showGamePicker) {
+        val filteredGames = remember(games, pickerQuery) {
+            if (pickerQuery.isBlank()) games
+            else games.filter {
+                it.title.contains(pickerQuery, ignoreCase = true) ||
+                    it.system.contains(pickerQuery, ignoreCase = true)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showGamePicker = false },
+            containerColor = LeatherBlack,
+            title = { Text("Elegir Juego para la Sala", color = CoinYellow, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = pickerQuery,
+                        onValueChange = { pickerQuery = it },
+                        placeholder = { Text("Buscar juego...", fontSize = 12.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ArcadeMagenta,
+                            unfocusedBorderColor = SteelGray,
+                            focusedTextColor = RetroIvory,
+                            unfocusedTextColor = RetroIvory
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    LazyColumn(modifier = Modifier.height(280.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(filteredGames, key = { it.id }) { g ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (selectedGame?.id == g.id) DeepPurple else ArcadeBlack
+                                ),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (selectedGame?.id == g.id) CoinYellow else SteelGray.copy(alpha = 0.4f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedGame = g
+                                        showGamePicker = false
+                                    }
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text(g.title, color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("${g.system} · ${g.maxPlayers}P", color = SteelGray, fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showGamePicker = false }) {
+                    Text("CERRAR", color = ArcadeOrange)
+                }
+            }
+        )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
@@ -500,23 +570,99 @@ private fun RoomsTab(
             }
         }
 
-        if (firstGame != null) {
+        // Selector de juego para crear sala
+        Card(
+            colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+            border = BorderStroke(1.dp, ArcadeMagenta.copy(alpha = 0.7f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = games.isNotEmpty()) { showGamePicker = true }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("JUEGO SELECCIONADO:", color = SteelGray, fontSize = 10.sp)
+                    Text(
+                        text = selectedGame?.title ?: "Cargando catálogo...",
+                        color = CoinYellow,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    if (selectedGame != null) {
+                        Text(
+                            "${selectedGame?.system} · Máx ${selectedGame?.maxPlayers}P",
+                            color = SteelGray,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Text("CAMBIAR", color = ArcadeMagenta, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+        }
+
+        selectedGame?.let { game ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
-                    onClick = { onCreateRoom(firstGame, "lan") },
+                    onClick = { onCreateRoom(game, "lan") },
                     colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("CREAR LAN", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                 }
                 Button(
-                    onClick = { onCreateRoom(firstGame, "online") },
+                    onClick = { onCreateRoom(game, "online") },
                     colors = ButtonDefaults.buttonColors(containerColor = ArcadeMagenta, contentColor = RetroIvory),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("CREAR ONLINE", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                 }
             }
+        }
+
+        // Unirse por código de sala
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = joinCode,
+                onValueChange = {
+                    joinCode = it.uppercase()
+                    joinError = null
+                },
+                placeholder = { Text("Código (ej. 4821A)", fontSize = 12.sp) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CoinYellow,
+                    unfocusedBorderColor = SteelGray,
+                    focusedTextColor = RetroIvory,
+                    unfocusedTextColor = RetroIvory
+                ),
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                enabled = joinCode.isNotBlank(),
+                onClick = {
+                    val codeClean = joinCode.trim().removePrefix("#")
+                    val found = rooms.firstOrNull { it.code.equals(codeClean, ignoreCase = true) }
+                    if (found != null) {
+                        onJoinRoom(found)
+                    } else {
+                        joinError = "No se encontró sala #$codeClean"
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack)
+            ) {
+                Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (joinError != null) {
+            Text(joinError ?: "", color = ArcadeOrange, fontSize = 12.sp)
         }
 
         if (discoveredLan.isNotEmpty()) {
@@ -532,7 +678,7 @@ private fun RoomsTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text("${lan.gameTitle} · #${lan.roomCode}", color = RetroIvory, fontWeight = FontWeight.Bold)
                             Text("${lan.hostIp}:${lan.udpPort}", color = SteelGray, fontSize = 11.sp)
                         }
@@ -556,7 +702,7 @@ private fun RoomsTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "No hay salas abiertas. Crea una sala LAN o Online para jugar con amigos.",
+                    text = "No hay salas abiertas. Selecciona un juego arriba y crea una sala LAN o Online.",
                     color = SteelGray,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(16.dp)
@@ -565,6 +711,7 @@ private fun RoomsTab(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rooms, key = { it.id }) { room ->
+                    val roomGameTitle = games.firstOrNull { it.id == room.gameId }?.title ?: "Arcade"
                     Card(
                         colors = CardDefaults.cardColors(containerColor = LeatherBlack),
                         border = BorderStroke(1.dp, ArcadeOrange.copy(alpha = 0.6f)),
@@ -575,10 +722,10 @@ private fun RoomsTab(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text("Sala #${room.code} (${room.mode.uppercase()})", color = CoinYellow, fontWeight = FontWeight.Bold)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("$roomGameTitle · #${room.code}", color = CoinYellow, fontWeight = FontWeight.Bold)
                                 Text(
-                                    "Jugadores: ${room.slotsJson.size}/${room.maxPlayers} · ${room.status}",
+                                    "${room.mode.uppercase()} · Jugadores: ${room.slotsJson.size}/${room.maxPlayers}",
                                     color = SteelGray,
                                     fontSize = 12.sp
                                 )
