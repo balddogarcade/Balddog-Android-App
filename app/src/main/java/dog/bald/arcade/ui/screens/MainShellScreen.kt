@@ -38,7 +38,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -142,7 +141,6 @@ fun MainShellScreen(
     var myEndpoint by remember { mutableStateOf("") }
 
     var downloadingGameId by remember { mutableStateOf<String?>(null) }
-    var downloadStage by remember { mutableStateOf("") }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var downloadedFiles by remember { mutableStateOf(romManager.listDownloadedFilenames()) }
     var cacheBytes by remember { mutableLongStateOf(romManager.totalCacheBytes()) }
@@ -179,15 +177,13 @@ fun MainShellScreen(
         scope.launch {
             downloadingGameId = game.id
             downloadProgress = 0f
-            downloadStage = "Preparando..."
             syncError = null
             try {
                 romManager.ensureGameReady(
                     game = game,
                     allGames = games,
                     allBios = biosList
-                ) { stage, progress ->
-                    downloadStage = stage
+                ) { _, progress ->
                     downloadProgress = progress
                 }
                 refreshLocalState()
@@ -231,8 +227,7 @@ fun MainShellScreen(
                 if (roomGame != null) {
                     scope.launch {
                         runCatching {
-                            romManager.ensureGameReady(roomGame, games, biosList) { stage, p ->
-                                downloadStage = stage
+                            romManager.ensureGameReady(roomGame, games, biosList) { _, p ->
                                 downloadProgress = p
                             }
                             activeRoom = null
@@ -354,22 +349,6 @@ fun MainShellScreen(
                 Text(text = syncError ?: "", color = SilverGray, fontSize = 12.sp)
             }
 
-            if (downloadingGameId != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "$downloadStage (${(downloadProgress * 100).toInt()}%)",
-                    color = PureWhite,
-                    fontFamily = JetBrainsMonoFamily,
-                    fontSize = 12.sp
-                )
-                LinearProgressIndicator(
-                    progress = { downloadProgress },
-                    color = PureWhite,
-                    trackColor = GraphiteSurface,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
             Spacer(modifier = Modifier.height(12.dp))
 
             when (MainTab.entries[selectedTab]) {
@@ -381,7 +360,7 @@ fun MainShellScreen(
                     busy = downloadingGameId != null,
                     onRefresh = { refreshAll() },
                     onDownload = { downloadOnly(it) },
-                    onGoToLibrary = { selectedTab = MainTab.LIBRARY.ordinal }
+                    onPlay = { onLaunchLocalRom(it) }
                 )
 
                 MainTab.ROOMS -> RoomsTab(
@@ -493,16 +472,12 @@ private fun CatalogTab(
     busy: Boolean,
     onRefresh: () -> Unit,
     onDownload: (GameDto) -> Unit,
-    onGoToLibrary: () -> Unit
+    onPlay: (GameDto) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
-    val availableGames = remember(games, downloadedFiles) {
-        games.filterNot { downloadedFiles.contains(it.romFilename) }
-    }
-
-    val filtered = remember(availableGames, searchQuery) {
-        availableGames.filter { it.matchesQuery(searchQuery) }
+    val filtered = remember(games, searchQuery) {
+        games.filter { it.matchesQuery(searchQuery) }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
@@ -512,30 +487,7 @@ private fun CatalogTab(
             placeholder = "Buscar en catálogo..."
         )
 
-        if (games.isNotEmpty() && availableGames.isEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                border = BorderStroke(1.dp, CharcoalBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Todos los juegos descargados",
-                        color = PureWhite,
-                        fontFamily = SpaceGroteskFamily,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Ya tienes todo el catálogo disponible en tu Biblioteca local.",
-                        color = MutedGray,
-                        fontSize = 13.sp
-                    )
-                    OutlinedButton(onClick = onGoToLibrary, border = BorderStroke(1.dp, SteelBorder)) {
-                        Text("IR A BIBLIOTECA", color = PureWhite, fontSize = 12.sp)
-                    }
-                }
-            }
-        } else if (filtered.isEmpty() && searchQuery.isNotBlank()) {
+        if (filtered.isEmpty() && searchQuery.isNotBlank()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = CarbonSurface),
                 border = BorderStroke(1.dp, CharcoalBorder),
@@ -589,13 +541,16 @@ private fun CatalogTab(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filtered, key = { it.id }) { game ->
+                    val isDownloaded = downloadedFiles.contains(game.romFilename)
                     ArcadeGameCard(
                         game = game,
-                        isDownloaded = false,
+                        isDownloaded = isDownloaded,
                         isDownloading = downloadingGameId == game.id,
                         downloadProgress = if (downloadingGameId == game.id) downloadProgress else 0f,
                         busy = busy,
-                        onPrimaryAction = { onDownload(game) }
+                        onPrimaryAction = {
+                            if (isDownloaded) onPlay(game) else onDownload(game)
+                        }
                     )
                 }
             }
