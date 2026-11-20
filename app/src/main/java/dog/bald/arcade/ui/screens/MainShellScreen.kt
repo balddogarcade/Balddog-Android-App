@@ -77,6 +77,7 @@ import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.ArcadeGameCard
+import dog.bald.arcade.ui.components.ArcadeSearchBar
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
@@ -407,6 +408,14 @@ fun MainShellScreen(
     }
 }
 
+private fun GameDto.matchesQuery(query: String): Boolean {
+    if (query.isBlank()) return true
+    val q = query.trim()
+    return title.contains(q, ignoreCase = true) ||
+        system.contains(q, ignoreCase = true) ||
+        slug.contains(q, ignoreCase = true)
+}
+
 @Composable
 private fun CatalogTab(
     games: List<GameDto>,
@@ -419,21 +428,32 @@ private fun CatalogTab(
     onGoToLibrary: () -> Unit
 ) {
     var filterSystem by remember { mutableStateOf("ALL") }
+    var searchQuery by remember { mutableStateOf("") }
     val systems = listOf("ALL", "NEOGEO", "CPS2", "CO-OP")
 
     val availableGames = remember(games, downloadedFiles) {
         games.filterNot { downloadedFiles.contains(it.romFilename) }
     }
 
-    val filtered = remember(availableGames, filterSystem) {
-        when (filterSystem) {
-            "ALL" -> availableGames
-            "CO-OP" -> availableGames.filter { it.isCoop }
-            else -> availableGames.filter { it.system.equals(filterSystem, ignoreCase = true) }
-        }
+    val filtered = remember(availableGames, filterSystem, searchQuery) {
+        availableGames
+            .filter { game ->
+                when (filterSystem) {
+                    "ALL" -> true
+                    "CO-OP" -> game.isCoop
+                    else -> game.system.equals(filterSystem, ignoreCase = true)
+                }
+            }
+            .filter { it.matchesQuery(searchQuery) }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+        ArcadeSearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            placeholder = "Buscar en catálogo..."
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             systems.forEach { sys ->
                 FilterChip(
@@ -470,6 +490,29 @@ private fun CatalogTab(
                     )
                     OutlinedButton(onClick = onGoToLibrary, border = BorderStroke(1.dp, SteelBorder)) {
                         Text("IR A BIBLIOTECA", color = PureWhite, fontSize = 12.sp)
+                    }
+                }
+            }
+        } else if (filtered.isEmpty() && searchQuery.isNotBlank()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Sin resultados para \"${searchQuery.trim()}\"",
+                        color = PureWhite,
+                        fontFamily = SpaceGroteskFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Prueba con otro término o limpia el buscador.",
+                        color = MutedGray,
+                        fontSize = 13.sp
+                    )
+                    OutlinedButton(onClick = { searchQuery = "" }, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("LIMPIAR BÚSQUEDA", color = PureWhite, fontSize = 12.sp)
                     }
                 }
             }
@@ -884,7 +927,12 @@ private fun LibraryTab(
     onDelete: (GameDto) -> Unit,
     onGoToCatalog: () -> Unit
 ) {
+    var searchQuery by remember { mutableStateOf("") }
     var pendingDeleteGame by remember { mutableStateOf<GameDto?>(null) }
+
+    val filtered = remember(games, searchQuery) {
+        games.filter { it.matchesQuery(searchQuery) }
+    }
 
     pendingDeleteGame?.let { target ->
         AlertDialog(
@@ -949,19 +997,52 @@ private fun LibraryTab(
             }
         }
     } else {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(games, key = { it.id }) { game ->
-                ArcadeGameCard(
-                    game = game,
-                    isDownloaded = true,
-                    onPrimaryAction = { onPlay(game) },
-                    onDeleteClick = { pendingDeleteGame = game }
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+            ArcadeSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                placeholder = "Buscar en biblioteca..."
+            )
+
+            if (filtered.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                    border = BorderStroke(1.dp, CharcoalBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Sin resultados para \"${searchQuery.trim()}\"",
+                            color = PureWhite,
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Ningún juego descargado coincide con tu búsqueda.",
+                            color = MutedGray,
+                            fontSize = 13.sp
+                        )
+                        OutlinedButton(onClick = { searchQuery = "" }, border = BorderStroke(1.dp, SteelBorder)) {
+                            Text("LIMPIAR BÚSQUEDA", color = PureWhite, fontSize = 12.sp)
+                        }
+                    }
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filtered, key = { it.id }) { game ->
+                        ArcadeGameCard(
+                            game = game,
+                            isDownloaded = true,
+                            onPrimaryAction = { onPlay(game) },
+                            onDeleteClick = { pendingDeleteGame = game }
+                        )
+                    }
+                }
             }
         }
     }
