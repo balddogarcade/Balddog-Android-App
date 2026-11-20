@@ -1,134 +1,134 @@
 # bald.dog ARCADE (Android)
 
-Cliente nativo de **bald.dog ARCADE** para Android (`arm64-v8a`). Combina una interfaz moderna en **Kotlin + Jetpack Compose** con un motor de emulación y netplay rollback escrito en **Rust** (`wgpu`, `oboe`, `ggrs`) sobre **FinalBurn Neo (libretro)**, respaldado por **Supabase** e **IPFS** para catálogo, salas multijugador y descarga verificada de ROMs/BIOS.
+Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a modern **Kotlin + Jetpack Compose** interface with an emulation and rollback netplay engine written in **Rust** (`wgpu`, `oboe`, `ggrs`) on top of **FinalBurn Neo (libretro)**, backed by **Supabase** and **IPFS** for the game catalog, multiplayer rooms, and verified ROM/BIOS downloads.
 
 ---
 
-## Características principales
+## Key Features
 
-- **Motor nativo en Rust (`balddog-core`)**:
-  - Carga dinámica del core `libfbneo_libretro.so` mediante `libloading`.
-  - Renderizado de video con `wgpu` conectado a la superficie nativa de Android (`Surface` / `ANativeWindow` vía JNI).
-  - Audio de baja latencia con `oboe` y buffer circular (`ringbuf`).
-- **Multijugador LAN y Online (`balddog-netplay`)**:
-  - Netplay P2P con rollback basado en **GGRS**.
-  - Descubrimiento de partidas en red local mediante Android NSD (`LanNsdManager`).
-  - Lobbies, slots de jugadores y chat en tiempo real con **Supabase Realtime**.
-- **Gestión de ROMs y BIOS (`IpfsRomManager`)**:
-  - Descarga desde IPFS con verificación de integridad (`sha256` / `crc32`) según el catálogo y BIOS (`game_bios`) definidos en Supabase.
-- **Controles adaptativos**:
-  - Soporte para gamepads físicos (`ControllerManager`, `RetroJoypad`).
-  - Overlay táctil personalizable (`ArcadeTouchOverlay`, `TouchLayoutPrefs`) y menú rápido in-game (`InGameQuickMenu`).
-- **Autenticación y seguridad**:
-  - Inicio de sesión por correo o como invitado/anónimo con **Supabase Auth**.
-  - Almacenamiento cifrado de tokens mediante `androidx.security:security-crypto`.
+- **Native Rust Engine (`balddog-core`)**:
+  - Dynamic loading of the `libfbneo_libretro.so` core via `libloading`.
+  - Video rendering with `wgpu` attached to the native Android surface (`Surface` / `ANativeWindow` via JNI).
+  - Low-latency audio using `oboe` and a ring buffer (`ringbuf`).
+- **LAN & Online Multiplayer (`balddog-netplay`)**:
+  - P2P rollback netplay powered by **GGRS**.
+  - Local network match discovery via Android NSD (`LanNsdManager`).
+  - Real-time lobbies, player slots, and chat with **Supabase Realtime**.
+- **ROM & BIOS Management (`IpfsRomManager`)**:
+  - Downloads from IPFS with integrity verification (`sha256` / `crc32`) based on the catalog and BIOS (`game_bios`) defined in Supabase.
+- **Adaptive Controls**:
+  - Physical gamepad support (`ControllerManager`, `RetroJoypad`).
+  - Customizable touch overlay (`ArcadeTouchOverlay`, `TouchLayoutPrefs`) and in-game quick menu (`InGameQuickMenu`).
+- **Authentication & Security**:
+  - Email or guest/anonymous sign-in with **Supabase Auth**.
+  - Encrypted token storage via `androidx.security:security-crypto`.
 
 ---
 
-## Estructura del proyecto
+## Project Structure
 
 ```text
 .
-├── app/                          # Aplicación Android (Kotlin + Jetpack Compose)
+├── app/                          # Android app (Kotlin + Jetpack Compose)
 │   └── src/main/
 │       ├── java/dog/bald/arcade/
-│       │   ├── data/             # Repositorio, modelos, Supabase, IPFS ROM manager
-│       │   ├── engine/           # Puente JNI/Surface hacia Rust
-│       │   ├── input/            # Gamepads, RetroJoypad y preferencias táctiles
-│       │   ├── net/              # Descubrimiento LAN (NSD)
-│       │   └── ui/               # Pantallas (Auth, MainShell, RoomLobby) y tema
-│       ├── java/uniffi/          # Bindings Kotlin generados por UniFFI
-│       └── jniLibs/arm64-v8a/    # Binarios nativos (.so)
-├── rust/                         # Workspace Rust
-│   ├── balddog-core/             # Núcleo de emulación (libretro + wgpu + oboe + ggrs)
-│   ├── balddog-netplay/          # Transporte LAN y P2P rollback (GGRS)
-│   └── balddog-android/          # Bridge UniFFI + JNI y generador uniffi-bindgen
-├── scripts/                      # Scripts de toolchain y compilación
-│   ├── setup-toolchain.sh        # Instala/configura JDK, Android SDK/NDK y cargo-ndk
-│   ├── build-fbneo-android.sh    # Compila libfbneo_libretro.so (arm64-v8a)
-│   ├── build-rust.sh             # Compila libbalddog_android.so y genera bindings UniFFI
-│   └── build-release.sh          # Genera APK y AAB de release
-└── supabase/migrations/          # Esquema SQL, RLS, Realtime y catálogo inicial
+│       │   ├── data/             # Repository, models, Supabase, IPFS ROM manager
+│       │   ├── engine/           # JNI/Surface bridge to Rust
+│       │   ├── input/            # Gamepads, RetroJoypad, and touch preferences
+│       │   ├── net/              # LAN discovery (NSD)
+│       │   └── ui/               # Screens (Auth, MainShell, RoomLobby) and theme
+│       ├── java/uniffi/          # Kotlin bindings generated by UniFFI
+│       └── jniLibs/arm64-v8a/    # Native binaries (.so)
+├── rust/                         # Rust workspace
+│   ├── balddog-core/             # Emulation core (libretro + wgpu + oboe + ggrs)
+│   ├── balddog-netplay/          # LAN transport and P2P rollback (GGRS)
+│   └── balddog-android/          # UniFFI + JNI bridge and uniffi-bindgen generator
+├── scripts/                      # Toolchain and build scripts
+│   ├── setup-toolchain.sh        # Installs/configures JDK, Android SDK/NDK, and cargo-ndk
+│   ├── build-fbneo-android.sh    # Builds libfbneo_libretro.so (arm64-v8a)
+│   ├── build-rust.sh             # Builds libbalddog_android.so and generates UniFFI bindings
+│   └── build-release.sh          # Builds release APK and AAB
+└── supabase/migrations/          # SQL schema, RLS, Realtime, and initial catalog
 ```
 
 ---
 
-## Requisitos
+## Requirements
 
-- **Sistema operativo**: Linux (para los scripts de toolchain y compilación nativa).
+- **Operating System**: Linux (for toolchain and native build scripts).
 - **Android**:
   - `minSdk`: 26 (Android 8.0)
   - `targetSdk` / `compileSdk`: 36
-  - Arquitectura soportada: `arm64-v8a`
+  - Supported architecture: `arm64-v8a`
   - Android NDK `27.2.12479018`
-  - JDK 17 o 21
-- **Rust**: `rustup`, `cargo`, target `aarch64-linux-android` y `cargo-ndk`.
-- **Herramientas base**: `git`, `curl`, `unzip`, `make`.
+  - JDK 17 or 21
+- **Rust**: `rustup`, `cargo`, `aarch64-linux-android` target, and `cargo-ndk`.
+- **Base tools**: `git`, `curl`, `unzip`, `make`.
 
 ---
 
-## Configuración inicial
+## Initial Setup
 
-### 1. Instalar el toolchain
+### 1. Install the toolchain
 
-El script `scripts/setup-toolchain.sh` verifica o descarga JDK 21, Android Command Line Tools, Platform 36, Build-Tools 36, NDK `27.2.12479018`, agrega el target de Rust `aarch64-linux-android`, instala `cargo-ndk` y genera `scripts/env.sh`:
+The `scripts/setup-toolchain.sh` script checks or downloads JDK 21, Android Command Line Tools, Platform 36, Build-Tools 36, NDK `27.2.12479018`, adds the `aarch64-linux-android` Rust target, installs `cargo-ndk`, and generates `scripts/env.sh`:
 
 ```bash
 ./scripts/setup-toolchain.sh
 source scripts/env.sh
 ```
 
-### 2. Configurar variables de Supabase y firma
+### 2. Configure Supabase and signing variables
 
-Agrega las propiedades necesarias en `local.properties` (en la raíz del proyecto) o expórtalas como variables de entorno:
+Add the required properties to `local.properties` (at the project root) or export them as environment variables:
 
 ```properties
-# Ruta al Android SDK (generada normalmente por Android Studio / Gradle)
-sdk.dir=/ruta/a/Android/Sdk
+# Path to the Android SDK (usually generated by Android Studio / Gradle)
+sdk.dir=/path/to/Android/Sdk
 
-# Configuración de Supabase (obligatoria para BuildConfig)
-SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_ANON_KEY=tu-anon-key
+# Supabase configuration (required for BuildConfig)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
 
-# Opcional: firma para builds release (APK / AAB)
-BALDDOG_KEYSTORE_PATH=/ruta/al/keystore.jks
-BALDDOG_KEYSTORE_PASSWORD=tu_password
-BALDDOG_KEY_ALIAS=tu_alias
-BALDDOG_KEY_PASSWORD=tu_key_password
+# Optional: signing for release builds (APK / AAB)
+BALDDOG_KEYSTORE_PATH=/path/to/keystore.jks
+BALDDOG_KEYSTORE_PASSWORD=your_password
+BALDDOG_KEY_ALIAS=your_alias
+BALDDOG_KEY_PASSWORD=your_key_password
 ```
 
-### 3. Base de datos Supabase
+### 3. Supabase database
 
-Aplica las migraciones ubicadas en `supabase/migrations/` en tu proyecto de Supabase:
+Apply the migrations located in `supabase/migrations/` to your Supabase project:
 
-1. `supabase/migrations/001_initial_schema.sql` — Crea las tablas `profiles`, `game_bios`, `games`, `rooms`, `room_messages`, triggers, políticas RLS y Realtime.
-2. `supabase/migrations/002_seed_curated_games.sql` — Inserta el catálogo curado inicial de juegos.
+1. `supabase/migrations/001_initial_schema.sql` — Creates the `profiles`, `game_bios`, `games`, `rooms`, and `room_messages` tables, triggers, RLS policies, and Realtime.
+2. `supabase/migrations/002_seed_curated_games.sql` — Inserts the initial curated game catalog.
 
 ---
 
-## Compilación
+## Building
 
-### 1. Compilar el core FinalBurn Neo (`libfbneo_libretro.so`)
+### 1. Build the FinalBurn Neo core (`libfbneo_libretro.so`)
 
-Clona FBNeo en `.cache/FBNeo` en el commit fijado y compila el core determinista para `arm64-v8a`:
+Clones FBNeo into `.cache/FBNeo` at the pinned commit and builds the deterministic core for `arm64-v8a`:
 
 ```bash
 ./scripts/build-fbneo-android.sh
 ```
 
-### 2. Compilar el motor Rust y generar bindings Kotlin
+### 2. Build the Rust engine and generate Kotlin bindings
 
-Para compilación en modo `debug` (por defecto) o `release`:
+For a `debug` (default) or `release` build:
 
 ```bash
 ./scripts/build-rust.sh debug
-# o para release:
+# or for release:
 ./scripts/build-rust.sh release
 ```
 
-Este paso genera `app/src/main/jniLibs/arm64-v8a/libbalddog_android.so`, copia `libc++_shared.so` y actualiza los bindings UniFFI en `app/src/main/java/uniffi/balddog_android/`.
+This step generates `app/src/main/jniLibs/arm64-v8a/libbalddog_android.so`, copies `libc++_shared.so`, and updates the UniFFI bindings in `app/src/main/java/uniffi/balddog_android/`.
 
-### 3. Compilar la aplicación Android
+### 3. Build the Android application
 
 **Debug APK:**
 
@@ -142,12 +142,12 @@ Este paso genera `app/src/main/jniLibs/arm64-v8a/libbalddog_android.so`, copia `
 ./scripts/build-release.sh
 ```
 
-Los artefactos generados quedan en:
+Generated artifacts are placed in:
 - `app/build/outputs/apk/release/`
 - `app/build/outputs/bundle/release/`
 
 ---
 
-## Licencia
+## License
 
-Consulta los archivos del repositorio (workspace Rust bajo licencia `MIT`).
+Check the repository files (Rust workspace licensed under `MIT`).

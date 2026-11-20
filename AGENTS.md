@@ -22,3 +22,6 @@ Este archivo define reglas obligatorias que todo agente de IA debe respetar al t
    - **SIEMPRE** incluye un **título** claro y conciso, seguido de una **descripción** (cuerpo del mensaje) lo más descriptiva posible en cada commit.
    - El **título** debe resumir con precisión el propósito del cambio.
    - La **descripción** debe detallar qué se modificó, por qué se realizó el cambio y cualquier contexto o impacto relevante para permitir un seguimiento adecuado en el historial del repositorio (evita commits sin cuerpo descriptivo).
+
+4. **Idioma obligatorio — Todos los commits en inglés:**
+   - **SIEMPRE** redacta tanto el título como la descripción (cuerpo) de cada commit en **inglés**.
