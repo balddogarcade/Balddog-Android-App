@@ -44,6 +44,12 @@ class ArcadeRepository(context: Context) {
                 put("username", username.trim())
             }
         }
+        if (client.auth.currentSessionOrNull() == null) {
+            signInWithEmail(email, password)
+        }
+        if (client.auth.currentSessionOrNull() == null) {
+            throw IllegalStateException("Cuenta creada; verifica tu correo o inicia sesión")
+        }
     }
 
     suspend fun signOut() {
@@ -185,10 +191,24 @@ class ArcadeRepository(context: Context) {
 
     suspend fun fetchMyProfile(): ProfileDto? {
         val uid = currentUserId() ?: return null
-        return client.from("profiles").select {
+        val existing = client.from("profiles").select {
             filter {
                 eq("id", uid)
             }
         }.decodeSingleOrNull<ProfileDto>()
+        if (existing != null) return existing
+
+        val user = client.auth.currentUserOrNull()
+        val metaName = user?.userMetadata?.get("username")?.toString()?.trim('"')
+            ?.takeIf { it.isNotBlank() }
+            ?: "player_${uid.replace("-", "").take(8)}"
+        val payload = buildJsonObject {
+            put("id", uid)
+            put("username", metaName)
+            put("is_anonymous", user?.email.isNullOrBlank())
+        }
+        return runCatching {
+            client.from("profiles").insert(payload) { select() }.decodeSingle<ProfileDto>()
+        }.getOrNull()
     }
 }

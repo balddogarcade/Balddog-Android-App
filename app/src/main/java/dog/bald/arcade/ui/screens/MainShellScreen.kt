@@ -303,8 +303,10 @@ fun MainShellScreen(
 
                 MainTab.ROOMS -> RoomsTab(
                     rooms = rooms,
-                    games = games,
+                    allGames = games,
+                    libraryGames = games.filter { downloadedFiles.contains(it.romFilename) },
                     lanNsd = lanNsd,
+                    onGoToCatalog = { selectedTab = 0 },
                     onRefresh = { refreshAll() },
                     onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
                     onCreateRoom = { game, mode ->
@@ -499,8 +501,10 @@ private fun CatalogTab(
 @Composable
 private fun RoomsTab(
     rooms: List<RoomDto>,
-    games: List<GameDto>,
+    allGames: List<GameDto>,
+    libraryGames: List<GameDto>,
     lanNsd: LanNsdManager,
+    onGoToCatalog: () -> Unit,
     onRefresh: () -> Unit,
     onLookupRoom: suspend (String) -> RoomDto?,
     onCreateRoom: (GameDto, String) -> Unit,
@@ -508,7 +512,7 @@ private fun RoomsTab(
 ) {
     val scope = rememberCoroutineScope()
     val discoveredLan by lanNsd.discoveredRooms.collectAsState()
-    var selectedGame by remember(games) { mutableStateOf(games.firstOrNull()) }
+    var selectedGame by remember(libraryGames) { mutableStateOf(libraryGames.firstOrNull()) }
     var showGamePicker by remember { mutableStateOf(false) }
     var pickerQuery by remember { mutableStateOf("") }
     var joinCode by remember { mutableStateOf("") }
@@ -521,9 +525,9 @@ private fun RoomsTab(
     }
 
     if (showGamePicker) {
-        val filteredGames = remember(games, pickerQuery) {
-            if (pickerQuery.isBlank()) games
-            else games.filter {
+        val filteredGames = remember(libraryGames, pickerQuery) {
+            if (pickerQuery.isBlank()) libraryGames
+            else libraryGames.filter {
                 it.title.contains(pickerQuery, ignoreCase = true) ||
                     it.system.contains(pickerQuery, ignoreCase = true)
             }
@@ -531,7 +535,7 @@ private fun RoomsTab(
         AlertDialog(
             onDismissRequest = { showGamePicker = false },
             containerColor = LeatherBlack,
-            title = { Text("Elegir Juego para la Sala", color = CoinYellow, fontWeight = FontWeight.Bold) },
+            title = { Text("Elegir Juego de tu Biblioteca", color = CoinYellow, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -604,42 +608,66 @@ private fun RoomsTab(
             }
         }
 
-        // Selector de juego para crear sala
-        Card(
-            colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-            border = BorderStroke(1.dp, ArcadeMagenta.copy(alpha = 0.7f)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = games.isNotEmpty()) { showGamePicker = true }
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // Selector de juego para crear sala (solo juegos descargados en Biblioteca)
+        if (libraryGames.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+                border = BorderStroke(1.dp, ArcadeOrange.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                GameCoverImage(
-                    slug = selectedGame?.slug,
-                    contentDescription = selectedGame?.title,
-                    modifier = Modifier.size(48.dp)
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("JUEGO SELECCIONADO:", color = SteelGray, fontSize = 10.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = selectedGame?.title ?: "Cargando catálogo...",
-                        color = CoinYellow,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        maxLines = 1
+                        text = "Descarga un juego en el Catálogo para poder crear una sala.",
+                        color = SteelGray,
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f)
                     )
-                    if (selectedGame != null) {
-                        Text(
-                            "${selectedGame?.system} · Máx ${selectedGame?.maxPlayers}P",
-                            color = SteelGray,
-                            fontSize = 11.sp
-                        )
+                    OutlinedButton(onClick = onGoToCatalog, border = BorderStroke(1.dp, CoinYellow)) {
+                        Text("CATÁLOGO", color = CoinYellow, fontSize = 11.sp)
                     }
                 }
-                Text("CAMBIAR", color = ArcadeMagenta, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+        } else {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+                border = BorderStroke(1.dp, ArcadeMagenta.copy(alpha = 0.7f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showGamePicker = true }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GameCoverImage(
+                        slug = selectedGame?.slug,
+                        contentDescription = selectedGame?.title,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("JUEGO DE TU BIBLIOTECA:", color = SteelGray, fontSize = 10.sp)
+                        Text(
+                            text = selectedGame?.title ?: "",
+                            color = CoinYellow,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            maxLines = 1
+                        )
+                        if (selectedGame != null) {
+                            Text(
+                                "${selectedGame?.system} · Máx ${selectedGame?.maxPlayers}P",
+                                color = SteelGray,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Text("CAMBIAR", color = ArcadeMagenta, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
             }
         }
 
@@ -713,7 +741,7 @@ private fun RoomsTab(
         if (discoveredLan.isNotEmpty()) {
             Text("SALAS DETECTADAS EN WIFI (NSD):", color = CoinYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             discoveredLan.forEach { lan ->
-                val lanGame = games.firstOrNull { it.title.equals(lan.gameTitle, ignoreCase = true) }
+                val lanGame = allGames.firstOrNull { it.title.equals(lan.gameTitle, ignoreCase = true) }
                 fun joinLan() {
                     scope.launch {
                         joinError = null
@@ -773,7 +801,7 @@ private fun RoomsTab(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rooms, key = { it.id }) { room ->
-                    val roomGame = games.firstOrNull { it.id == room.gameId }
+                    val roomGame = allGames.firstOrNull { it.id == room.gameId }
                     val roomGameTitle = roomGame?.title ?: "Arcade"
                     Card(
                         colors = CardDefaults.cardColors(containerColor = LeatherBlack),
