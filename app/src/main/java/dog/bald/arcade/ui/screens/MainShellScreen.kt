@@ -266,10 +266,10 @@ fun MainShellScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    painter = painterResource(id = R.drawable.logo_text),
                     contentDescription = "bald.dog ARCADE",
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.height(34.dp)
                 )
                 Text(
                     text = profile?.username ?: "Jugador",
