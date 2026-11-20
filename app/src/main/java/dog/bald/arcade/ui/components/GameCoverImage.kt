@@ -21,9 +21,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.DeepPurple
-import dog.bald.arcade.ui.theme.SteelGray
+import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.GraphiteSurface
+import dog.bald.arcade.ui.theme.MutedGray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,8 +68,8 @@ fun GameCoverImage(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(DeepPurple)
-            .border(1.dp, ArcadeMagenta.copy(alpha = 0.5f), shape),
+            .background(GraphiteSurface)
+            .border(1.dp, CharcoalBorder, shape),
         contentAlignment = Alignment.Center
     ) {
         val img = bitmap
@@ -84,7 +84,7 @@ fun GameCoverImage(
             Icon(
                 imageVector = Icons.Default.SportsEsports,
                 contentDescription = contentDescription,
-                tint = SteelGray
+                tint = MutedGray
             )
         }
     }

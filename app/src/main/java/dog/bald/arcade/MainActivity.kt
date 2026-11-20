@@ -3,6 +3,7 @@ package dog.bald.arcade
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -21,15 +22,17 @@ import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.screens.AuthScreen
 import dog.bald.arcade.ui.screens.MainShellScreen
-import dog.bald.arcade.ui.theme.ArcadeBlack
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
-import dog.bald.arcade.ui.theme.CoinYellow
+import dog.bald.arcade.ui.theme.ObsidianBlack
 import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         val repo = ArcadeRepository(applicationContext)
         val romManager = IpfsRomManager(applicationContext)
@@ -54,10 +57,10 @@ class MainActivity : ComponentActivity() {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(ArcadeBlack),
+                                .background(ObsidianBlack),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(color = CoinYellow)
+                            CircularProgressIndicator(color = dog.bald.arcade.ui.theme.PureWhite)
                         }
                     }
 

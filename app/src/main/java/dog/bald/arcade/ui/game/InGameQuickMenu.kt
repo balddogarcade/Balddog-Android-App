@@ -29,13 +29,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.input.TouchLayoutConfig
-import dog.bald.arcade.ui.theme.ArcadeBlack
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.ArcadeOrange
-import dog.bald.arcade.ui.theme.CoinYellow
-import dog.bald.arcade.ui.theme.LeatherBlack
-import dog.bald.arcade.ui.theme.RetroIvory
-import dog.bald.arcade.ui.theme.SteelGray
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.GraphiteSurface
+import dog.bald.arcade.ui.theme.MutedGray
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SteelBorder
 
 @Composable
 fun InGameQuickMenu(
@@ -56,34 +58,34 @@ fun InGameQuickMenu(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(ArcadeBlack.copy(alpha = 0.55f))
+            .background(ObsidianBlack.copy(alpha = 0.6f))
     ) {
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .width(320.dp)
                 .fillMaxHeight()
-                .background(LeatherBlack.copy(alpha = 0.94f), RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
+                .background(CarbonSurface.copy(alpha = 0.96f), RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                 .padding(18.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = gameTitle.ifBlank { "bald.dog ARCADE" },
-                color = CoinYellow,
+                color = PureWhite,
                 fontSize = 17.sp,
-                fontWeight = FontWeight.ExtraBold
+                fontWeight = FontWeight.Bold
             )
             Text(
                 text = "FPS: ${"%.1f".format(fps)} · ${if (hasPhysicalController) "Mando BT conectado" else "Modo Táctil"}",
-                color = SteelGray,
+                color = MutedGray,
                 fontSize = 12.sp
             )
 
             if (!statusMessage.isNullOrBlank()) {
                 Text(
                     text = statusMessage,
-                    color = ArcadeOrange,
+                    color = SilverGray,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -92,34 +94,36 @@ fun InGameQuickMenu(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = onSaveState,
-                    colors = ButtonDefaults.buttonColors(containerColor = ArcadeMagenta, contentColor = RetroIvory),
+                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                    border = BorderStroke(1.dp, SteelBorder),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("SAVE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
                 Button(
                     onClick = onLoadState,
-                    colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack),
+                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                    border = BorderStroke(1.dp, SteelBorder),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("LOAD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
 
-            Text("Opacidad Táctil (${(touchConfig.opacity * 100).toInt()}%)", color = RetroIvory, fontSize = 12.sp)
+            Text("Opacidad Táctil (${(touchConfig.opacity * 100).toInt()}%)", color = PureWhite, fontSize = 12.sp)
             Slider(
                 value = touchConfig.opacity,
                 onValueChange = { onTouchConfigChange(touchConfig.copy(opacity = it)) },
                 valueRange = 0.2f..1.0f,
-                colors = SliderDefaults.colors(thumbColor = CoinYellow, activeTrackColor = ArcadeMagenta)
+                colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
             )
 
-            Text("Escala Botones (${"%.2f".format(touchConfig.scale)}x)", color = RetroIvory, fontSize = 12.sp)
+            Text("Escala Botones (${"%.2f".format(touchConfig.scale)}x)", color = PureWhite, fontSize = 12.sp)
             Slider(
                 value = touchConfig.scale,
                 onValueChange = { onTouchConfigChange(touchConfig.copy(scale = it)) },
                 valueRange = 0.75f..1.4f,
-                colors = SliderDefaults.colors(thumbColor = CoinYellow, activeTrackColor = ArcadeMagenta)
+                colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
             )
 
             Row(
@@ -127,49 +131,54 @@ fun InGameQuickMenu(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Mostrar táctil con mando", color = RetroIvory, fontSize = 12.sp)
+                Text("Mostrar táctil con mando", color = PureWhite, fontSize = 12.sp)
                 Switch(
                     checked = touchConfig.forceShowTouch,
                     onCheckedChange = { onTouchConfigChange(touchConfig.copy(forceShowTouch = it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = ArcadeBlack, checkedTrackColor = CoinYellow)
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = PureBlack,
+                        checkedTrackColor = PureWhite,
+                        uncheckedThumbColor = MutedGray,
+                        uncheckedTrackColor = GraphiteSurface
+                    )
                 )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
                     onClick = onToggleEditLayout,
-                    border = BorderStroke(1.dp, if (editLayoutMode) CoinYellow else ArcadeMagenta),
+                    border = BorderStroke(1.dp, if (editLayoutMode) PureWhite else SteelBorder),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
                         if (editLayoutMode) "LISTO" else "REUBICAR",
-                        color = RetroIvory,
+                        color = PureWhite,
                         fontSize = 11.sp
                     )
                 }
                 OutlinedButton(
                     onClick = onResetLayout,
-                    border = BorderStroke(1.dp, SteelGray),
+                    border = BorderStroke(1.dp, CharcoalBorder),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("RESET", color = SteelGray, fontSize = 11.sp)
+                    Text("RESET", color = MutedGray, fontSize = 11.sp)
                 }
             }
 
             Button(
                 onClick = onResume,
-                colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack),
+                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("REANUDAR", fontWeight = FontWeight.ExtraBold)
+                Text("REANUDAR", fontWeight = FontWeight.Bold)
             }
 
             OutlinedButton(
                 onClick = onExit,
-                border = BorderStroke(1.dp, ArcadeOrange),
+                border = BorderStroke(1.dp, SteelBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("SALIR DE PARTIDA", color = ArcadeOrange, fontWeight = FontWeight.Bold)
+                Text("SALIR DE PARTIDA", color = SilverGray, fontWeight = FontWeight.Bold)
             }
         }
     }

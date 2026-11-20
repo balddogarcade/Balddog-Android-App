@@ -49,14 +49,14 @@ import dog.bald.arcade.input.TouchLayoutConfig
 import dog.bald.arcade.input.TouchLayoutPrefs
 import dog.bald.arcade.ui.game.ArcadeTouchOverlay
 import dog.bald.arcade.ui.game.InGameQuickMenu
-import dog.bald.arcade.ui.theme.ArcadeBlack
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.ArcadeOrange
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
-import dog.bald.arcade.ui.theme.CoinYellow
-import dog.bald.arcade.ui.theme.LeatherBlack
-import dog.bald.arcade.ui.theme.RetroIvory
-import dog.bald.arcade.ui.theme.SteelGray
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.MutedGray
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -231,7 +231,7 @@ class GameActivity : ComponentActivity() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(ArcadeBlack)
+                        .background(ObsidianBlack)
                 ) {
                     if (engineError == null) {
                         AndroidView(
@@ -293,8 +293,8 @@ class GameActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .align(Alignment.TopCenter)
                                     .padding(top = 8.dp)
-                                    .background(LeatherBlack.copy(alpha = 0.75f), RoundedCornerShape(12.dp))
-                                    .border(1.dp, if (editLayoutMode) CoinYellow else ArcadeMagenta.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                                    .background(CarbonSurface.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                                    .border(1.dp, if (editLayoutMode) PureWhite else SteelBorder, RoundedCornerShape(12.dp))
                                     .clickable {
                                         if (editLayoutMode) {
                                             editLayoutMode = false
@@ -313,7 +313,7 @@ class GameActivity : ComponentActivity() {
                                         isNetplay -> "MENU · ${"%.0f".format(currentFps)} FPS · ${netplayHud.pingMs} ms"
                                         else -> "MENU · ${"%.0f".format(currentFps)} FPS"
                                     },
-                                    color = if (editLayoutMode) CoinYellow else RetroIvory,
+                                    color = if (editLayoutMode) PureWhite else SilverGray,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -323,12 +323,12 @@ class GameActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .align(Alignment.TopCenter)
                                         .padding(top = 42.dp)
-                                        .background(ArcadeOrange.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                                        .background(PureWhite.copy(alpha = 0.94f), RoundedCornerShape(10.dp))
                                         .padding(horizontal = 14.dp, vertical = 6.dp)
                                 ) {
                                     Text(
                                         text = "RECONECTANDO PAR... ${netplayHud.reconnectSecsLeft}s",
-                                        color = ArcadeBlack,
+                                        color = PureBlack,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.ExtraBold
                                     )
@@ -386,7 +386,7 @@ class GameActivity : ComponentActivity() {
                     } else {
                         Text(
                             text = engineError ?: "",
-                            color = ArcadeOrange,
+                            color = SilverGray,
                             fontSize = 15.sp,
                             modifier = Modifier
                                 .align(Alignment.Center)
@@ -399,11 +399,11 @@ class GameActivity : ComponentActivity() {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(ArcadeBlack.copy(alpha = 0.8f)),
+                                .background(ObsidianBlack.copy(alpha = 0.84f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+                                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.padding(24.dp)
                             ) {
@@ -412,11 +412,11 @@ class GameActivity : ComponentActivity() {
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text("PARTIDA FINALIZADA", color = CoinYellow, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                                    Text(endMsg, color = SteelGray, fontSize = 13.sp)
+                                    Text("PARTIDA FINALIZADA", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                    Text(endMsg, color = MutedGray, fontSize = 13.sp)
                                     Button(
                                         onClick = { finish() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                                        colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
                                     ) {
                                         Text("VOLVER A SALAS", fontWeight = FontWeight.Bold)
                                     }

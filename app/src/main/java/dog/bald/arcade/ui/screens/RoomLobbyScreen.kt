@@ -49,14 +49,17 @@ import dog.bald.arcade.data.RoomMessageDto
 import dog.bald.arcade.data.RoomSlotInfo
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.GameCoverImage
-import dog.bald.arcade.ui.theme.ArcadeBlack
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.ArcadeOrange
-import dog.bald.arcade.ui.theme.CoinYellow
-import dog.bald.arcade.ui.theme.DeepPurple
-import dog.bald.arcade.ui.theme.LeatherBlack
-import dog.bald.arcade.ui.theme.RetroIvory
-import dog.bald.arcade.ui.theme.SteelGray
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.GraphiteSurface
+import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
+import dog.bald.arcade.ui.theme.MutedGray
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SpaceGroteskFamily
+import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -183,7 +186,7 @@ fun RoomLobbyScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(ArcadeBlack)
+            .background(ObsidianBlack)
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
@@ -208,13 +211,14 @@ fun RoomLobbyScreen(
                 Column {
                     Text(
                         text = "SALA #${room.code} · ${room.mode.uppercase()}",
-                        color = CoinYellow,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold
+                        color = PureWhite,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = game?.title ?: "Arcade Match",
-                        color = ArcadeMagenta,
+                        color = MutedGray,
                         fontSize = 13.sp,
                         maxLines = 1
                     )
@@ -227,18 +231,18 @@ fun RoomLobbyScreen(
                         onLeave()
                     }
                 },
-                border = BorderStroke(1.dp, ArcadeOrange)
+                border = BorderStroke(1.dp, SteelBorder)
             ) {
-                Text("SALIR", color = ArcadeOrange, fontSize = 12.sp)
+                Text("SALIR", color = SilverGray, fontSize = 12.sp)
             }
         }
 
         if (errorMsg != null) {
-            Text(errorMsg ?: "", color = ArcadeOrange, fontSize = 12.sp)
+            Text(errorMsg ?: "", color = SilverGray, fontSize = 12.sp)
         }
 
         // Slots 1P..4P (en grilla de 2 columnas si son 3 o 4 jugadores)
-        Text("SLOTS DE JUGADORES (${room.maxPlayers}P · Toca un slot libre):", color = SteelGray, fontSize = 11.sp)
+        Text("SLOTS DE JUGADORES (${room.maxPlayers}P · Toca un slot libre):", color = MutedGray, fontSize = 11.sp)
         val slotIndices = (0 until room.maxPlayers).toList()
         val rows = slotIndices.chunked(2)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -249,14 +253,14 @@ fun RoomLobbyScreen(
                         val isMine = occupant?.userId == myUid
                         Card(
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isMine) DeepPurple else LeatherBlack
+                                containerColor = if (isMine) GraphiteSurface else CarbonSurface
                             ),
                             border = BorderStroke(
                                 1.dp,
                                 when {
-                                    occupant == null -> SteelGray.copy(alpha = 0.4f)
-                                    occupant.ready -> CoinYellow
-                                    else -> ArcadeMagenta
+                                    occupant == null -> CharcoalBorder
+                                    occupant.ready -> PureWhite
+                                    else -> SteelBorder
                                 }
                             ),
                             modifier = Modifier
@@ -267,17 +271,17 @@ fun RoomLobbyScreen(
                                 modifier = Modifier.padding(10.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("${slot + 1}P", color = CoinYellow, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                Text("${slot + 1}P", color = PureWhite, fontFamily = SpaceGroteskFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 Text(
                                     text = occupant?.username ?: "LIBRE",
-                                    color = if (occupant != null) RetroIvory else SteelGray,
+                                    color = if (occupant != null) PureWhite else MutedGray,
                                     fontSize = 11.sp,
                                     maxLines = 1
                                 )
                                 if (occupant != null) {
                                     Text(
                                         text = if (occupant.ready) "READY" else "...",
-                                        color = if (occupant.ready) CoinYellow else ArcadeOrange,
+                                        color = if (occupant.ready) PureWhite else MutedGray,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -301,9 +305,9 @@ fun RoomLobbyScreen(
                             runCatching { repo.sendRoomMessage(room.id, myUsername, sticker) }
                         }
                     },
-                    border = BorderStroke(1.dp, ArcadeMagenta)
+                    border = BorderStroke(1.dp, CharcoalBorder)
                 ) {
-                    Text(sticker, color = RetroIvory, fontSize = 11.sp)
+                    Text(sticker, color = PureWhite, fontSize = 11.sp)
                 }
             }
         }
@@ -312,14 +316,14 @@ fun RoomLobbyScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(LeatherBlack, RoundedCornerShape(10.dp))
+                .background(CarbonSurface, RoundedCornerShape(10.dp))
                 .padding(10.dp)
         ) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(messages, key = { it.id }) { msg ->
                     Text(
                         text = "${msg.username}: ${msg.message}",
-                        color = RetroIvory,
+                        color = SilverGray,
                         fontSize = 12.sp
                     )
                 }
@@ -337,10 +341,10 @@ fun RoomLobbyScreen(
                 placeholder = { Text("Mensaje rápido...", fontSize = 12.sp) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ArcadeMagenta,
-                    unfocusedBorderColor = SteelGray,
-                    focusedTextColor = RetroIvory,
-                    unfocusedTextColor = RetroIvory
+                    focusedBorderColor = PureWhite,
+                    unfocusedBorderColor = CharcoalBorder,
+                    focusedTextColor = PureWhite,
+                    unfocusedTextColor = PureWhite
                 ),
                 modifier = Modifier.weight(1f)
             )
@@ -353,7 +357,7 @@ fun RoomLobbyScreen(
                         runCatching { repo.sendRoomMessage(room.id, myUsername, txt) }
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = ArcadeMagenta, contentColor = RetroIvory)
+                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
             ) {
                 Text("ENVIAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
@@ -363,10 +367,11 @@ fun RoomLobbyScreen(
             if (!isHost && mySlot != null) {
                 Button(
                     onClick = { toggleReady() },
-                    colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack),
+                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                    border = BorderStroke(1.dp, PureWhite),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("LISTO / READY", fontWeight = FontWeight.ExtraBold)
+                    Text("LISTO / READY", fontWeight = FontWeight.Bold)
                 }
             }
             if (isHost && mySlot != null) {
@@ -384,12 +389,12 @@ fun RoomLobbyScreen(
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack),
+                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(
                         if (canStart) "INICIAR PARTIDA" else "ESPERANDO JUGADORES (${seated.size}/2+)",
-                        fontWeight = FontWeight.ExtraBold
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }

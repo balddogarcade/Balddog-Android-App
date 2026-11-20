@@ -41,12 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.input.RetroJoypad
 import dog.bald.arcade.input.TouchLayoutConfig
-import dog.bald.arcade.ui.theme.ArcadeBlack
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.ArcadeOrange
-import dog.bald.arcade.ui.theme.CoinYellow
-import dog.bald.arcade.ui.theme.LeatherBlack
-import dog.bald.arcade.ui.theme.RetroIvory
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.MutedGray
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SteelBorder
 import kotlin.math.atan2
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -102,13 +103,13 @@ fun ArcadeTouchOverlay(
         ) {
             ArcadePillButton(
                 label = "COIN",
-                accent = CoinYellow,
+                accent = PureWhite,
                 editMode = editMode,
                 onPressChanged = { updatePill(RetroJoypad.COIN, it) }
             )
             ArcadePillButton(
                 label = "START",
-                accent = ArcadeOrange,
+                accent = SilverGray,
                 editMode = editMode,
                 onPressChanged = { updatePill(RetroJoypad.START, it) }
             )
@@ -238,7 +239,7 @@ private fun ArcadeButtonCluster(
                 ArcadeCircleVisual(
                     label = "Y",
                     size = btnSize,
-                    accent = ArcadeMagenta,
+                    accent = SilverGray,
                     pressed = (activeMask and RetroJoypad.Y) != 0,
                     editMode = editMode,
                     onPositioned = { rect -> buttonBounds[RetroJoypad.Y] = rect.translate(rOffset) }
@@ -246,7 +247,7 @@ private fun ArcadeButtonCluster(
                 ArcadeCircleVisual(
                     label = "X",
                     size = btnSize,
-                    accent = ArcadeMagenta,
+                    accent = SilverGray,
                     pressed = (activeMask and RetroJoypad.X) != 0,
                     editMode = editMode,
                     onPositioned = { rect -> buttonBounds[RetroJoypad.X] = rect.translate(rOffset) }
@@ -254,7 +255,7 @@ private fun ArcadeButtonCluster(
                 ArcadeCircleVisual(
                     label = "L",
                     size = btnSize,
-                    accent = ArcadeOrange,
+                    accent = MutedGray,
                     pressed = (activeMask and RetroJoypad.L) != 0,
                     editMode = editMode,
                     onPositioned = { rect -> buttonBounds[RetroJoypad.L] = rect.translate(rOffset) }
@@ -270,7 +271,7 @@ private fun ArcadeButtonCluster(
                 ArcadeCircleVisual(
                     label = "B",
                     size = btnSize,
-                    accent = CoinYellow,
+                    accent = PureWhite,
                     pressed = (activeMask and RetroJoypad.B) != 0,
                     editMode = editMode,
                     onPositioned = { rect -> buttonBounds[RetroJoypad.B] = rect.translate(rOffset) }
@@ -278,7 +279,7 @@ private fun ArcadeButtonCluster(
                 ArcadeCircleVisual(
                     label = "A",
                     size = btnSize,
-                    accent = CoinYellow,
+                    accent = PureWhite,
                     pressed = (activeMask and RetroJoypad.A) != 0,
                     editMode = editMode,
                     onPositioned = { rect -> buttonBounds[RetroJoypad.A] = rect.translate(rOffset) }
@@ -286,7 +287,7 @@ private fun ArcadeButtonCluster(
                 ArcadeCircleVisual(
                     label = "R",
                     size = btnSize,
-                    accent = ArcadeOrange,
+                    accent = MutedGray,
                     pressed = (activeMask and RetroJoypad.R) != 0,
                     editMode = editMode,
                     onPositioned = { rect -> buttonBounds[RetroJoypad.R] = rect.translate(rOffset) }
@@ -311,18 +312,18 @@ private fun ArcadeCircleVisual(
             .size(size)
             .onGloballyPositioned { coords -> onPositioned(coords.boundsInParent()) }
             .background(
-                color = if (pressed) accent else LeatherBlack.copy(alpha = 0.82f),
+                color = if (pressed) accent else CarbonSurface.copy(alpha = 0.82f),
                 shape = CircleShape
             )
             .border(
-                width = 2.dp,
-                color = if (editMode) CoinYellow else accent,
+                width = 1.5.dp,
+                color = if (editMode) PureWhite else accent,
                 shape = CircleShape
             )
     ) {
         Text(
             text = label,
-            color = if (pressed) ArcadeBlack else RetroIvory,
+            color = if (pressed) PureBlack else PureWhite,
             fontWeight = FontWeight.ExtraBold,
             fontSize = 15.sp
         )
@@ -389,17 +390,17 @@ private fun ArcadeEightWayDpad(
             val c = Offset(size.width / 2f, size.height / 2f)
             val outerR = size.minDimension / 2f
             drawCircle(
-                color = LeatherBlack.copy(alpha = 0.75f),
+                color = CarbonSurface.copy(alpha = 0.78f),
                 radius = outerR,
                 center = c
             )
             drawCircle(
-                color = if (editMode) CoinYellow else ArcadeMagenta.copy(alpha = 0.8f),
+                color = if (editMode) PureWhite else SteelBorder,
                 radius = outerR,
                 center = c,
                 style = Stroke(width = 3f)
             )
-            val stickColor = if (activeMask != 0) CoinYellow else RetroIvory.copy(alpha = 0.7f)
+            val stickColor = if (activeMask != 0) PureWhite else SilverGray.copy(alpha = 0.75f)
             drawCircle(
                 color = stickColor,
                 radius = outerR * 0.34f,
@@ -442,7 +443,7 @@ private fun ArcadePillButton(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .background(
-                color = if (pressed) accent else LeatherBlack.copy(alpha = 0.82f),
+                color = if (pressed) accent else ObsidianBlack.copy(alpha = 0.82f),
                 shape = RoundedCornerShape(16.dp)
             )
             .border(1.5.dp, accent, RoundedCornerShape(16.dp))
@@ -469,7 +470,7 @@ private fun ArcadePillButton(
     ) {
         Text(
             text = label,
-            color = if (pressed) ArcadeBlack else RetroIvory,
+            color = if (pressed) PureBlack else PureWhite,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp
         )

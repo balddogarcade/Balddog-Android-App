@@ -2,12 +2,13 @@ package dog.bald.arcade.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Paleta oficial bald.dog ARCADE (Manual 02 / AGENTS.md)
-val ArcadeBlack = Color(0xFF0A0A0C)
-val LeatherBlack = Color(0xFF141418)
-val DeepPurple = Color(0xFF1A0F2E)
-val ArcadeMagenta = Color(0xFFFF007F)
-val ArcadeOrange = Color(0xFFFF5E1A)
-val CoinYellow = Color(0xFFFFD600)
-val RetroIvory = Color(0xFFF4F4F6)
-val SteelGray = Color(0xFF8E8E9E)
+// Official bald.dog ARCADE High-Contrast Monochrome Palette (docs/BRAND_MANUAL.md)
+val ObsidianBlack = Color(0xFF050506)
+val CarbonSurface = Color(0xFF101012)
+val GraphiteSurface = Color(0xFF1A1A1E)
+val CharcoalBorder = Color(0xFF2A2A30)
+val SteelBorder = Color(0xFF44444E)
+val MutedGray = Color(0xFF8E8E98)
+val SilverGray = Color(0xFFC8C8D0)
+val PureWhite = Color(0xFFFAFAFA)
+val PureBlack = Color(0xFF000000)

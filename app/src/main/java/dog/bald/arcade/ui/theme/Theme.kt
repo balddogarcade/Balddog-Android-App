@@ -4,26 +4,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-private val ArcadeDarkColorScheme = darkColorScheme(
-    primary = CoinYellow,
-    onPrimary = ArcadeBlack,
-    secondary = ArcadeMagenta,
-    onSecondary = RetroIvory,
-    tertiary = ArcadeOrange,
-    onTertiary = ArcadeBlack,
-    background = ArcadeBlack,
-    onBackground = RetroIvory,
-    surface = LeatherBlack,
-    onSurface = RetroIvory,
-    surfaceVariant = DeepPurple,
-    onSurfaceVariant = SteelGray,
-    outline = ArcadeMagenta,
+private val ArcadeMonochromeColorScheme = darkColorScheme(
+    primary = PureWhite,
+    onPrimary = PureBlack,
+    secondary = SilverGray,
+    onSecondary = PureBlack,
+    tertiary = GraphiteSurface,
+    onTertiary = PureWhite,
+    background = ObsidianBlack,
+    onBackground = PureWhite,
+    surface = CarbonSurface,
+    onSurface = PureWhite,
+    surfaceVariant = GraphiteSurface,
+    onSurfaceVariant = MutedGray,
+    outline = SteelBorder,
+    outlineVariant = CharcoalBorder,
 )
 
 @Composable
 fun BaldDogArcadeTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = ArcadeDarkColorScheme,
+        colorScheme = ArcadeMonochromeColorScheme,
+        typography = BaldDogTypography,
         content = content
     )
 }

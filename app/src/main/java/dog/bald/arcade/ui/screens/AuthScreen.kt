@@ -36,13 +36,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.ArcadeRepository
-import dog.bald.arcade.ui.theme.ArcadeBlack
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.ArcadeOrange
-import dog.bald.arcade.ui.theme.CoinYellow
-import dog.bald.arcade.ui.theme.LeatherBlack
-import dog.bald.arcade.ui.theme.RetroIvory
-import dog.bald.arcade.ui.theme.SteelGray
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.MutedGray
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SpaceGroteskFamily
+import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.launch
 
 @Composable
@@ -62,7 +64,7 @@ fun AuthScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ArcadeBlack)
+            .background(ObsidianBlack)
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
@@ -72,22 +74,23 @@ fun AuthScreen(
     ) {
         Text(
             text = "bald.dog ARCADE",
-            color = CoinYellow,
+            color = PureWhite,
+            fontFamily = SpaceGroteskFamily,
             fontSize = 30.sp,
-            fontWeight = FontWeight.ExtraBold
+            fontWeight = FontWeight.Bold
         )
         Text(
             text = "Arcade with Teeth.",
-            color = ArcadeMagenta,
+            color = MutedGray,
             fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Card(
-            colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-            border = BorderStroke(1.dp, ArcadeMagenta),
+            colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+            border = BorderStroke(1.dp, CharcoalBorder),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -97,18 +100,19 @@ fun AuthScreen(
             ) {
                 Text(
                     text = if (isRegister) "CREAR CUENTA" else "INSERT COIN · LOGIN",
-                    color = RetroIvory,
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
 
                 val fieldColors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ArcadeMagenta,
-                    unfocusedBorderColor = SteelGray,
-                    focusedTextColor = RetroIvory,
-                    unfocusedTextColor = RetroIvory,
-                    focusedLabelColor = CoinYellow,
-                    unfocusedLabelColor = SteelGray
+                    focusedBorderColor = PureWhite,
+                    unfocusedBorderColor = CharcoalBorder,
+                    focusedTextColor = PureWhite,
+                    unfocusedTextColor = PureWhite,
+                    focusedLabelColor = PureWhite,
+                    unfocusedLabelColor = MutedGray
                 )
 
                 if (isRegister) {
@@ -144,7 +148,7 @@ fun AuthScreen(
                 if (errorMsg != null) {
                     Text(
                         text = errorMsg ?: "",
-                        color = ArcadeOrange,
+                        color = SilverGray,
                         fontSize = 12.sp
                     )
                 }
@@ -170,17 +174,18 @@ fun AuthScreen(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = CoinYellow,
-                        contentColor = ArcadeBlack
+                        containerColor = PureWhite,
+                        contentColor = PureBlack
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (loading) {
-                        CircularProgressIndicator(color = ArcadeBlack, strokeWidth = 2.dp)
+                        CircularProgressIndicator(color = PureBlack, strokeWidth = 2.dp)
                     } else {
                         Text(
                             if (isRegister) "REGISTRARME" else "ENTRAR",
-                            fontWeight = FontWeight.ExtraBold
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -194,7 +199,7 @@ fun AuthScreen(
                 ) {
                     Text(
                         text = if (isRegister) "¿Ya tienes cuenta? Inicia sesión" else "¿Nuevo aquí? Crea una cuenta",
-                        color = SteelGray,
+                        color = MutedGray,
                         fontSize = 12.sp
                     )
                 }
@@ -219,12 +224,13 @@ fun AuthScreen(
                     }
                 }
             },
-            border = BorderStroke(1.dp, ArcadeOrange),
+            border = BorderStroke(1.dp, SteelBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = "ENTRAR COMO INVITADO",
-                color = ArcadeOrange,
+                color = PureWhite,
+                fontFamily = SpaceGroteskFamily,
                 fontWeight = FontWeight.Bold
             )
         }

@@ -70,14 +70,17 @@ import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.GameCoverImage
-import dog.bald.arcade.ui.theme.ArcadeBlack
-import dog.bald.arcade.ui.theme.ArcadeMagenta
-import dog.bald.arcade.ui.theme.ArcadeOrange
-import dog.bald.arcade.ui.theme.CoinYellow
-import dog.bald.arcade.ui.theme.DeepPurple
-import dog.bald.arcade.ui.theme.LeatherBlack
-import dog.bald.arcade.ui.theme.RetroIvory
-import dog.bald.arcade.ui.theme.SteelGray
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.GraphiteSurface
+import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
+import dog.bald.arcade.ui.theme.MutedGray
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SpaceGroteskFamily
+import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -223,9 +226,9 @@ fun MainShellScreen(
     }
 
     Scaffold(
-        containerColor = ArcadeBlack,
+        containerColor = ObsidianBlack,
         bottomBar = {
-            NavigationBar(containerColor = LeatherBlack) {
+            NavigationBar(containerColor = CarbonSurface) {
                 MainTab.entries.forEachIndexed { idx, tab ->
                     NavigationBarItem(
                         selected = selectedTab == idx,
@@ -233,11 +236,11 @@ fun MainShellScreen(
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
                         label = { Text(tab.label, fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = CoinYellow,
-                            selectedTextColor = CoinYellow,
-                            unselectedIconColor = SteelGray,
-                            unselectedTextColor = SteelGray,
-                            indicatorColor = DeepPurple
+                            selectedIconColor = PureWhite,
+                            selectedTextColor = PureWhite,
+                            unselectedIconColor = MutedGray,
+                            unselectedTextColor = MutedGray,
+                            indicatorColor = GraphiteSurface
                         )
                     )
                 }
@@ -257,13 +260,14 @@ fun MainShellScreen(
             ) {
                 Text(
                     text = "bald.dog ARCADE",
-                    color = CoinYellow,
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
                     fontSize = 22.sp,
-                    fontWeight = FontWeight.ExtraBold
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = profile?.username ?: "Jugador",
-                    color = ArcadeMagenta,
+                    color = SilverGray,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -271,20 +275,21 @@ fun MainShellScreen(
 
             if (syncError != null) {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(text = syncError ?: "", color = ArcadeOrange, fontSize = 12.sp)
+                Text(text = syncError ?: "", color = SilverGray, fontSize = 12.sp)
             }
 
             if (downloadingGameId != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "$downloadStage (${(downloadProgress * 100).toInt()}%)",
-                    color = CoinYellow,
+                    color = PureWhite,
+                    fontFamily = JetBrainsMonoFamily,
                     fontSize = 12.sp
                 )
                 LinearProgressIndicator(
                     progress = { downloadProgress },
-                    color = CoinYellow,
-                    trackColor = DeepPurple,
+                    color = PureWhite,
+                    trackColor = GraphiteSurface,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -420,10 +425,10 @@ private fun CatalogTab(
                     onClick = { filterSystem = sys },
                     label = { Text(sys, fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = ArcadeMagenta,
-                        selectedLabelColor = RetroIvory,
-                        containerColor = LeatherBlack,
-                        labelColor = SteelGray
+                        selectedContainerColor = PureWhite,
+                        selectedLabelColor = PureBlack,
+                        containerColor = CarbonSurface,
+                        labelColor = MutedGray
                     )
                 )
             }
@@ -431,19 +436,19 @@ private fun CatalogTab(
 
         if (filtered.isEmpty()) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-                border = BorderStroke(1.dp, DeepPurple),
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Catálogo vacío por ahora", color = RetroIvory, fontWeight = FontWeight.Bold)
+                    Text("Catálogo vacío por ahora", color = PureWhite, fontWeight = FontWeight.Bold)
                     Text(
                         "Agrega juegos en la tabla `games` de Supabase para descargarlos vía IPFS.",
-                        color = SteelGray,
+                        color = MutedGray,
                         fontSize = 13.sp
                     )
-                    OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, CoinYellow)) {
-                        Text("ACTUALIZAR CATÁLOGO", color = CoinYellow)
+                    OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("ACTUALIZAR CATÁLOGO", color = PureWhite)
                     }
                 }
             }
@@ -452,8 +457,8 @@ private fun CatalogTab(
                 items(filtered, key = { it.id }) { game ->
                     val isLocal = downloadedFiles.contains(game.romFilename)
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-                        border = BorderStroke(1.dp, ArcadeMagenta.copy(alpha = 0.6f)),
+                        colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                        border = BorderStroke(1.dp, CharcoalBorder),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -470,10 +475,10 @@ private fun CatalogTab(
                                 modifier = Modifier.size(56.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(game.title, color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(game.title, color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 Text(
                                     "${game.system} · ${game.maxPlayers}P${if (game.isCoop) " · CO-OP" else ""}",
-                                    color = SteelGray,
+                                    color = MutedGray,
                                     fontSize = 12.sp
                                 )
                             }
@@ -481,13 +486,13 @@ private fun CatalogTab(
                                 enabled = !busy,
                                 onClick = { if (isLocal) onPlay(game) else onDownload(game) },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isLocal) CoinYellow else ArcadeOrange,
-                                    contentColor = ArcadeBlack
+                                    containerColor = if (isLocal) PureWhite else GraphiteSurface,
+                                    contentColor = if (isLocal) PureBlack else PureWhite
                                 )
                             ) {
                                 Text(
                                     if (isLocal) "JUGAR" else "DESCARGAR",
-                                    fontWeight = FontWeight.ExtraBold,
+                                    fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp
                                 )
                             }
@@ -535,8 +540,8 @@ private fun RoomsTab(
         }
         AlertDialog(
             onDismissRequest = { showGamePicker = false },
-            containerColor = LeatherBlack,
-            title = { Text("Elegir Juego de tu Biblioteca", color = CoinYellow, fontWeight = FontWeight.Bold) },
+            containerColor = CarbonSurface,
+            title = { Text("Elegir Juego de tu Biblioteca", color = PureWhite, fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
@@ -545,10 +550,10 @@ private fun RoomsTab(
                         placeholder = { Text("Buscar juego...", fontSize = 12.sp) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = ArcadeMagenta,
-                            unfocusedBorderColor = SteelGray,
-                            focusedTextColor = RetroIvory,
-                            unfocusedTextColor = RetroIvory
+                            focusedBorderColor = PureWhite,
+                            unfocusedBorderColor = CharcoalBorder,
+                            focusedTextColor = PureWhite,
+                            unfocusedTextColor = PureWhite
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -556,11 +561,11 @@ private fun RoomsTab(
                         items(filteredGames, key = { it.id }) { g ->
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (selectedGame?.id == g.id) DeepPurple else ArcadeBlack
+                                    containerColor = if (selectedGame?.id == g.id) GraphiteSurface else ObsidianBlack
                                 ),
                                 border = BorderStroke(
                                     1.dp,
-                                    if (selectedGame?.id == g.id) CoinYellow else SteelGray.copy(alpha = 0.4f)
+                                    if (selectedGame?.id == g.id) PureWhite else CharcoalBorder
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -580,8 +585,8 @@ private fun RoomsTab(
                                         modifier = Modifier.size(42.dp)
                                     )
                                     Column {
-                                        Text(g.title, color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text("${g.system} · ${g.maxPlayers}P", color = SteelGray, fontSize = 11.sp)
+                                        Text(g.title, color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("${g.system} · ${g.maxPlayers}P", color = MutedGray, fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -591,7 +596,7 @@ private fun RoomsTab(
             },
             confirmButton = {
                 TextButton(onClick = { showGamePicker = false }) {
-                    Text("CERRAR", color = ArcadeOrange)
+                    Text("CERRAR", color = SilverGray)
                 }
             }
         )
@@ -603,17 +608,17 @@ private fun RoomsTab(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Salas LAN y Online", color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, ArcadeMagenta)) {
-                Text("REFRESCAR", color = ArcadeMagenta, fontSize = 11.sp)
+            Text("Salas LAN y Online", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
+                Text("REFRESCAR", color = PureWhite, fontSize = 11.sp)
             }
         }
 
         // Selector de juego para crear sala (solo juegos descargados en Biblioteca)
         if (libraryGames.isEmpty()) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-                border = BorderStroke(1.dp, ArcadeOrange.copy(alpha = 0.6f)),
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -623,19 +628,19 @@ private fun RoomsTab(
                 ) {
                     Text(
                         text = "Descarga un juego en el Catálogo para poder crear una sala.",
-                        color = SteelGray,
+                        color = MutedGray,
                         fontSize = 12.sp,
                         modifier = Modifier.weight(1f)
                     )
-                    OutlinedButton(onClick = onGoToCatalog, border = BorderStroke(1.dp, CoinYellow)) {
-                        Text("CATÁLOGO", color = CoinYellow, fontSize = 11.sp)
+                    OutlinedButton(onClick = onGoToCatalog, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("CATÁLOGO", color = PureWhite, fontSize = 11.sp)
                     }
                 }
             }
         } else {
             Card(
-                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-                border = BorderStroke(1.dp, ArcadeMagenta.copy(alpha = 0.7f)),
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showGamePicker = true }
@@ -651,10 +656,10 @@ private fun RoomsTab(
                         modifier = Modifier.size(48.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("JUEGO DE TU BIBLIOTECA:", color = SteelGray, fontSize = 10.sp)
+                        Text("JUEGO DE TU BIBLIOTECA:", color = MutedGray, fontSize = 10.sp)
                         Text(
                             text = selectedGame?.title ?: "",
-                            color = CoinYellow,
+                            color = PureWhite,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             maxLines = 1
@@ -662,12 +667,12 @@ private fun RoomsTab(
                         if (selectedGame != null) {
                             Text(
                                 "${selectedGame?.system} · Máx ${selectedGame?.maxPlayers}P",
-                                color = SteelGray,
+                                color = MutedGray,
                                 fontSize = 11.sp
                             )
                         }
                     }
-                    Text("CAMBIAR", color = ArcadeMagenta, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("CAMBIAR", color = SilverGray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
@@ -676,17 +681,18 @@ private fun RoomsTab(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = { onCreateRoom(game, "lan") },
-                    colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack),
+                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("CREAR LAN", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    Text("CREAR LAN", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
                 Button(
                     onClick = { onCreateRoom(game, "online") },
-                    colors = ButtonDefaults.buttonColors(containerColor = ArcadeMagenta, contentColor = RetroIvory),
+                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                    border = BorderStroke(1.dp, SteelBorder),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("CREAR ONLINE", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                    Text("CREAR ONLINE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
@@ -706,10 +712,10 @@ private fun RoomsTab(
                 placeholder = { Text("Código o ID (ej. 4821A)", fontSize = 12.sp) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = CoinYellow,
-                    unfocusedBorderColor = SteelGray,
-                    focusedTextColor = RetroIvory,
-                    unfocusedTextColor = RetroIvory
+                    focusedBorderColor = PureWhite,
+                    unfocusedBorderColor = CharcoalBorder,
+                    focusedTextColor = PureWhite,
+                    unfocusedTextColor = PureWhite
                 ),
                 modifier = Modifier.weight(1f)
             )
@@ -729,14 +735,14 @@ private fun RoomsTab(
                         }
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack)
+                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
             ) {
                 Text(if (joinBusy) "..." else "UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
 
         if (joinError != null) {
-            Text(joinError ?: "", color = ArcadeOrange, fontSize = 12.sp)
+            Text(joinError ?: "", color = SilverGray, fontSize = 12.sp)
         }
 
         val lanCodes = remember(discoveredLan) {
@@ -747,7 +753,7 @@ private fun RoomsTab(
         }
 
         if (discoveredLan.isNotEmpty()) {
-            Text("SALAS DETECTADAS EN WIFI (NSD):", color = CoinYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("SALAS DETECTADAS EN WIFI (NSD):", color = PureWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             discoveredLan.forEach { lan ->
                 val lanGame = allGames.firstOrNull { it.title.equals(lan.gameTitle, ignoreCase = true) }
                 fun joinLan() {
@@ -763,8 +769,8 @@ private fun RoomsTab(
                     }
                 }
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = DeepPurple),
-                    border = BorderStroke(1.dp, CoinYellow),
+                    colors = CardDefaults.cardColors(containerColor = GraphiteSurface),
+                    border = BorderStroke(1.dp, PureWhite),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { joinLan() }
@@ -780,12 +786,12 @@ private fun RoomsTab(
                             modifier = Modifier.size(44.dp)
                         )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("${lan.gameTitle} · #${lan.roomCode}", color = RetroIvory, fontWeight = FontWeight.Bold)
-                            Text("${lan.hostIp}:${lan.udpPort}", color = SteelGray, fontSize = 11.sp)
+                            Text("${lan.gameTitle} · #${lan.roomCode}", color = PureWhite, fontWeight = FontWeight.Bold)
+                            Text("${lan.hostIp}:${lan.udpPort}", color = MutedGray, fontSize = 11.sp)
                         }
                         Button(
                             onClick = { joinLan() },
-                            colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                            colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
                         ) {
                             Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
@@ -796,12 +802,13 @@ private fun RoomsTab(
 
         if (otherRooms.isEmpty() && discoveredLan.isEmpty()) {
             Card(
-                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = "No hay salas abiertas. Selecciona un juego arriba y crea una sala LAN o Online.",
-                    color = SteelGray,
+                    color = MutedGray,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(16.dp)
                 )
@@ -812,8 +819,8 @@ private fun RoomsTab(
                     val roomGame = allGames.firstOrNull { it.id == room.gameId }
                     val roomGameTitle = roomGame?.title ?: "Arcade"
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-                        border = BorderStroke(1.dp, ArcadeOrange.copy(alpha = 0.6f)),
+                        colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                        border = BorderStroke(1.dp, CharcoalBorder),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onJoinRoom(room) }
@@ -829,16 +836,16 @@ private fun RoomsTab(
                                 modifier = Modifier.size(48.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("$roomGameTitle · #${room.code}", color = CoinYellow, fontWeight = FontWeight.Bold)
+                                Text("$roomGameTitle · #${room.code}", color = PureWhite, fontWeight = FontWeight.Bold)
                                 Text(
                                     "${room.mode.uppercase()} · Jugadores: ${room.slotsJson.size}/${room.maxPlayers}",
-                                    color = SteelGray,
+                                    color = MutedGray,
                                     fontSize = 12.sp
                                 )
                             }
                             Button(
                                 onClick = { onJoinRoom(room) },
-                                colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack)
+                                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
                             ) {
                                 Text("ENTRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
@@ -858,14 +865,15 @@ private fun LibraryTab(
 ) {
     if (games.isEmpty()) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+            colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+            border = BorderStroke(1.dp, CharcoalBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Biblioteca Local vacía", color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Biblioteca Local vacía", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Text(
                     "Descarga un juego desde el Catálogo para verlo aquí y jugarlo sin conexión.",
-                    color = SteelGray,
+                    color = MutedGray,
                     fontSize = 13.sp
                 )
             }
@@ -874,8 +882,8 @@ private fun LibraryTab(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(games, key = { it.id }) { game ->
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-                    border = BorderStroke(1.dp, CoinYellow.copy(alpha = 0.6f)),
+                    colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                    border = BorderStroke(1.dp, CharcoalBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -891,18 +899,18 @@ private fun LibraryTab(
                             modifier = Modifier.size(52.dp)
                         )
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(game.title, color = RetroIvory, fontWeight = FontWeight.Bold)
-                            Text("${game.system} · Verificado SHA256", color = SteelGray, fontSize = 12.sp)
+                            Text(game.title, color = PureWhite, fontWeight = FontWeight.Bold)
+                            Text("${game.system} · Verificado SHA256", color = MutedGray, fontSize = 12.sp)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(onClick = { onDelete(game) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Borrar ROM", tint = ArcadeOrange)
+                                Icon(Icons.Default.Delete, contentDescription = "Borrar ROM", tint = SilverGray)
                             }
                             Button(
                                 onClick = { onPlay(game) },
-                                colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
                             ) {
-                                Text("JUGAR", fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                                Text("JUGAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
@@ -926,31 +934,31 @@ private fun ProfileTab(
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
         Card(
-            colors = CardDefaults.cardColors(containerColor = LeatherBlack),
-            border = BorderStroke(1.dp, ArcadeMagenta),
+            colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+            border = BorderStroke(1.dp, CharcoalBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Perfil: ${profile?.username ?: "Invitado"}", color = CoinYellow, fontWeight = FontWeight.Bold)
+                Text("Perfil: ${profile?.username ?: "Invitado"}", color = PureWhite, fontWeight = FontWeight.Bold)
                 Text(
                     "Motor Rust v${engineStatus?.engineVersion ?: "?"} · ${engineStatus?.targetArch ?: "?"} · FBNeo: ${if (engineStatus?.fbneoReady == true) "LISTO" else "NO DETECTADO"}",
-                    color = RetroIvory,
+                    color = SilverGray,
                     fontSize = 12.sp
                 )
                 Text(
                     "Caché local (ROMs/BIOS/States): ${"%.1f".format(cacheMb)} MB",
-                    color = SteelGray,
+                    color = MutedGray,
                     fontSize = 12.sp
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onRefreshLogs, border = BorderStroke(1.dp, CoinYellow)) {
-                        Text("PING", color = CoinYellow, fontSize = 11.sp)
+                    OutlinedButton(onClick = onRefreshLogs, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("PING", color = PureWhite, fontSize = 11.sp)
                     }
-                    OutlinedButton(onClick = onClearCache, border = BorderStroke(1.dp, ArcadeMagenta)) {
-                        Text("LIMPIAR CACHÉ", color = ArcadeMagenta, fontSize = 11.sp)
+                    OutlinedButton(onClick = onClearCache, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("LIMPIAR CACHÉ", color = SilverGray, fontSize = 11.sp)
                     }
-                    OutlinedButton(onClick = onSignOut, border = BorderStroke(1.dp, ArcadeOrange)) {
-                        Text("SALIR", color = ArcadeOrange, fontSize = 11.sp)
+                    OutlinedButton(onClick = onSignOut, border = BorderStroke(1.dp, CharcoalBorder)) {
+                        Text("SALIR", color = MutedGray, fontSize = 11.sp)
                     }
                 }
             }
@@ -960,24 +968,24 @@ private fun ProfileTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(DeepPurple, RoundedCornerShape(10.dp))
+                .background(CarbonSurface, RoundedCornerShape(10.dp))
                 .padding(12.dp)
         ) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 item {
                     Text(
                         "LOGS INTERNOS (RUST):",
-                        color = SteelGray,
+                        color = MutedGray,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = JetBrainsMonoFamily
                     )
                 }
                 items(logs) { line ->
                     Text(
                         line,
-                        color = RetroIvory,
+                        color = SilverGray,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = JetBrainsMonoFamily
                     )
                 }
             }
