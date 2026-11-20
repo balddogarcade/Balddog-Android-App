@@ -151,7 +151,7 @@ fun MainShellScreen(
         }
     }
 
-    fun downloadAndPlay(game: GameDto) {
+    fun downloadOnly(game: GameDto) {
         if (downloadingGameId != null) return
         scope.launch {
             downloadingGameId = game.id
@@ -168,7 +168,6 @@ fun MainShellScreen(
                     downloadProgress = progress
                 }
                 refreshLocalState()
-                onLaunchLocalRom(game)
             } catch (t: Throwable) {
                 syncError = t.message ?: "Error descargando ROM"
             } finally {
@@ -298,7 +297,8 @@ fun MainShellScreen(
                     downloadedFiles = downloadedFiles,
                     busy = downloadingGameId != null,
                     onRefresh = { refreshAll() },
-                    onPlay = { downloadAndPlay(it) }
+                    onDownload = { downloadOnly(it) },
+                    onPlay = { onLaunchLocalRom(it) }
                 )
 
                 MainTab.ROOMS -> RoomsTab(
@@ -360,7 +360,7 @@ fun MainShellScreen(
 
                 MainTab.LIBRARY -> LibraryTab(
                     games = games.filter { downloadedFiles.contains(it.romFilename) },
-                    onPlay = { downloadAndPlay(it) },
+                    onPlay = { onLaunchLocalRom(it) },
                     onDelete = { game ->
                         romManager.deleteRom(game.romFilename)
                         refreshLocalState()
@@ -398,6 +398,7 @@ private fun CatalogTab(
     downloadedFiles: Set<String>,
     busy: Boolean,
     onRefresh: () -> Unit,
+    onDownload: (GameDto) -> Unit,
     onPlay: (GameDto) -> Unit
 ) {
     var filterSystem by remember { mutableStateOf("ALL") }
@@ -478,7 +479,7 @@ private fun CatalogTab(
                             }
                             Button(
                                 enabled = !busy,
-                                onClick = { onPlay(game) },
+                                onClick = { if (isLocal) onPlay(game) else onDownload(game) },
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isLocal) CoinYellow else ArcadeOrange,
                                     contentColor = ArcadeBlack
@@ -738,6 +739,13 @@ private fun RoomsTab(
             Text(joinError ?: "", color = ArcadeOrange, fontSize = 12.sp)
         }
 
+        val lanCodes = remember(discoveredLan) {
+            discoveredLan.map { it.roomCode.uppercase() }.toSet()
+        }
+        val otherRooms = remember(rooms, lanCodes) {
+            rooms.filterNot { lanCodes.contains(it.code.uppercase()) }
+        }
+
         if (discoveredLan.isNotEmpty()) {
             Text("SALAS DETECTADAS EN WIFI (NSD):", color = CoinYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             discoveredLan.forEach { lan ->
@@ -786,7 +794,7 @@ private fun RoomsTab(
             }
         }
 
-        if (rooms.isEmpty()) {
+        if (otherRooms.isEmpty() && discoveredLan.isEmpty()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = LeatherBlack),
                 modifier = Modifier.fillMaxWidth()
@@ -798,9 +806,9 @@ private fun RoomsTab(
                     modifier = Modifier.padding(16.dp)
                 )
             }
-        } else {
+        } else if (otherRooms.isNotEmpty()) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(rooms, key = { it.id }) { room ->
+                items(otherRooms, key = { it.id }) { room ->
                     val roomGame = allGames.firstOrNull { it.id == room.gameId }
                     val roomGameTitle = roomGame?.title ?: "Arcade"
                     Card(

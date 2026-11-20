@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -25,10 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -56,20 +60,32 @@ fun ArcadeTouchOverlay(
     modifier: Modifier = Modifier
 ) {
     var dpadMask by remember { mutableIntStateOf(0) }
-    var buttonsMask by remember { mutableIntStateOf(0) }
+    var clusterMask by remember { mutableIntStateOf(0) }
+    var pillMask by remember { mutableIntStateOf(0) }
+
+    fun emitCombined() {
+        onMaskChanged(dpadMask or clusterMask or pillMask)
+    }
 
     fun updateDpad(newMask: Int) {
         if (dpadMask != newMask) {
             dpadMask = newMask
-            onMaskChanged(dpadMask or buttonsMask)
+            emitCombined()
         }
     }
 
-    fun updateButton(bit: Int, pressed: Boolean) {
-        val next = if (pressed) buttonsMask or bit else buttonsMask and bit.inv()
-        if (buttonsMask != next) {
-            buttonsMask = next
-            onMaskChanged(dpadMask or buttonsMask)
+    fun updateCluster(newMask: Int) {
+        if (clusterMask != newMask) {
+            clusterMask = newMask
+            emitCombined()
+        }
+    }
+
+    fun updatePill(bit: Int, pressed: Boolean) {
+        val next = if (pressed) pillMask or bit else pillMask and bit.inv()
+        if (pillMask != next) {
+            pillMask = next
+            emitCombined()
         }
     }
 
@@ -79,7 +95,7 @@ fun ArcadeTouchOverlay(
             .padding(horizontal = 20.dp, vertical = 16.dp)
             .alpha(if (editMode) 0.95f else config.opacity)
     ) {
-        // COIN y START arriba a izquierda/derecha para no estorbar
+        // COIN y START arriba a la izquierda
         Row(
             modifier = Modifier.align(Alignment.TopStart),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -88,17 +104,17 @@ fun ArcadeTouchOverlay(
                 label = "COIN",
                 accent = CoinYellow,
                 editMode = editMode,
-                onPressChanged = { updateButton(RetroJoypad.COIN, it) }
+                onPressChanged = { updatePill(RetroJoypad.COIN, it) }
             )
             ArcadePillButton(
                 label = "START",
                 accent = ArcadeOrange,
                 editMode = editMode,
-                onPressChanged = { updateButton(RetroJoypad.START, it) }
+                onPressChanged = { updatePill(RetroJoypad.START, it) }
             )
         }
 
-        // D-pad 8 direcciones (izquierda abajo)
+        // D-pad 8 direcciones compacto (116.dp base)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -122,89 +138,194 @@ fun ArcadeTouchOverlay(
                 )
         ) {
             ArcadeEightWayDpad(
-                sizeDp = (148f * config.scale).dp,
+                sizeDp = (116f * config.scale).dp,
                 activeMask = dpadMask,
                 editMode = editMode,
                 onDpadChanged = { updateDpad(it) }
             )
         }
 
-        // Cluster de botones Arcade (derecha abajo)
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset { IntOffset(config.buttonsOffsetX.roundToInt(), config.buttonsOffsetY.roundToInt()) }
-                .then(
-                    if (editMode) {
-                        Modifier.pointerInput(config) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                onConfigChange(
-                                    config.copy(
-                                        buttonsOffsetX = config.buttonsOffsetX + dragAmount.x,
-                                        buttonsOffsetY = config.buttonsOffsetY + dragAmount.y
-                                    )
-                                )
+        // Cluster multi-touch real de botones Arcade (soporta varios dedos y deslizamiento)
+        ArcadeButtonCluster(
+            scale = config.scale,
+            activeMask = clusterMask,
+            editMode = editMode,
+            offsetX = config.buttonsOffsetX,
+            offsetY = config.buttonsOffsetY,
+            onDrag = { dx, dy ->
+                onConfigChange(
+                    config.copy(
+                        buttonsOffsetX = config.buttonsOffsetX + dx,
+                        buttonsOffsetY = config.buttonsOffsetY + dy
+                    )
+                )
+            },
+            onMaskChanged = { updateCluster(it) },
+            modifier = Modifier.align(Alignment.BottomEnd)
+        )
+    }
+}
+
+@Composable
+private fun ArcadeButtonCluster(
+    scale: Float,
+    activeMask: Int,
+    editMode: Boolean,
+    offsetX: Float,
+    offsetY: Float,
+    onDrag: (Float, Float) -> Unit,
+    onMaskChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val buttonBounds = remember { mutableStateMapOf<Int, Rect>() }
+    val btnSize = (54f * scale).dp
+    val rowBounds = remember { mutableStateMapOf<Int, Rect>() }
+
+    Box(
+        modifier = modifier
+            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+            .then(
+                if (editMode) {
+                    Modifier.pointerInput(offsetX, offsetY) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            onDrag(dragAmount.x, dragAmount.y)
+                        }
+                    }
+                } else {
+                    Modifier.pointerInput(scale) {
+                        awaitPointerEventScope {
+                            val activePointers = mutableMapOf<PointerId, Offset>()
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                for (change in event.changes) {
+                                    change.consume()
+                                    if (change.pressed) {
+                                        activePointers[change.id] = change.position
+                                    } else {
+                                        activePointers.remove(change.id)
+                                    }
+                                }
+                                var newMask = 0
+                                for (pos in activePointers.values) {
+                                    for ((bit, rect) in buttonBounds) {
+                                        // Hit-box circular con margen cómodo para pulsar 2 botones a la vez
+                                        val center = rect.center
+                                        val hitR = (rect.width.coerceAtLeast(rect.height) * 0.62f)
+                                        if (hypot(pos.x - center.x, pos.y - center.y) <= hitR) {
+                                            newMask = newMask or bit
+                                        }
+                                    }
+                                }
+                                onMaskChanged(newMask)
                             }
                         }
-                    } else {
-                        Modifier
                     }
-                )
+                }
+            )
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy((10f * scale).dp),
+            horizontalAlignment = Alignment.End
         ) {
-            val btnSize = (56f * config.scale).dp
-            Column(
-                verticalArrangement = Arrangement.spacedBy((10f * config.scale).dp),
-                horizontalAlignment = Alignment.End
+            Row(
+                horizontalArrangement = Arrangement.spacedBy((12f * scale).dp),
+                modifier = Modifier.onGloballyPositioned { coords ->
+                    rowBounds[0] = coords.boundsInParent()
+                }
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy((12f * config.scale).dp)) {
-                    ArcadeCircleButton(
-                        label = "Y",
-                        size = btnSize,
-                        accent = ArcadeMagenta,
-                        editMode = editMode,
-                        onPressChanged = { updateButton(RetroJoypad.Y, it) }
-                    )
-                    ArcadeCircleButton(
-                        label = "X",
-                        size = btnSize,
-                        accent = ArcadeMagenta,
-                        editMode = editMode,
-                        onPressChanged = { updateButton(RetroJoypad.X, it) }
-                    )
-                    ArcadeCircleButton(
-                        label = "L",
-                        size = btnSize,
-                        accent = ArcadeOrange,
-                        editMode = editMode,
-                        onPressChanged = { updateButton(RetroJoypad.L, it) }
-                    )
+                val rOffset = rowBounds[0]?.topLeft ?: Offset.Zero
+                ArcadeCircleVisual(
+                    label = "Y",
+                    size = btnSize,
+                    accent = ArcadeMagenta,
+                    pressed = (activeMask and RetroJoypad.Y) != 0,
+                    editMode = editMode,
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.Y] = rect.translate(rOffset) }
+                )
+                ArcadeCircleVisual(
+                    label = "X",
+                    size = btnSize,
+                    accent = ArcadeMagenta,
+                    pressed = (activeMask and RetroJoypad.X) != 0,
+                    editMode = editMode,
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.X] = rect.translate(rOffset) }
+                )
+                ArcadeCircleVisual(
+                    label = "L",
+                    size = btnSize,
+                    accent = ArcadeOrange,
+                    pressed = (activeMask and RetroJoypad.L) != 0,
+                    editMode = editMode,
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.L] = rect.translate(rOffset) }
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy((12f * scale).dp),
+                modifier = Modifier.onGloballyPositioned { coords ->
+                    rowBounds[1] = coords.boundsInParent()
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy((12f * config.scale).dp)) {
-                    ArcadeCircleButton(
-                        label = "B",
-                        size = btnSize,
-                        accent = CoinYellow,
-                        editMode = editMode,
-                        onPressChanged = { updateButton(RetroJoypad.B, it) }
-                    )
-                    ArcadeCircleButton(
-                        label = "A",
-                        size = btnSize,
-                        accent = CoinYellow,
-                        editMode = editMode,
-                        onPressChanged = { updateButton(RetroJoypad.A, it) }
-                    )
-                    ArcadeCircleButton(
-                        label = "R",
-                        size = btnSize,
-                        accent = ArcadeOrange,
-                        editMode = editMode,
-                        onPressChanged = { updateButton(RetroJoypad.R, it) }
-                    )
-                }
+            ) {
+                val rOffset = rowBounds[1]?.topLeft ?: Offset.Zero
+                ArcadeCircleVisual(
+                    label = "B",
+                    size = btnSize,
+                    accent = CoinYellow,
+                    pressed = (activeMask and RetroJoypad.B) != 0,
+                    editMode = editMode,
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.B] = rect.translate(rOffset) }
+                )
+                ArcadeCircleVisual(
+                    label = "A",
+                    size = btnSize,
+                    accent = CoinYellow,
+                    pressed = (activeMask and RetroJoypad.A) != 0,
+                    editMode = editMode,
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.A] = rect.translate(rOffset) }
+                )
+                ArcadeCircleVisual(
+                    label = "R",
+                    size = btnSize,
+                    accent = ArcadeOrange,
+                    pressed = (activeMask and RetroJoypad.R) != 0,
+                    editMode = editMode,
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.R] = rect.translate(rOffset) }
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun ArcadeCircleVisual(
+    label: String,
+    size: Dp,
+    accent: Color,
+    pressed: Boolean,
+    editMode: Boolean,
+    onPositioned: (Rect) -> Unit
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(size)
+            .onGloballyPositioned { coords -> onPositioned(coords.boundsInParent()) }
+            .background(
+                color = if (pressed) accent else LeatherBlack.copy(alpha = 0.82f),
+                shape = CircleShape
+            )
+            .border(
+                width = 2.dp,
+                color = if (editMode) CoinYellow else accent,
+                shape = CircleShape
+            )
+    ) {
+        Text(
+            text = label,
+            color = if (pressed) ArcadeBlack else RetroIvory,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 15.sp
+        )
     }
 }
 
@@ -300,65 +421,12 @@ private fun computeEightWay(delta: Offset, maxRadius: Float): Pair<Int, Offset> 
         return 0 to clamped
     }
     val angle = Math.toDegrees(atan2(delta.y.toDouble(), delta.x.toDouble()))
-    // 8 sectores de 45 grados
     var mask = 0
     if (angle in -67.5..67.5) mask = mask or RetroJoypad.RIGHT
     if (angle >= 112.5 || angle <= -112.5) mask = mask or RetroJoypad.LEFT
     if (angle in 22.5..157.5) mask = mask or RetroJoypad.DOWN
     if (angle in -157.5..-22.5) mask = mask or RetroJoypad.UP
     return mask to clamped
-}
-
-@Composable
-private fun ArcadeCircleButton(
-    label: String,
-    size: Dp,
-    accent: Color,
-    editMode: Boolean,
-    onPressChanged: (Boolean) -> Unit
-) {
-    var pressed by remember { mutableStateOf(false) }
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(size)
-            .background(
-                color = if (pressed) accent else LeatherBlack.copy(alpha = 0.82f),
-                shape = CircleShape
-            )
-            .border(
-                width = 2.dp,
-                color = if (editMode) CoinYellow else accent,
-                shape = CircleShape
-            )
-            .then(
-                if (!editMode) {
-                    Modifier.pointerInput(label) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val anyDown = event.changes.any { it.pressed }
-                                event.changes.forEach { it.consume() }
-                                if (pressed != anyDown) {
-                                    pressed = anyDown
-                                    onPressChanged(anyDown)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Modifier
-                }
-            )
-    ) {
-        Text(
-            text = label,
-            color = if (pressed) ArcadeBlack else RetroIvory,
-            fontWeight = FontWeight.ExtraBold,
-            fontSize = 15.sp
-        )
-    }
 }
 
 @Composable
