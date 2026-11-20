@@ -323,7 +323,10 @@ class GameActivity : ComponentActivity() {
                                 Text(
                                     text = when {
                                         editLayoutMode -> "GUARDAR LAYOUT"
-                                        isNetplay -> "MENU · ${"%.0f".format(currentFps)} FPS · ${netplayHud.pingMs} ms"
+                                        isNetplay -> {
+                                            val pingLabel = if (netplayHud.pingMs > 0u) "${netplayHud.pingMs} ms" else "-- ms"
+                                            "MENU · ${"%.0f".format(currentFps)} FPS · $pingLabel"
+                                        }
                                         else -> "MENU · ${"%.0f".format(currentFps)} FPS"
                                     },
                                     color = if (editLayoutMode) PureWhite else SilverGray,

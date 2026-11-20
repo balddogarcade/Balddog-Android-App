@@ -313,7 +313,7 @@ fun RoomLobbyScreen(
                                     )
                                     val pingMs = latenciesMs[occupant.userId]
                                     val pingText = when {
-                                        isMine -> "0 ms · LOCAL"
+                                        isMine -> "TÚ"
                                         pingMs != null -> "$pingMs ms"
                                         else -> "-- ms"
                                     }
