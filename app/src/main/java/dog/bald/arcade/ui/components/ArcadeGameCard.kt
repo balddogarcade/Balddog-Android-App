@@ -1,0 +1,229 @@
+package dog.bald.arcade.ui.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.ui.theme.CarbonSurface
+import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.GraphiteSurface
+import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
+import dog.bald.arcade.ui.theme.ObsidianBlack
+import dog.bald.arcade.ui.theme.PureBlack
+import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SpaceGroteskFamily
+import dog.bald.arcade.ui.theme.SteelBorder
+import kotlin.math.roundToInt
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ArcadeGameCard(
+    game: GameDto,
+    isDownloaded: Boolean,
+    isDownloading: Boolean = false,
+    downloadProgress: Float = 0f,
+    busy: Boolean = false,
+    onPrimaryAction: () -> Unit,
+    onDeleteClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val cardShape = RoundedCornerShape(14.dp)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+        border = BorderStroke(1.dp, CharcoalBorder),
+        shape = cardShape,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Full-height 3:4 poster stage with uncropped ContentScale.Fit
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(3f / 4f)
+                    .background(ObsidianBlack)
+            ) {
+                GameCoverImage(
+                    slug = game.slug,
+                    contentDescription = game.title,
+                    contentScale = ContentScale.Fit,
+                    shape = RoundedCornerShape(0.dp),
+                    backgroundColor = ObsidianBlack,
+                    showBorder = false,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(6.dp)
+                )
+
+                ArcadeBadge(
+                    text = game.system.uppercase(),
+                    style = ArcadeBadgeStyle.Overlay,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                )
+
+                if (onDeleteClick != null) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(ObsidianBlack.copy(alpha = 0.84f))
+                            .border(1.dp, CharcoalBorder, CircleShape)
+                            .clickable(onClick = onDeleteClick)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Eliminar ROM",
+                            tint = SilverGray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(thickness = 1.dp, color = CharcoalBorder)
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = game.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = PureWhite,
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    ArcadeBadge(
+                        text = "${game.maxPlayers}P",
+                        style = ArcadeBadgeStyle.Outline
+                    )
+                    if (game.isCoop) {
+                        ArcadeBadge(
+                            text = "CO-OP",
+                            style = ArcadeBadgeStyle.Solid
+                        )
+                    }
+                    if (game.sizeBytes > 0L) {
+                        val sizeMb = (game.sizeBytes / (1024.0 * 1024.0)).roundToInt().coerceAtLeast(1)
+                        ArcadeBadge(
+                            text = "$sizeMb MB",
+                            style = ArcadeBadgeStyle.Outline
+                        )
+                    }
+                }
+
+                if (isDownloading) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "${(downloadProgress * 100).toInt()}%",
+                            color = PureWhite,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            color = PureWhite,
+                            trackColor = GraphiteSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                        )
+                    }
+                } else {
+                    Button(
+                        enabled = !busy,
+                        onClick = onPrimaryAction,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDownloaded) PureWhite else GraphiteSurface,
+                            contentColor = if (isDownloaded) PureBlack else PureWhite,
+                            disabledContainerColor = GraphiteSurface.copy(alpha = 0.5f),
+                            disabledContentColor = SilverGray.copy(alpha = 0.5f)
+                        ),
+                        border = if (isDownloaded) null else BorderStroke(1.dp, SteelBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isDownloaded) Icons.Default.PlayArrow else Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (isDownloaded) "JUGAR" else "DESCARGAR",
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

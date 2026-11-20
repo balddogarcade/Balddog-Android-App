@@ -16,7 +16,9 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -39,10 +41,13 @@ private object CoverCache {
 fun GameCoverImage(
     slug: String?,
     contentDescription: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    shape: Shape = RoundedCornerShape(8.dp),
+    backgroundColor: Color = GraphiteSurface,
+    showBorder: Boolean = true
 ) {
     val context = LocalContext.current
-    val shape = RoundedCornerShape(8.dp)
 
     val bitmap by produceState<ImageBitmap?>(initialValue = slug?.let { CoverCache.get(it) }, slug) {
         if (slug.isNullOrBlank()) {
@@ -68,8 +73,8 @@ fun GameCoverImage(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(GraphiteSurface)
-            .border(1.dp, CharcoalBorder, shape),
+            .background(backgroundColor)
+            .then(if (showBorder) Modifier.border(1.dp, CharcoalBorder, shape) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         val img = bitmap
@@ -77,7 +82,7 @@ fun GameCoverImage(
             Image(
                 bitmap = img,
                 contentDescription = contentDescription,
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
                 modifier = Modifier.matchParentSize()
             )
         } else {
