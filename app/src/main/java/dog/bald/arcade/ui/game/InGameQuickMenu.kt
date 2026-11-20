@@ -71,7 +71,7 @@ fun InGameQuickMenu(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = gameTitle.ifBlank { "bald.dog ARCADE" },
+                text = gameTitle.ifBlank { "Bald Dog" },
                 color = PureWhite,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold

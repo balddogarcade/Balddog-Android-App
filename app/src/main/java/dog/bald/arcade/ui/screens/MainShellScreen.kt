@@ -275,7 +275,7 @@ fun MainShellScreen(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.logo_text),
-                    contentDescription = "bald.dog ARCADE",
+                    contentDescription = "Bald Dog",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.height(34.dp)
                 )

@@ -79,7 +79,7 @@ fun AuthScreen(
     ) {
         Image(
             painter = painterResource(id = R.drawable.logo_text),
-            contentDescription = "bald.dog ARCADE",
+            contentDescription = "Bald Dog",
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth(0.75f)
