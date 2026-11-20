@@ -27,7 +27,8 @@ data class LobbyPeerTarget(
  */
 class LobbyLatencyMonitor(
     private val localPort: Int,
-    private val myUserId: String
+    private val myUserId: String,
+    private val measureInternetPing: Boolean = false
 ) {
     private val _latenciesMs = MutableStateFlow<Map<String, Int>>(emptyMap())
     val latenciesMs: StateFlow<Map<String, Int>> = _latenciesMs.asStateFlow()
@@ -43,6 +44,7 @@ class LobbyLatencyMonitor(
 
     private val lastSeenNanos = ConcurrentHashMap<String, Long>()
     private val currentLatencies = ConcurrentHashMap<String, Int>()
+    private val pendingStunPings = ConcurrentHashMap<String, Long>()
     private var scopeJob: Job? = null
 
     fun updatePeers(newPeers: List<LobbyPeerTarget>) {
@@ -50,7 +52,7 @@ class LobbyLatencyMonitor(
         val activeIds = newPeers.mapTo(HashSet()) { it.userId }
         var changed = false
         currentLatencies.keys.toList().forEach { uid ->
-            if (uid !in activeIds) {
+            if (uid != myUserId && uid !in activeIds) {
                 currentLatencies.remove(uid)
                 lastSeenNanos.remove(uid)
                 changed = true
@@ -89,8 +91,7 @@ class LobbyLatencyMonitor(
                     try {
                         packet.length = buf.size
                         sock.receive(packet)
-                        val msg = String(packet.data, 0, packet.length, Charsets.UTF_8)
-                        handlePacket(sock, packet.socketAddress, msg)
+                        handlePacket(sock, packet.socketAddress, packet.data, packet.length)
                     } catch (_: SocketTimeoutException) {
                         // Timeout periódico para evaluar cancelación
                     } catch (_: Throwable) {
@@ -100,8 +101,24 @@ class LobbyLatencyMonitor(
             }
 
             val sendJob = launch {
+                var stunTarget: InetSocketAddress? = null
                 while (isActive && !closed && !sock.isClosed) {
                     val now = System.nanoTime()
+                    if (measureInternetPing && myUserId.isNotBlank()) {
+                        if (stunTarget == null) {
+                            stunTarget = resolveFirstStunTarget()
+                        }
+                        stunTarget?.let { target ->
+                            val (txKey, reqBytes) = buildStunBindingRequest()
+                            pendingStunPings[txKey] = now
+                            if (pendingStunPings.size > 16) {
+                                pendingStunPings.entries.removeIf { now - it.value > 10_000_000_000L }
+                            }
+                            runCatching {
+                                sock.send(DatagramPacket(reqBytes, reqBytes.size, target))
+                            }
+                        }
+                    }
                     for (peer in peers) {
                         if (peer.userId == myUserId) continue
                         val addr = parseEndpoint(peer.endpoint) ?: continue
@@ -137,8 +154,28 @@ class LobbyLatencyMonitor(
     private fun handlePacket(
         sock: DatagramSocket,
         senderAddr: java.net.SocketAddress,
-        msg: String
+        data: ByteArray,
+        length: Int
     ) {
+        if (length >= 20 &&
+            data[0] == 0x01.toByte() &&
+            data[1] == 0x01.toByte() &&
+            data[4] == 0x21.toByte() &&
+            data[5] == 0x12.toByte() &&
+            data[6] == 0xA4.toByte() &&
+            data[7] == 0x42.toByte()
+        ) {
+            val txKey = data.sliceArray(8 until 20).joinToString("") { "%02x".format(it) }
+            val sentNanos = pendingStunPings.remove(txKey) ?: return
+            val now = System.nanoTime()
+            val rttMs = ((now - sentNanos) / 1_000_000L).coerceIn(1L, 9999L).toInt()
+            currentLatencies[myUserId] = rttMs
+            lastSeenNanos[myUserId] = now
+            _latenciesMs.value = currentLatencies.toMap()
+            return
+        }
+
+        val msg = String(data, 0, length, Charsets.UTF_8)
         val parts = msg.split('|')
         if (parts.size != 4) return
         val type = parts[0]
@@ -162,6 +199,31 @@ class LobbyLatencyMonitor(
                 _latenciesMs.value = currentLatencies.toMap()
             }
         }
+    }
+
+    private fun resolveFirstStunTarget(): InetSocketAddress? {
+        val servers = listOf("stun.cloudflare.com" to 3478, "stun.l.google.com" to 19302)
+        for ((host, port) in servers) {
+            val addr = runCatching { InetSocketAddress(InetAddress.getByName(host), port) }.getOrNull()
+            if (addr != null && !addr.isUnresolved) return addr
+        }
+        return null
+    }
+
+    private fun buildStunBindingRequest(): Pair<String, ByteArray> {
+        val req = ByteArray(20)
+        req[0] = 0x00
+        req[1] = 0x01
+        req[4] = 0x21
+        req[5] = 0x12
+        req[6] = 0xA4.toByte()
+        req[7] = 0x42
+        val tid = java.security.SecureRandom().let { rng ->
+            ByteArray(12).also { rng.nextBytes(it) }
+        }
+        System.arraycopy(tid, 0, req, 8, 12)
+        val txKey = tid.joinToString("") { "%02x".format(it) }
+        return txKey to req
     }
 
     private fun parseEndpoint(endpoint: String): InetSocketAddress? {

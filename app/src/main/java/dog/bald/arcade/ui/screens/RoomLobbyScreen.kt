@@ -97,8 +97,13 @@ fun RoomLobbyScreen(
     var matchLaunched by remember { mutableStateOf(false) }
     var leftRoom by remember { mutableStateOf(false) }
 
-    val latencyMonitor = remember(room.id, myUdpPort, myUid) {
-        LobbyLatencyMonitor(localPort = myUdpPort, myUserId = myUid)
+    val isOnlineRoom = room.mode != "lan"
+    val latencyMonitor = remember(room.id, myUdpPort, myUid, isOnlineRoom) {
+        LobbyLatencyMonitor(
+            localPort = myUdpPort,
+            myUserId = myUid,
+            measureInternetPing = isOnlineRoom
+        )
     }
     val latenciesMs by latencyMonitor.latenciesMs.collectAsState()
 
@@ -387,12 +392,13 @@ fun RoomLobbyScreen(
                                     )
                                     val pingMs = latenciesMs[occupant.userId]
                                     val pingText = when {
-                                        isMine -> "TÚ"
+                                        isMine && !isOnlineRoom -> "TÚ · LOCAL"
+                                        isMine && pingMs != null -> "$pingMs ms · TÚ"
+                                        isMine -> "-- ms · TÚ"
                                         pingMs != null -> "$pingMs ms"
                                         else -> "-- ms"
                                     }
                                     val pingColor = when {
-                                        isMine -> MutedGray
                                         pingMs == null -> MutedGray
                                         pingMs <= 80 -> PureWhite
                                         pingMs <= 150 -> SilverGray
