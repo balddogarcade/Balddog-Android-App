@@ -1,5 +1,7 @@
 package dog.bald.arcade.ui.screens
 
+import dog.bald.arcade.data.toUserMessage
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -184,7 +186,7 @@ fun RoomLobbyScreen(
                 repo.updateRoomSlots(room.id, next)
                 room = room.copy(slotsJson = next)
             } catch (t: Throwable) {
-                errorMsg = t.message
+                errorMsg = t.toUserMessage("Error actualizando sala")
             }
         }
     }
@@ -199,7 +201,7 @@ fun RoomLobbyScreen(
                 repo.updateRoomSlots(room.id, next)
                 room = room.copy(slotsJson = next)
             } catch (t: Throwable) {
-                errorMsg = t.message
+                errorMsg = t.toUserMessage("Error cambiando estado")
             }
         }
     }

@@ -1,5 +1,7 @@
 package dog.bald.arcade.ui.screens
 
+import dog.bald.arcade.data.toUserMessage
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -159,7 +161,7 @@ fun MainShellScreen(
                 engineStatus = pingEngine(nativeLibDir)
                 logs = getRecentLogs()
             }.onFailure { t ->
-                syncError = t.message ?: "Error conectando con motor nativo"
+                syncError = t.toUserMessage("Error conectando con motor nativo")
             }
             try {
                 games = repo.fetchGames()
@@ -169,7 +171,7 @@ fun MainShellScreen(
                 myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
                 refreshLocalState()
             } catch (t: Throwable) {
-                val msg = t.message ?: "Error sincronizando catálogo"
+                val msg = t.toUserMessage("Error sincronizando catálogo")
                 syncError = if (syncError == null) msg else "$syncError\n$msg"
             }
         }
@@ -198,7 +200,7 @@ fun MainShellScreen(
                 }
                 refreshLocalState()
             } catch (t: Throwable) {
-                syncError = t.message ?: "Error descargando ROM"
+                syncError = t.toUserMessage("Error descargando ROM")
             } finally {
                 downloadingGameId = null
             }
@@ -255,7 +257,7 @@ fun MainShellScreen(
                             }
                             activeRoom = null
                             onLaunchNetplayMatch(roomGame, startedRoom, mySlot, myUdpPort)
-                        }.onFailure { syncError = it.message }
+                        }.onFailure { syncError = it.toUserMessage("Error preparando partida") }
                     }
                 }
             }
@@ -422,7 +424,7 @@ fun MainShellScreen(
                                 )
                                 activeRoom = created
                             } catch (t: Throwable) {
-                                syncError = t.message ?: "Error creando sala"
+                                syncError = t.toUserMessage("Error creando sala")
                             }
                         }
                     },

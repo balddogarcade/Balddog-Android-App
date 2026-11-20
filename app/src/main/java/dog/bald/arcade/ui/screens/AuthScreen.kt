@@ -1,5 +1,7 @@
 package dog.bald.arcade.ui.screens
 
+import dog.bald.arcade.data.toUserMessage
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -174,7 +176,7 @@ fun AuthScreen(
                                 }
                                 onAuthenticated()
                             } catch (t: Throwable) {
-                                errorMsg = t.message ?: "Error de autenticación"
+                                errorMsg = t.toUserMessage("Error de autenticación")
                             } finally {
                                 loading = false
                             }
@@ -225,7 +227,7 @@ fun AuthScreen(
                         repo.signInAnonymously()
                         onAuthenticated()
                     } catch (t: Throwable) {
-                        errorMsg = t.message ?: "No se pudo iniciar como invitado"
+                        errorMsg = t.toUserMessage("No se pudo iniciar como invitado")
                     } finally {
                         loading = false
                     }
