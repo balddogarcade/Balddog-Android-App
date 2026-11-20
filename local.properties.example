@@ -8,6 +8,11 @@ sdk.dir=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 
+# Opcional: administración y migraciones de Supabase (no se incluyen en el APK)
+SUPABASE_PROJECT_ID=
+SUPABASE_DB_PASSWORD=
+SUPABASE_ACCESS_TOKEN=
+
 # Opcional: firma para builds release (APK / AAB)
 BALDDOG_KEYSTORE_PATH=
 BALDDOG_KEYSTORE_PASSWORD=

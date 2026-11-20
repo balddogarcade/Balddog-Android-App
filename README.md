@@ -90,6 +90,11 @@ sdk.dir=/path/to/Android/Sdk
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 
+# Optional: Supabase administration & migrations (never bundled into the APK)
+SUPABASE_PROJECT_ID=your-project-ref
+SUPABASE_DB_PASSWORD=your-db-password
+SUPABASE_ACCESS_TOKEN=sbp_your_personal_access_token
+
 # Optional: signing for release builds (APK / AAB)
 BALDDOG_KEYSTORE_PATH=/path/to/keystore.jks
 BALDDOG_KEYSTORE_PASSWORD=your_password
@@ -103,6 +108,8 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 
 1. `supabase/migrations/001_initial_schema.sql` — Creates the `profiles`, `game_bios`, `games`, `rooms`, and `room_messages` tables, triggers, RLS policies, and Realtime.
 2. `supabase/migrations/002_seed_curated_games.sql` — Inserts the initial curated game catalog.
+3. `supabase/migrations/003_private_rooms.sql` — Adds `rooms.is_private` and `idx_rooms_status_private` for private rooms.
+4. `supabase/migrations/004_game_stats.sql` — Adds download/play-time counters, `user_game_stats`, and atomic RPCs (`increment_game_download`, `record_play_session`).
 
 ---
 
