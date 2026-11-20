@@ -32,8 +32,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -427,24 +425,14 @@ private fun CatalogTab(
     onDownload: (GameDto) -> Unit,
     onGoToLibrary: () -> Unit
 ) {
-    var filterSystem by remember { mutableStateOf("ALL") }
     var searchQuery by remember { mutableStateOf("") }
-    val systems = listOf("ALL", "NEOGEO", "CPS2", "CO-OP")
 
     val availableGames = remember(games, downloadedFiles) {
         games.filterNot { downloadedFiles.contains(it.romFilename) }
     }
 
-    val filtered = remember(availableGames, filterSystem, searchQuery) {
-        availableGames
-            .filter { game ->
-                when (filterSystem) {
-                    "ALL" -> true
-                    "CO-OP" -> game.isCoop
-                    else -> game.system.equals(filterSystem, ignoreCase = true)
-                }
-            }
-            .filter { it.matchesQuery(searchQuery) }
+    val filtered = remember(availableGames, searchQuery) {
+        availableGames.filter { it.matchesQuery(searchQuery) }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
@@ -453,22 +441,6 @@ private fun CatalogTab(
             onQueryChange = { searchQuery = it },
             placeholder = "Buscar en catálogo..."
         )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            systems.forEach { sys ->
-                FilterChip(
-                    selected = filterSystem == sys,
-                    onClick = { filterSystem = sys },
-                    label = { Text(sys, fontSize = 11.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PureWhite,
-                        selectedLabelColor = PureBlack,
-                        containerColor = CarbonSurface,
-                        labelColor = MutedGray
-                    )
-                )
-            }
-        }
 
         if (games.isNotEmpty() && availableGames.isEmpty()) {
             Card(
@@ -524,24 +496,18 @@ private fun CatalogTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        if (games.isEmpty()) "Catálogo vacío por ahora" else "Sin juegos en $filterSystem",
+                        "Catálogo vacío por ahora",
                         color = PureWhite,
                         fontFamily = SpaceGroteskFamily,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        if (games.isEmpty()) {
-                            "Agrega juegos en la tabla `games` de Supabase para descargarlos vía IPFS."
-                        } else {
-                            "Prueba seleccionando otro filtro de sistema."
-                        },
+                        "Agrega juegos en la tabla `games` de Supabase para descargarlos vía IPFS.",
                         color = MutedGray,
                         fontSize = 13.sp
                     )
-                    if (games.isEmpty()) {
-                        OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
-                            Text("ACTUALIZAR CATÁLOGO", color = PureWhite, fontSize = 12.sp)
-                        }
+                    OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("ACTUALIZAR CATÁLOGO", color = PureWhite, fontSize = 12.sp)
                     }
                 }
             }
