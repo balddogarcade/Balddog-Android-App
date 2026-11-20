@@ -25,3 +25,65 @@ Este archivo define reglas obligatorias que todo agente de IA debe respetar al t
 
 4. **Idioma obligatorio — Todos los commits en inglés:**
    - **SIEMPRE** redacta tanto el título como la descripción (cuerpo) de cada commit en **inglés**.
+
+---
+
+## Protocolo Rápido: Probar la App en Celular por USB
+
+Cuando el usuario pida probar, correr, instalar o abrir la app en su celular conectado por USB (ej. *"quiero probar la app en el celular"*, *"instálala en el teléfono"*, *"córrela en el dispositivo"*), **NO explores ni analices el repositorio**. Sigue exactamente este paso a paso:
+
+### Datos fijos del proyecto (no re-investigar)
+- **Entorno toolchain:** `scripts/env.sh` (configura `JAVA_HOME`, `ANDROID_HOME`, `ANDROID_NDK_HOME` y `PATH`).
+- **Módulo Android:** `:app` (arquitectura soportada: `arm64-v8a`).
+- **Application ID (debug):** `dog.bald.arcade.debug`
+- **Activity principal:** `dog.bald.arcade.MainActivity`
+- **Componente para lanzar:** `dog.bald.arcade.debug/dog.bald.arcade.MainActivity`
+- **Binarios nativos esperados en `app/src/main/jniLibs/arm64-v8a/`:** `libbalddog_android.so`, `libc++_shared.so`, `libfbneo_libretro.so`.
+
+### Paso a paso obligatorio
+
+1. **Verificar dispositivo USB conectado:**
+   Ejecuta:
+   ```bash
+   adb devices
+   ```
+   - Debe aparecer un dispositivo con estado `device`.
+   - Si aparece `unauthorized`, pide al usuario aceptar la depuración USB en la pantalla del celular y detente.
+   - Si no aparece ningún dispositivo, pide al usuario verificar el cable/depuración USB y detente.
+   - *(Nota: si `adb` falla dentro del sandbox por acceso USB/socket, reintenta ese comando fuera del sandbox).*
+
+2. **Compilar Rust solo si hubo cambios en `rust/` o faltan `.so`:**
+   - Si **NO** se modificaron archivos en `rust/` y ya existen `libbalddog_android.so`, `libc++_shared.so` y `libfbneo_libretro.so` en `app/src/main/jniLibs/arm64-v8a/`, **salta directo al paso 3**.
+   - Si se modificó código en `rust/` o falta `libbalddog_android.so`, ejecuta primero:
+     ```bash
+     source scripts/env.sh && ./scripts/build-rust.sh debug
+     ```
+   - Solo si falta `libfbneo_libretro.so`, ejecuta antes:
+     ```bash
+     source scripts/env.sh && ./scripts/build-fbneo-android.sh
+     ```
+
+3. **Compilar e instalar el APK debug en el celular:**
+   Ejecuta directamente:
+   ```bash
+   source scripts/env.sh && ./gradlew installDebug
+   ```
+   - Si falla por errores de compilación Kotlin/Gradle, corrige el error puntual y vuelve a ejecutar `./gradlew installDebug`.
+
+4. **Abrir la aplicación en el celular:**
+   Ejecuta:
+   ```bash
+   adb shell am start -n dog.bald.arcade.debug/dog.bald.arcade.MainActivity
+   ```
+
+5. **Confirmar que arrancó sin crash inmediato:**
+   Ejecuta una verificación rápida:
+   ```bash
+   adb shell pidof dog.bald.arcade.debug
+   ```
+   - Si devuelve un PID, confirma al usuario que la app quedó instalada y abierta en el celular.
+   - Si no devuelve PID o la app se cerró, revisa el error con:
+     ```bash
+     adb logcat -d -t 80 *:E
+     ```
+     y reporta o corrige la causa exacta del fallo.
