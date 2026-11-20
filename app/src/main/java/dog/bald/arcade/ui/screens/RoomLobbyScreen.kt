@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -46,6 +48,7 @@ import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.RoomMessageDto
 import dog.bald.arcade.data.RoomSlotInfo
 import dog.bald.arcade.net.LanNsdManager
+import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.ArcadeBlack
 import dog.bald.arcade.ui.theme.ArcadeMagenta
 import dog.bald.arcade.ui.theme.ArcadeOrange
@@ -88,6 +91,31 @@ fun RoomLobbyScreen(
         onDispose {
             if (isHost && room.mode == "lan") {
                 lanNsd.unregisterRoom()
+            }
+        }
+    }
+
+    // Auto-asignar el primer slot libre al entrar si aún no tiene slot
+    LaunchedEffect(room.id, myUid) {
+        if (myUid.isNotBlank() && mySlot == null) {
+            val latest = runCatching { repo.fetchRoomById(room.id) }.getOrNull() ?: room
+            room = latest
+            val alreadySeated = latest.slotsJson.values.any { it.userId == myUid }
+            if (!alreadySeated) {
+                val freeSlot = (0 until latest.maxPlayers).firstOrNull { !latest.slotsJson.containsKey(it.toString()) }
+                if (freeSlot != null) {
+                    val next = latest.slotsJson.toMutableMap()
+                    next[freeSlot.toString()] = RoomSlotInfo(
+                        userId = myUid,
+                        username = myUsername,
+                        endpoint = myEndpoint,
+                        ready = isHost
+                    )
+                    runCatching {
+                        repo.updateRoomSlots(latest.id, next)
+                        room = latest.copy(slotsJson = next)
+                    }
+                }
             }
         }
     }
@@ -167,18 +195,30 @@ fun RoomLobbyScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "SALA #${room.code} · ${room.mode.uppercase()}",
-                    color = CoinYellow,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.ExtraBold
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                GameCoverImage(
+                    slug = game?.slug,
+                    contentDescription = game?.title,
+                    modifier = Modifier.size(48.dp)
                 )
-                Text(
-                    text = game?.title ?: "Arcade Match",
-                    color = ArcadeMagenta,
-                    fontSize = 13.sp
-                )
+                Column {
+                    Text(
+                        text = "SALA #${room.code} · ${room.mode.uppercase()}",
+                        color = CoinYellow,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = game?.title ?: "Arcade Match",
+                        color = ArcadeMagenta,
+                        fontSize = 13.sp,
+                        maxLines = 1
+                    )
+                }
             }
             OutlinedButton(
                 onClick = {

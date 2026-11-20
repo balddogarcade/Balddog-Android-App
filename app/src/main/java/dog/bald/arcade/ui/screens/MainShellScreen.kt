@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +69,7 @@ import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
+import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.ArcadeBlack
 import dog.bald.arcade.ui.theme.ArcadeMagenta
 import dog.bald.arcade.ui.theme.ArcadeOrange
@@ -76,6 +79,7 @@ import dog.bald.arcade.ui.theme.LeatherBlack
 import dog.bald.arcade.ui.theme.RetroIvory
 import dog.bald.arcade.ui.theme.SteelGray
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.balddog_android.EngineStatus
@@ -175,6 +179,16 @@ fun MainShellScreen(
 
     LaunchedEffect(Unit) {
         refreshAll()
+    }
+
+    // Auto-refrescar salas cada 3s mientras el usuario está en la pestaña Salas
+    LaunchedEffect(selectedTab, activeRoom) {
+        if (MainTab.entries[selectedTab] == MainTab.ROOMS && activeRoom == null) {
+            while (true) {
+                runCatching { rooms = repo.fetchOpenRooms() }
+                delay(3000)
+            }
+        }
     }
 
     val currentRoom = activeRoom
@@ -292,6 +306,7 @@ fun MainShellScreen(
                     games = games,
                     lanNsd = lanNsd,
                     onRefresh = { refreshAll() },
+                    onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
                     onCreateRoom = { game, mode ->
                         scope.launch {
                             syncError = null
@@ -442,10 +457,15 @@ private fun CatalogTab(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            GameCoverImage(
+                                slug = game.slug,
+                                contentDescription = game.title,
+                                modifier = Modifier.size(56.dp)
+                            )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(game.title, color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                                 Text(
@@ -482,14 +502,17 @@ private fun RoomsTab(
     games: List<GameDto>,
     lanNsd: LanNsdManager,
     onRefresh: () -> Unit,
+    onLookupRoom: suspend (String) -> RoomDto?,
     onCreateRoom: (GameDto, String) -> Unit,
     onJoinRoom: (RoomDto) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     val discoveredLan by lanNsd.discoveredRooms.collectAsState()
     var selectedGame by remember(games) { mutableStateOf(games.firstOrNull()) }
     var showGamePicker by remember { mutableStateOf(false) }
     var pickerQuery by remember { mutableStateOf("") }
     var joinCode by remember { mutableStateOf("") }
+    var joinBusy by remember { mutableStateOf(false) }
     var joinError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
@@ -541,9 +564,20 @@ private fun RoomsTab(
                                         showGamePicker = false
                                     }
                             ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(g.title, color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text("${g.system} · ${g.maxPlayers}P", color = SteelGray, fontSize = 11.sp)
+                                Row(
+                                    modifier = Modifier.padding(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    GameCoverImage(
+                                        slug = g.slug,
+                                        contentDescription = g.title,
+                                        modifier = Modifier.size(42.dp)
+                                    )
+                                    Column {
+                                        Text(g.title, color = RetroIvory, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("${g.system} · ${g.maxPlayers}P", color = SteelGray, fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }
@@ -579,17 +613,23 @@ private fun RoomsTab(
                 .clickable(enabled = games.isNotEmpty()) { showGamePicker = true }
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                GameCoverImage(
+                    slug = selectedGame?.slug,
+                    contentDescription = selectedGame?.title,
+                    modifier = Modifier.size(48.dp)
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text("JUEGO SELECCIONADO:", color = SteelGray, fontSize = 10.sp)
                     Text(
                         text = selectedGame?.title ?: "Cargando catálogo...",
                         color = CoinYellow,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        maxLines = 1
                     )
                     if (selectedGame != null) {
                         Text(
@@ -622,7 +662,7 @@ private fun RoomsTab(
             }
         }
 
-        // Unirse por código de sala
+        // Unirse por código o ID de sala (consulta directa a Supabase)
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -634,7 +674,7 @@ private fun RoomsTab(
                     joinCode = it.uppercase()
                     joinError = null
                 },
-                placeholder = { Text("Código (ej. 4821A)", fontSize = 12.sp) },
+                placeholder = { Text("Código o ID (ej. 4821A)", fontSize = 12.sp) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = CoinYellow,
@@ -645,19 +685,24 @@ private fun RoomsTab(
                 modifier = Modifier.weight(1f)
             )
             Button(
-                enabled = joinCode.isNotBlank(),
+                enabled = joinCode.isNotBlank() && !joinBusy,
                 onClick = {
-                    val codeClean = joinCode.trim().removePrefix("#")
-                    val found = rooms.firstOrNull { it.code.equals(codeClean, ignoreCase = true) }
-                    if (found != null) {
-                        onJoinRoom(found)
-                    } else {
-                        joinError = "No se encontró sala #$codeClean"
+                    scope.launch {
+                        joinBusy = true
+                        joinError = null
+                        val codeClean = joinCode.trim().removePrefix("#")
+                        val found = runCatching { onLookupRoom(codeClean) }.getOrNull()
+                        joinBusy = false
+                        if (found != null) {
+                            onJoinRoom(found)
+                        } else {
+                            joinError = "No se encontró sala activa #$codeClean"
+                        }
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = ArcadeOrange, contentColor = ArcadeBlack)
             ) {
-                Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(if (joinBusy) "..." else "UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -668,28 +713,45 @@ private fun RoomsTab(
         if (discoveredLan.isNotEmpty()) {
             Text("SALAS DETECTADAS EN WIFI (NSD):", color = CoinYellow, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             discoveredLan.forEach { lan ->
+                val lanGame = games.firstOrNull { it.title.equals(lan.gameTitle, ignoreCase = true) }
+                fun joinLan() {
+                    scope.launch {
+                        joinError = null
+                        val found = rooms.firstOrNull { it.code.equals(lan.roomCode, ignoreCase = true) }
+                            ?: runCatching { onLookupRoom(lan.roomCode) }.getOrNull()
+                        if (found != null) {
+                            onJoinRoom(found)
+                        } else {
+                            joinError = "La sala LAN #${lan.roomCode} ya no está disponible"
+                        }
+                    }
+                }
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DeepPurple),
                     border = BorderStroke(1.dp, CoinYellow),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { joinLan() }
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        GameCoverImage(
+                            slug = lanGame?.slug,
+                            contentDescription = lan.gameTitle,
+                            modifier = Modifier.size(44.dp)
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text("${lan.gameTitle} · #${lan.roomCode}", color = RetroIvory, fontWeight = FontWeight.Bold)
                             Text("${lan.hostIp}:${lan.udpPort}", color = SteelGray, fontSize = 11.sp)
                         }
-                        val matching = rooms.firstOrNull { it.code == lan.roomCode }
-                        if (matching != null) {
-                            Button(
-                                onClick = { onJoinRoom(matching) },
-                                colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
-                            ) {
-                                Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
+                        Button(
+                            onClick = { joinLan() },
+                            colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                        ) {
+                            Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -711,17 +773,25 @@ private fun RoomsTab(
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(rooms, key = { it.id }) { room ->
-                    val roomGameTitle = games.firstOrNull { it.id == room.gameId }?.title ?: "Arcade"
+                    val roomGame = games.firstOrNull { it.id == room.gameId }
+                    val roomGameTitle = roomGame?.title ?: "Arcade"
                     Card(
                         colors = CardDefaults.cardColors(containerColor = LeatherBlack),
                         border = BorderStroke(1.dp, ArcadeOrange.copy(alpha = 0.6f)),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onJoinRoom(room) }
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            GameCoverImage(
+                                slug = roomGame?.slug,
+                                contentDescription = roomGameTitle,
+                                modifier = Modifier.size(48.dp)
+                            )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("$roomGameTitle · #${room.code}", color = CoinYellow, fontWeight = FontWeight.Bold)
                                 Text(
@@ -775,10 +845,15 @@ private fun LibraryTab(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        GameCoverImage(
+                            slug = game.slug,
+                            contentDescription = game.title,
+                            modifier = Modifier.size(52.dp)
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(game.title, color = RetroIvory, fontWeight = FontWeight.Bold)
                             Text("${game.system} · Verificado SHA256", color = SteelGray, fontSize = 12.sp)

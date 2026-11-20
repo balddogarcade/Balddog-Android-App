@@ -1,0 +1,91 @@
+package dog.bald.arcade.ui.components
+
+import android.graphics.BitmapFactory
+import android.util.LruCache
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import dog.bald.arcade.ui.theme.ArcadeMagenta
+import dog.bald.arcade.ui.theme.DeepPurple
+import dog.bald.arcade.ui.theme.SteelGray
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private object CoverCache {
+    private val cache = LruCache<String, ImageBitmap>(48)
+    fun get(slug: String): ImageBitmap? = cache.get(slug)
+    fun put(slug: String, bmp: ImageBitmap) {
+        cache.put(slug, bmp)
+    }
+}
+
+@Composable
+fun GameCoverImage(
+    slug: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val shape = RoundedCornerShape(8.dp)
+
+    val bitmap by produceState<ImageBitmap?>(initialValue = slug?.let { CoverCache.get(it) }, slug) {
+        if (slug.isNullOrBlank()) {
+            value = null
+            return@produceState
+        }
+        val cached = CoverCache.get(slug)
+        if (cached != null) {
+            value = cached
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.assets.open("covers/$slug.webp").use { stream ->
+                    BitmapFactory.decodeStream(stream)?.asImageBitmap()?.also { bmp ->
+                        CoverCache.put(slug, bmp)
+                    }
+                }
+            }.getOrNull()
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(DeepPurple)
+            .border(1.dp, ArcadeMagenta.copy(alpha = 0.5f), shape),
+        contentAlignment = Alignment.Center
+    ) {
+        val img = bitmap
+        if (img != null) {
+            Image(
+                bitmap = img,
+                contentDescription = contentDescription,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.SportsEsports,
+                contentDescription = contentDescription,
+                tint = SteelGray
+            )
+        }
+    }
+}

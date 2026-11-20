@@ -74,6 +74,26 @@ class ArcadeRepository(context: Context) {
         }.decodeSingleOrNull<RoomDto>()
     }
 
+    suspend fun fetchRoomByCodeOrId(codeOrId: String): RoomDto? {
+        val clean = codeOrId.trim().removePrefix("#")
+        if (clean.isEmpty()) return null
+        val byCode = client.from("rooms").select {
+            filter {
+                ilike("code", clean)
+                eq("status", "waiting")
+            }
+        }.decodeList<RoomDto>().firstOrNull()
+        if (byCode != null) return byCode
+        return runCatching {
+            client.from("rooms").select {
+                filter {
+                    eq("id", clean)
+                    eq("status", "waiting")
+                }
+            }.decodeSingleOrNull<RoomDto>()
+        }.getOrNull()
+    }
+
     suspend fun createRoom(
         gameId: String,
         mode: String,
