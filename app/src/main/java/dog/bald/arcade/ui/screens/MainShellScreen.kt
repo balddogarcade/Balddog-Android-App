@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -573,7 +574,8 @@ private fun RoomsTab(
     val scope = rememberCoroutineScope()
     val discoveredLan by lanNsd.discoveredRooms.collectAsState()
     var selectedGame by remember(libraryGames) { mutableStateOf(libraryGames.firstOrNull()) }
-    var showGamePicker by remember { mutableStateOf(false) }
+    var selectedMode by remember { mutableStateOf("lan") }
+    var showCreateRoomDialog by remember { mutableStateOf(false) }
     var pickerQuery by remember { mutableStateOf("") }
     var joinCode by remember { mutableStateOf("") }
     var joinBusy by remember { mutableStateOf(false) }
@@ -584,7 +586,7 @@ private fun RoomsTab(
         onDispose { lanNsd.stopDiscovery() }
     }
 
-    if (showGamePicker) {
+    if (showCreateRoomDialog) {
         val filteredGames = remember(libraryGames, pickerQuery) {
             if (pickerQuery.isBlank()) libraryGames
             else libraryGames.filter {
@@ -593,54 +595,85 @@ private fun RoomsTab(
             }
         }
         AlertDialog(
-            onDismissRequest = { showGamePicker = false },
+            onDismissRequest = { showCreateRoomDialog = false },
             containerColor = CarbonSurface,
-            title = { Text("Elegir Juego de tu Biblioteca", color = PureWhite, fontWeight = FontWeight.Bold) },
+            title = { Text("Crear Sala", color = PureWhite, fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = pickerQuery,
-                        onValueChange = { pickerQuery = it },
-                        placeholder = { Text("Buscar juego...", fontSize = 12.sp) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PureWhite,
-                            unfocusedBorderColor = CharcoalBorder,
-                            focusedTextColor = PureWhite,
-                            unfocusedTextColor = PureWhite
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                if (libraryGames.isEmpty()) {
+                    Text(
+                        text = "Descarga un juego en el Catálogo para poder crear una sala.",
+                        color = MutedGray,
+                        fontSize = 13.sp
                     )
-                    LazyColumn(modifier = Modifier.height(280.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(filteredGames, key = { it.id }) { g ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (selectedGame?.id == g.id) GraphiteSurface else ObsidianBlack
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            val isLan = selectedMode == "lan"
+                            Button(
+                                onClick = { selectedMode = "lan" },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isLan) PureWhite else ObsidianBlack,
+                                    contentColor = if (isLan) PureBlack else SilverGray
                                 ),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (selectedGame?.id == g.id) PureWhite else CharcoalBorder
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedGame = g
-                                        showGamePicker = false
-                                    }
+                                border = if (isLan) null else BorderStroke(1.dp, CharcoalBorder),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                Text("LAN", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = { selectedMode = "online" },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!isLan) PureWhite else ObsidianBlack,
+                                    contentColor = if (!isLan) PureBlack else SilverGray
+                                ),
+                                border = if (!isLan) null else BorderStroke(1.dp, CharcoalBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("ONLINE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                        Text("Elige un juego de tu biblioteca:", color = SilverGray, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = pickerQuery,
+                            onValueChange = { pickerQuery = it },
+                            placeholder = { Text("Buscar juego...", fontSize = 12.sp) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PureWhite,
+                                unfocusedBorderColor = CharcoalBorder,
+                                focusedTextColor = PureWhite,
+                                unfocusedTextColor = PureWhite
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        LazyColumn(modifier = Modifier.height(240.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(filteredGames, key = { it.id }) { g ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (selectedGame?.id == g.id) GraphiteSurface else ObsidianBlack
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedGame?.id == g.id) PureWhite else CharcoalBorder
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedGame = g }
                                 ) {
-                                    GameCoverImage(
-                                        slug = g.slug,
-                                        contentDescription = g.title,
-                                        modifier = Modifier.size(42.dp)
-                                    )
-                                    Column {
-                                        Text(g.title, color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text("${g.system} · ${g.maxPlayers}P", color = MutedGray, fontSize = 11.sp)
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        GameCoverImage(
+                                            slug = g.slug,
+                                            contentDescription = g.title,
+                                            modifier = Modifier.size(42.dp)
+                                        )
+                                        Column {
+                                            Text(g.title, color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text("${g.system} · ${g.maxPlayers}P", color = MutedGray, fontSize = 11.sp)
+                                        }
                                     }
                                 }
                             }
@@ -649,8 +682,34 @@ private fun RoomsTab(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showGamePicker = false }) {
-                    Text("CERRAR", color = SilverGray)
+                if (libraryGames.isEmpty()) {
+                    Button(
+                        onClick = {
+                            showCreateRoomDialog = false
+                            onGoToCatalog()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
+                    ) {
+                        Text("IR AL CATÁLOGO", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                } else {
+                    Button(
+                        enabled = selectedGame != null,
+                        onClick = {
+                            selectedGame?.let { game ->
+                                showCreateRoomDialog = false
+                                onCreateRoom(game, selectedMode)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
+                    ) {
+                        Text("CREAR SALA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateRoomDialog = false }) {
+                    Text("CANCELAR", color = SilverGray)
                 }
             }
         )
@@ -663,92 +722,27 @@ private fun RoomsTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Salas LAN y Online", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
-                Text("REFRESCAR", color = PureWhite, fontSize = 11.sp)
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Refrescar",
+                    tint = PureWhite
+                )
             }
         }
 
-        // Selector de juego para crear sala (solo juegos descargados en Biblioteca)
-        if (libraryGames.isEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                border = BorderStroke(1.dp, CharcoalBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Descarga un juego en el Catálogo para poder crear una sala.",
-                        color = MutedGray,
-                        fontSize = 12.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedButton(onClick = onGoToCatalog, border = BorderStroke(1.dp, SteelBorder)) {
-                        Text("CATÁLOGO", color = PureWhite, fontSize = 11.sp)
-                    }
+        Button(
+            onClick = {
+                pickerQuery = ""
+                if (selectedGame == null) {
+                    selectedGame = libraryGames.firstOrNull()
                 }
-            }
-        } else {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                border = BorderStroke(1.dp, CharcoalBorder),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showGamePicker = true }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    GameCoverImage(
-                        slug = selectedGame?.slug,
-                        contentDescription = selectedGame?.title,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("JUEGO DE TU BIBLIOTECA:", color = MutedGray, fontSize = 10.sp)
-                        Text(
-                            text = selectedGame?.title ?: "",
-                            color = PureWhite,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            maxLines = 1
-                        )
-                        if (selectedGame != null) {
-                            Text(
-                                "${selectedGame?.system} · Máx ${selectedGame?.maxPlayers}P",
-                                color = MutedGray,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                    Text("CAMBIAR", color = SilverGray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            }
-        }
-
-        selectedGame?.let { game ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = { onCreateRoom(game, "lan") },
-                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("CREAR LAN", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-                Button(
-                    onClick = { onCreateRoom(game, "online") },
-                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
-                    border = BorderStroke(1.dp, SteelBorder),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("CREAR ONLINE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            }
+                showCreateRoomDialog = true
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("CREAR SALA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
         }
 
         // Unirse por código o ID de sala (consulta directa a Supabase)
@@ -861,7 +855,7 @@ private fun RoomsTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "No hay salas abiertas. Selecciona un juego arriba y crea una sala LAN o Online.",
+                    text = "No hay salas abiertas. Toca \"Crear sala\" para iniciar una partida LAN o Online.",
                     color = MutedGray,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(16.dp)
