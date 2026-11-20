@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -168,7 +170,7 @@ fun ArcadeGameCard(
 
                 if (isDownloading) {
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(36.dp),
@@ -181,15 +183,26 @@ fun ArcadeGameCard(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
                         )
-                        LinearProgressIndicator(
-                            progress = { downloadProgress },
-                            color = PureWhite,
-                            trackColor = GraphiteSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            CircularProgressIndicator(
+                                color = PureWhite,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            LinearProgressIndicator(
+                                progress = { downloadProgress },
+                                color = PureWhite,
+                                trackColor = GraphiteSurface,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                            )
+                        }
                     }
                 } else {
                     Button(
