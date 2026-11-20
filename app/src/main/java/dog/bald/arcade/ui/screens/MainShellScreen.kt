@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
@@ -105,7 +104,6 @@ import uniffi.balddog_android.pingEngine
 private enum class MainTab(val label: String, val icon: ImageVector) {
     CATALOG("Catálogo", Icons.Default.SportsEsports),
     ROOMS("Salas", Icons.Default.Groups),
-    LIBRARY("Biblioteca", Icons.Default.Bookmark),
     PROFILE("Perfil", Icons.Default.Person),
 }
 
@@ -420,16 +418,6 @@ fun MainShellScreen(
                             activeRoom = room
                         }
                     }
-                )
-
-                MainTab.LIBRARY -> LibraryTab(
-                    games = games.filter { downloadedFiles.contains(it.romFilename) },
-                    onPlay = { onLaunchLocalRom(it) },
-                    onDelete = { game ->
-                        romManager.deleteRom(game.romFilename)
-                        refreshLocalState()
-                    },
-                    onGoToCatalog = { selectedTab = MainTab.CATALOG.ordinal }
                 )
 
                 MainTab.PROFILE -> ProfileTab(
@@ -932,134 +920,6 @@ private fun RoomsTab(
                                 Text("ENTRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LibraryTab(
-    games: List<GameDto>,
-    onPlay: (GameDto) -> Unit,
-    onDelete: (GameDto) -> Unit,
-    onGoToCatalog: () -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-    var pendingDeleteGame by remember { mutableStateOf<GameDto?>(null) }
-
-    val filtered = remember(games, searchQuery) {
-        games.filter { it.matchesQuery(searchQuery) }
-    }
-
-    pendingDeleteGame?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingDeleteGame = null },
-            containerColor = CarbonSurface,
-            title = {
-                Text(
-                    "Eliminar ROM local",
-                    color = PureWhite,
-                    fontFamily = SpaceGroteskFamily,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    "¿Seguro que deseas eliminar \"${target.title}\" de tu almacenamiento local? Podrás volver a descargarlo desde el Catálogo.",
-                    color = SilverGray,
-                    fontSize = 13.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onDelete(target)
-                        pendingDeleteGame = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
-                ) {
-                    Text("ELIMINAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeleteGame = null }) {
-                    Text("CANCELAR", color = MutedGray, fontSize = 12.sp)
-                }
-            }
-        )
-    }
-
-    if (games.isEmpty()) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-            border = BorderStroke(1.dp, CharcoalBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Biblioteca Local vacía",
-                    color = PureWhite,
-                    fontFamily = SpaceGroteskFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Text(
-                    "Descarga un juego desde el Catálogo para verlo aquí y jugarlo sin conexión.",
-                    color = MutedGray,
-                    fontSize = 13.sp
-                )
-                OutlinedButton(onClick = onGoToCatalog, border = BorderStroke(1.dp, SteelBorder)) {
-                    Text("EXPLORAR CATÁLOGO", color = PureWhite, fontSize = 12.sp)
-                }
-            }
-        }
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
-            ArcadeSearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                placeholder = "Buscar en biblioteca..."
-            )
-
-            if (filtered.isEmpty()) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                    border = BorderStroke(1.dp, CharcoalBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "Sin resultados para \"${searchQuery.trim()}\"",
-                            color = PureWhite,
-                            fontFamily = SpaceGroteskFamily,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Ningún juego descargado coincide con tu búsqueda.",
-                            color = MutedGray,
-                            fontSize = 13.sp
-                        )
-                        OutlinedButton(onClick = { searchQuery = "" }, border = BorderStroke(1.dp, SteelBorder)) {
-                            Text("LIMPIAR BÚSQUEDA", color = PureWhite, fontSize = 12.sp)
-                        }
-                    }
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(filtered, key = { it.id }) { game ->
-                        ArcadeGameCard(
-                            game = game,
-                            isDownloaded = true,
-                            onPrimaryAction = { onPlay(game) },
-                            onDeleteClick = { pendingDeleteGame = game }
-                        )
                     }
                 }
             }
