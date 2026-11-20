@@ -97,13 +97,42 @@ fun ArcadeGameCard(
                         .padding(6.dp)
                 )
 
-                ArcadeBadge(
-                    text = game.system.uppercase(),
-                    style = ArcadeBadgeStyle.Overlay,
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp)
-                )
+                ) {
+                    ArcadeBadge(
+                        text = game.system.uppercase(),
+                        style = ArcadeBadgeStyle.Overlay
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(ObsidianBlack.copy(alpha = 0.84f))
+                            .border(1.dp, SteelBorder, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Descargas",
+                            tint = PureWhite,
+                            modifier = Modifier.size(11.dp)
+                        )
+                        Text(
+                            text = "${game.downloadCount}",
+                            color = PureWhite,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.4.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
 
                 if (onDeleteClick != null) {
                     Box(
@@ -163,12 +192,6 @@ fun ArcadeGameCard(
                         val sizeMb = (game.sizeBytes / (1024.0 * 1024.0)).roundToInt().coerceAtLeast(1)
                         ArcadeBadge(
                             text = "$sizeMb MB",
-                            style = ArcadeBadgeStyle.Outline
-                        )
-                    }
-                    if (game.downloadCount > 0L) {
-                        ArcadeBadge(
-                            text = "↓ ${game.downloadCount}",
                             style = ArcadeBadgeStyle.Outline
                         )
                     }
