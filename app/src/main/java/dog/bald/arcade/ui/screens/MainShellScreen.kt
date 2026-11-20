@@ -81,6 +81,7 @@ import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.UserGameStatDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
+import dog.bald.arcade.ui.components.AppPreloadScreen
 import dog.bald.arcade.ui.components.ArcadeGameCard
 import dog.bald.arcade.ui.components.ArcadeSearchBar
 import dog.bald.arcade.ui.components.DiceBearPixelArtAvatar
@@ -122,7 +123,8 @@ fun MainShellScreen(
     onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(MainTab.CATALOG.ordinal) }
+    var isInitialLoading by remember { mutableStateOf(true) }
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
@@ -157,22 +159,26 @@ fun MainShellScreen(
     fun refreshAll() {
         scope.launch {
             syncError = null
-            runCatching {
-                engineStatus = pingEngine(nativeLibDir)
-                logs = getRecentLogs()
-            }.onFailure { t ->
-                syncError = t.toUserMessage("Error conectando con motor nativo")
-            }
             try {
-                games = repo.fetchGames()
-                biosList = repo.fetchBios()
-                rooms = repo.fetchOpenRooms()
-                profile = repo.fetchMyProfile()
-                myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
-                refreshLocalState()
-            } catch (t: Throwable) {
-                val msg = t.toUserMessage("Error sincronizando catálogo")
-                syncError = if (syncError == null) msg else "$syncError\n$msg"
+                runCatching {
+                    engineStatus = pingEngine(nativeLibDir)
+                    logs = getRecentLogs()
+                }.onFailure { t ->
+                    syncError = t.toUserMessage("Error conectando con motor nativo")
+                }
+                try {
+                    games = repo.fetchGames()
+                    biosList = repo.fetchBios()
+                    rooms = repo.fetchOpenRooms()
+                    profile = repo.fetchMyProfile()
+                    myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
+                    refreshLocalState()
+                } catch (t: Throwable) {
+                    val msg = t.toUserMessage("Error sincronizando catálogo")
+                    syncError = if (syncError == null) msg else "$syncError\n$msg"
+                }
+            } finally {
+                isInitialLoading = false
             }
         }
     }
@@ -262,6 +268,11 @@ fun MainShellScreen(
                 }
             }
         )
+        return
+    }
+
+    if (isInitialLoading) {
+        AppPreloadScreen(message = "Cargando catálogo...")
         return
     }
 
@@ -393,7 +404,7 @@ fun MainShellScreen(
                     allGames = games,
                     libraryGames = games.filter { downloadedFiles.contains(it.romFilename) },
                     lanNsd = lanNsd,
-                    onGoToCatalog = { selectedTab = 0 },
+                    onGoToCatalog = { selectedTab = MainTab.CATALOG.ordinal },
                     onRefresh = { refreshAll() },
                     onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
                     onCreateRoom = { game, mode, isPrivate ->

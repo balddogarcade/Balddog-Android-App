@@ -6,24 +6,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.net.LanNsdManager
+import dog.bald.arcade.ui.components.AppPreloadScreen
 import dog.bald.arcade.ui.screens.AuthScreen
 import dog.bald.arcade.ui.screens.MainShellScreen
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
-import dog.bald.arcade.ui.theme.ObsidianBlack
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -54,14 +48,7 @@ class MainActivity : ComponentActivity() {
 
                 when {
                     checkingSession -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(ObsidianBlack),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = dog.bald.arcade.ui.theme.PureWhite)
-                        }
+                        AppPreloadScreen(message = "Iniciando Bald Dog...")
                     }
 
                     !isAuthenticated -> {
