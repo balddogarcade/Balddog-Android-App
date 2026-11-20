@@ -63,6 +63,7 @@ pub struct NetplayHudInfo {
     pub rollback_frames: u32,
     pub reconnecting: bool,
     pub reconnect_secs_left: u32,
+    pub session_ended: bool,
 }
 
 #[uniffi::export]
@@ -134,7 +135,7 @@ pub fn start_netplay_game(
         num_players: num_players as usize,
         peers,
         input_delay: input_delay as usize,
-        disconnect_timeout_secs: 15,
+        disconnect_timeout_secs: 8,
     };
 
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
@@ -211,6 +212,7 @@ pub fn get_netplay_hud_stats() -> NetplayHudInfo {
             rollback_frames: st.rollback_frames,
             reconnecting: st.reconnecting,
             reconnect_secs_left: st.reconnect_secs_left,
+            session_ended: st.session_ended,
         }
     })
     .unwrap_or(NetplayHudInfo {
@@ -218,6 +220,7 @@ pub fn get_netplay_hud_stats() -> NetplayHudInfo {
         rollback_frames: 0,
         reconnecting: false,
         reconnect_secs_left: 0,
+        session_ended: false,
     })
 }
 

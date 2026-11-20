@@ -104,6 +104,8 @@ class MainActivity : ComponentActivity() {
                                     putExtra(GameActivity.EXTRA_PEER_HANDLES, peerHandles)
                                     putStringArrayListExtra(GameActivity.EXTRA_PEER_ADDRS, peerAddrs)
                                     putExtra(GameActivity.EXTRA_INPUT_DELAY, if (room.mode == "lan") 1 else 2)
+                                    putExtra(GameActivity.EXTRA_ROOM_ID, room.id)
+                                    putExtra(GameActivity.EXTRA_IS_HOST, room.hostId == repo.currentUserId())
                                 }
                                 startActivity(intent)
                             }

@@ -52,6 +52,7 @@ struct SharedStats {
     rollback_frames: AtomicU32,
     reconnecting: AtomicBool,
     reconnect_secs_left: AtomicU32,
+    session_ended: AtomicBool,
 }
 
 pub struct EmulationSession {
@@ -224,6 +225,8 @@ impl EmulationSession {
                                 }
                                 GgrsEvent::Disconnected { .. } => {
                                     record_log("WARN", "Par remoto desconectado definitivamente");
+                                    stats_clone.reconnecting.store(false, Ordering::Release);
+                                    stats_clone.session_ended.store(true, Ordering::Release);
                                     running_clone.store(false, Ordering::Release);
                                 }
                                 _ => {}
@@ -405,6 +408,7 @@ impl EmulationSession {
             rollback_frames: self.stats.rollback_frames.load(Ordering::Relaxed),
             reconnecting: self.stats.reconnecting.load(Ordering::Acquire),
             reconnect_secs_left: self.stats.reconnect_secs_left.load(Ordering::Relaxed),
+            session_ended: self.stats.session_ended.load(Ordering::Acquire),
         }
     }
 

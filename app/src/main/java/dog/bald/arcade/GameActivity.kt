@@ -17,10 +17,16 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
 import dog.bald.arcade.input.TouchLayoutConfig
@@ -49,7 +56,11 @@ import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
 import dog.bald.arcade.ui.theme.CoinYellow
 import dog.bald.arcade.ui.theme.LeatherBlack
 import dog.bald.arcade.ui.theme.RetroIvory
+import dog.bald.arcade.ui.theme.SteelGray
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uniffi.balddog_android.NetplayHudInfo
 import uniffi.balddog_android.getCurrentFps
 import uniffi.balddog_android.getNetplayHudStats
@@ -75,6 +86,8 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_PEER_HANDLES = "peer_handles"
         const val EXTRA_PEER_ADDRS = "peer_addrs"
         const val EXTRA_INPUT_DELAY = "input_delay"
+        const val EXTRA_ROOM_ID = "room_id"
+        const val EXTRA_IS_HOST = "is_host"
     }
 
     private var audioManager: AudioManager? = null
@@ -89,7 +102,10 @@ class GameActivity : ComponentActivity() {
     private var menuStatusMsg by mutableStateOf<String?>(null)
     private var currentFps by mutableFloatStateOf(0f)
     private var isNetplay by mutableStateOf(false)
-    private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u))
+    private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u, false))
+    private var netplayEndReason by mutableStateOf<String?>(null)
+    private var netplayRoomId: String = ""
+    private var isNetplayHost: Boolean = false
 
     private var touchMaskP1: Int = 0
     private val physicalMasks = IntArray(4)
@@ -133,6 +149,8 @@ class GameActivity : ComponentActivity() {
         requestAudioFocus()
 
         isNetplay = intent.getBooleanExtra(EXTRA_NETPLAY_ENABLED, false)
+        netplayRoomId = intent.getStringExtra(EXTRA_ROOM_ID).orEmpty()
+        isNetplayHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
 
         try {
             if (romPath.isBlank()) {
@@ -176,8 +194,27 @@ class GameActivity : ComponentActivity() {
                         currentFps = getCurrentFps()
                         if (isNetplay) {
                             netplayHud = getNetplayHudStats()
+                            if (netplayHud.sessionEnded && netplayEndReason == null) {
+                                netplayEndReason = "El otro jugador se desconectó de la partida."
+                            }
                         }
                         delay(500)
+                    }
+                }
+
+                // Vigilar estado de la sala en Supabase: si el Host cierra la sala, avisar y desbloquear
+                LaunchedEffect(isNetplay, netplayRoomId) {
+                    if (isNetplay && netplayRoomId.isNotBlank()) {
+                        val repo = ArcadeRepository(applicationContext)
+                        while (netplayEndReason == null) {
+                            delay(2000)
+                            val r = runCatching { repo.fetchRoomById(netplayRoomId) }.getOrNull()
+                            if (r == null || r.status == "closed") {
+                                netplayEndReason = "El anfitrión salió y cerró la sala."
+                                stopGame()
+                                break
+                            }
+                        }
                     }
                 }
 
@@ -356,6 +393,37 @@ class GameActivity : ComponentActivity() {
                                 .padding(24.dp)
                         )
                     }
+
+                    val endMsg = netplayEndReason
+                    if (endMsg != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(ArcadeBlack.copy(alpha = 0.8f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = LeatherBlack),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("PARTIDA FINALIZADA", color = CoinYellow, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                    Text(endMsg, color = SteelGray, fontSize = 13.sp)
+                                    Button(
+                                        onClick = { finish() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CoinYellow, contentColor = ArcadeBlack)
+                                    ) {
+                                        Text("VOLVER A SALAS", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -422,6 +490,13 @@ class GameActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (isNetplay && isNetplayHost && netplayRoomId.isNotBlank()) {
+            val roomIdToClose = netplayRoomId
+            val appCtx = applicationContext
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching { ArcadeRepository(appCtx).closeRoom(roomIdToClose) }
+            }
+        }
         controllerManager?.stop()
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
         NativeSurfaceBridge.detachSurface()

@@ -54,6 +54,7 @@ pub struct NetplayHudStats {
     pub rollback_frames: u32,
     pub reconnecting: bool,
     pub reconnect_secs_left: u32,
+    pub session_ended: bool,
 }
 
 pub fn build_p2p_session(
