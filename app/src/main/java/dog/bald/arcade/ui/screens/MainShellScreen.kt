@@ -234,6 +234,7 @@ fun MainShellScreen(
             game = roomGame,
             myUsername = profile?.username ?: "Jugador",
             myEndpoint = myEndpoint,
+            myUdpPort = myUdpPort,
             onLeave = {
                 activeRoom = null
                 refreshAll()

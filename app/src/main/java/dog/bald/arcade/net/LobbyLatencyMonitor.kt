@@ -1,0 +1,186 @@
+package dog.bald.arcade.net
+
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.SocketTimeoutException
+import java.util.concurrent.ConcurrentHashMap
+
+data class LobbyPeerTarget(
+    val userId: String,
+    val endpoint: String
+)
+
+/**
+ * Mide la latencia UDP (RTT en ms) entre el jugador local y los pares de la sala
+ * mientras están en el lobby, usando el mismo puerto UDP que luego usará GGRS.
+ */
+class LobbyLatencyMonitor(
+    private val localPort: Int,
+    private val myUserId: String
+) {
+    private val _latenciesMs = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val latenciesMs: StateFlow<Map<String, Int>> = _latenciesMs.asStateFlow()
+
+    @Volatile
+    private var peers: List<LobbyPeerTarget> = emptyList()
+
+    @Volatile
+    private var socket: DatagramSocket? = null
+
+    @Volatile
+    private var closed = false
+
+    private val lastSeenNanos = ConcurrentHashMap<String, Long>()
+    private val currentLatencies = ConcurrentHashMap<String, Int>()
+    private var scopeJob: Job? = null
+
+    fun updatePeers(newPeers: List<LobbyPeerTarget>) {
+        peers = newPeers
+        val activeIds = newPeers.mapTo(HashSet()) { it.userId }
+        var changed = false
+        currentLatencies.keys.toList().forEach { uid ->
+            if (uid !in activeIds) {
+                currentLatencies.remove(uid)
+                lastSeenNanos.remove(uid)
+                changed = true
+            }
+        }
+        if (changed) {
+            _latenciesMs.value = currentLatencies.toMap()
+        }
+    }
+
+    fun start(parentScope: CoroutineScope) {
+        if (closed || scopeJob != null) return
+        val job = Job()
+        scopeJob = job
+        val ioScope = CoroutineScope(parentScope.coroutineContext + Dispatchers.IO + job)
+
+        ioScope.launch {
+            val sock = runCatching {
+                DatagramSocket(null).apply {
+                    reuseAddress = true
+                    soTimeout = 400
+                    bind(InetSocketAddress(localPort))
+                }
+            }.getOrNull() ?: return@launch
+
+            if (closed) {
+                runCatching { sock.close() }
+                return@launch
+            }
+            socket = sock
+
+            val recvJob = launch {
+                val buf = ByteArray(256)
+                val packet = DatagramPacket(buf, buf.size)
+                while (isActive && !closed && !sock.isClosed) {
+                    try {
+                        packet.length = buf.size
+                        sock.receive(packet)
+                        val msg = String(packet.data, 0, packet.length, Charsets.UTF_8)
+                        handlePacket(sock, packet.socketAddress, msg)
+                    } catch (_: SocketTimeoutException) {
+                        // Timeout periódico para evaluar cancelación
+                    } catch (_: Throwable) {
+                        if (closed || sock.isClosed) break
+                    }
+                }
+            }
+
+            val sendJob = launch {
+                while (isActive && !closed && !sock.isClosed) {
+                    val now = System.nanoTime()
+                    for (peer in peers) {
+                        if (peer.userId == myUserId) continue
+                        val addr = parseEndpoint(peer.endpoint) ?: continue
+                        val payload = "BDPING|$myUserId|${peer.userId}|$now".toByteArray(Charsets.UTF_8)
+                        runCatching {
+                            sock.send(DatagramPacket(payload, payload.size, addr))
+                        }
+                    }
+
+                    // Limpiar mediciones obsoletas (> 6 s sin respuesta)
+                    var staleRemoved = false
+                    lastSeenNanos.forEach { (uid, seenAt) ->
+                        if (now - seenAt > 6_000_000_000L) {
+                            if (currentLatencies.remove(uid) != null) {
+                                staleRemoved = true
+                            }
+                            lastSeenNanos.remove(uid)
+                        }
+                    }
+                    if (staleRemoved) {
+                        _latenciesMs.value = currentLatencies.toMap()
+                    }
+
+                    delay(1500)
+                }
+            }
+
+            recvJob.join()
+            sendJob.join()
+        }
+    }
+
+    private fun handlePacket(
+        sock: DatagramSocket,
+        senderAddr: java.net.SocketAddress,
+        msg: String
+    ) {
+        val parts = msg.split('|')
+        if (parts.size != 4) return
+        val type = parts[0]
+        val senderUid = parts[1]
+        val targetUid = parts[2]
+        val sentNanos = parts[3].toLongOrNull() ?: return
+
+        when (type) {
+            "BDPING" -> {
+                val pong = "BDPONG|$senderUid|$targetUid|$sentNanos".toByteArray(Charsets.UTF_8)
+                runCatching {
+                    sock.send(DatagramPacket(pong, pong.size, senderAddr))
+                }
+            }
+            "BDPONG" -> {
+                if (senderUid != myUserId) return
+                val now = System.nanoTime()
+                val rttMs = ((now - sentNanos) / 1_000_000L).coerceIn(1L, 9999L).toInt()
+                currentLatencies[targetUid] = rttMs
+                lastSeenNanos[targetUid] = now
+                _latenciesMs.value = currentLatencies.toMap()
+            }
+        }
+    }
+
+    private fun parseEndpoint(endpoint: String): InetSocketAddress? {
+        val idx = endpoint.lastIndexOf(':')
+        if (idx <= 0 || idx >= endpoint.length - 1) return null
+        val host = endpoint.substring(0, idx).trim().removeSurrounding("[", "]")
+        val port = endpoint.substring(idx + 1).trim().toIntOrNull() ?: return null
+        if (host.isEmpty() || port !in 1..65535) return null
+        return runCatching {
+            InetSocketAddress(InetAddress.getByName(host), port)
+        }.getOrNull()
+    }
+
+    fun close() {
+        if (closed) return
+        closed = true
+        scopeJob?.cancel()
+        scopeJob = null
+        runCatching { socket?.close() }
+        socket = null
+    }
+}

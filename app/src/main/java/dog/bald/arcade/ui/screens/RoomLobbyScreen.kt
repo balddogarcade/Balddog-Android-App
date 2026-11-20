@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,8 @@ import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.RoomMessageDto
 import dog.bald.arcade.data.RoomSlotInfo
 import dog.bald.arcade.net.LanNsdManager
+import dog.bald.arcade.net.LobbyLatencyMonitor
+import dog.bald.arcade.net.LobbyPeerTarget
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
@@ -71,6 +74,7 @@ fun RoomLobbyScreen(
     game: GameDto?,
     myUsername: String,
     myEndpoint: String,
+    myUdpPort: Int,
     onLeave: () -> Unit,
     onStartMatch: (room: RoomDto, mySlot: Int) -> Unit
 ) {
@@ -83,8 +87,26 @@ fun RoomLobbyScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var matchLaunched by remember { mutableStateOf(false) }
 
+    val latencyMonitor = remember(room.id, myUdpPort, myUid) {
+        LobbyLatencyMonitor(localPort = myUdpPort, myUserId = myUid)
+    }
+    val latenciesMs by latencyMonitor.latenciesMs.collectAsState()
+
     val isHost = room.hostId == myUid
     val mySlot = room.slotsJson.entries.firstOrNull { it.value.userId == myUid }?.key?.toIntOrNull()
+
+    DisposableEffect(latencyMonitor) {
+        latencyMonitor.start(scope)
+        onDispose {
+            latencyMonitor.close()
+        }
+    }
+
+    LaunchedEffect(room.slotsJson) {
+        latencyMonitor.updatePeers(
+            room.slotsJson.values.map { LobbyPeerTarget(userId = it.userId, endpoint = it.endpoint) }
+        )
+    }
 
     // Si somos Host de una sala LAN pública, anunciamos por NsdManager
     DisposableEffect(room.id, isHost, room.isPrivate) {
@@ -135,6 +157,7 @@ fun RoomLobbyScreen(
                         ?.toIntOrNull()
                     if (updated.status == "playing" && updatedSlot != null && !matchLaunched) {
                         matchLaunched = true
+                        latencyMonitor.close()
                         onStartMatch(updated, updatedSlot)
                     }
                 }
@@ -286,6 +309,25 @@ fun RoomLobbyScreen(
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
                                     )
+                                    val pingMs = latenciesMs[occupant.userId]
+                                    val pingText = when {
+                                        isMine -> "0 ms · LOCAL"
+                                        pingMs != null -> "$pingMs ms"
+                                        else -> "-- ms"
+                                    }
+                                    val pingColor = when {
+                                        isMine -> MutedGray
+                                        pingMs == null -> MutedGray
+                                        pingMs <= 80 -> PureWhite
+                                        pingMs <= 150 -> SilverGray
+                                        else -> MutedGray
+                                    }
+                                    Text(
+                                        text = pingText,
+                                        color = pingColor,
+                                        fontFamily = JetBrainsMonoFamily,
+                                        fontSize = 10.sp
+                                    )
                                 }
                             }
                         }
@@ -386,6 +428,7 @@ fun RoomLobbyScreen(
                             runCatching {
                                 repo.updateRoomSlots(room.id, room.slotsJson, status = "playing")
                                 matchLaunched = true
+                                latencyMonitor.close()
                                 onStartMatch(room.copy(status = "playing"), mySlot)
                             }
                         }
