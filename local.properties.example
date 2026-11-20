@@ -1,0 +1,15 @@
+# Copia este archivo a `local.properties` y completa los valores correspondientes.
+# `local.properties` está en `.gitignore` y no debe subirse al repositorio.
+
+# Ruta al Android SDK (generada normalmente por Android Studio / Gradle)
+sdk.dir=
+
+# Configuración de Supabase (obligatoria para BuildConfig)
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+
+# Opcional: firma para builds release (APK / AAB)
+BALDDOG_KEYSTORE_PATH=
+BALDDOG_KEYSTORE_PASSWORD=
+BALDDOG_KEY_ALIAS=
+BALDDOG_KEY_PASSWORD=
