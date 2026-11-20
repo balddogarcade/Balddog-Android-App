@@ -70,6 +70,7 @@ class ArcadeRepository(context: Context) {
         return client.from("rooms").select {
             filter {
                 eq("status", "waiting")
+                eq("is_private", false)
             }
         }.decodeList<RoomDto>()
     }
@@ -109,7 +110,8 @@ class ArcadeRepository(context: Context) {
         username: String,
         endpoint: String,
         localIp: String?,
-        localPort: Int?
+        localPort: Int?,
+        isPrivate: Boolean = false
     ): RoomDto {
         val uid = currentUserId() ?: throw IllegalStateException("Usuario no autenticado")
         val code = (1000..9999).random(Random).toString() + ('A'..'Z').random(Random)
@@ -130,6 +132,7 @@ class ArcadeRepository(context: Context) {
             put("max_players", maxPlayers.coerceIn(2, 4))
             put("slots_json", Json.encodeToJsonElement(initialSlots))
             put("host_endpoint", endpoint)
+            put("is_private", isPrivate)
             if (localIp != null) put("local_ip", localIp)
             if (localPort != null) put("local_port", localPort)
         }

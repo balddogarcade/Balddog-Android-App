@@ -61,7 +61,8 @@ data class RoomDto(
     @SerialName("slots_json") val slotsJson: Map<String, RoomSlotInfo> = emptyMap(),
     @SerialName("host_endpoint") val hostEndpoint: String? = null,
     @SerialName("local_ip") val localIp: String? = null,
-    @SerialName("local_port") val localPort: Int? = null
+    @SerialName("local_port") val localPort: Int? = null,
+    @SerialName("is_private") val isPrivate: Boolean = false
 )
 
 @Serializable

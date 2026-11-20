@@ -372,7 +372,7 @@ fun MainShellScreen(
                     onGoToCatalog = { selectedTab = 0 },
                     onRefresh = { refreshAll() },
                     onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
-                    onCreateRoom = { game, mode ->
+                    onCreateRoom = { game, mode, isPrivate ->
                         scope.launch {
                             syncError = null
                             try {
@@ -395,7 +395,8 @@ fun MainShellScreen(
                                     username = profile?.username ?: "Host",
                                     endpoint = endpoint,
                                     localIp = localIp,
-                                    localPort = port
+                                    localPort = port,
+                                    isPrivate = isPrivate
                                 )
                                 activeRoom = created
                             } catch (t: Throwable) {
@@ -568,13 +569,14 @@ private fun RoomsTab(
     onGoToCatalog: () -> Unit,
     onRefresh: () -> Unit,
     onLookupRoom: suspend (String) -> RoomDto?,
-    onCreateRoom: (GameDto, String) -> Unit,
+    onCreateRoom: (GameDto, String, Boolean) -> Unit,
     onJoinRoom: (RoomDto) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val discoveredLan by lanNsd.discoveredRooms.collectAsState()
     var selectedGame by remember(libraryGames) { mutableStateOf(libraryGames.firstOrNull()) }
     var selectedMode by remember { mutableStateOf("lan") }
+    var isPrivateRoom by remember { mutableStateOf(false) }
     var showCreateRoomDialog by remember { mutableStateOf(false) }
     var pickerQuery by remember { mutableStateOf("") }
     var joinCode by remember { mutableStateOf("") }
@@ -631,6 +633,37 @@ private fun RoomsTab(
                             ) {
                                 Text("ONLINE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { isPrivateRoom = false },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!isPrivateRoom) PureWhite else ObsidianBlack,
+                                    contentColor = if (!isPrivateRoom) PureBlack else SilverGray
+                                ),
+                                border = if (!isPrivateRoom) null else BorderStroke(1.dp, CharcoalBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("PÚBLICA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                            Button(
+                                onClick = { isPrivateRoom = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isPrivateRoom) PureWhite else ObsidianBlack,
+                                    contentColor = if (isPrivateRoom) PureBlack else SilverGray
+                                ),
+                                border = if (isPrivateRoom) null else BorderStroke(1.dp, CharcoalBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("PRIVADA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                        if (isPrivateRoom) {
+                            Text(
+                                text = "No aparecerá en el listado; solo accesible por código o ID.",
+                                color = MutedGray,
+                                fontSize = 11.sp
+                            )
                         }
                         Text("Elige un juego de tu biblioteca:", color = SilverGray, fontSize = 12.sp)
                         OutlinedTextField(
@@ -698,7 +731,7 @@ private fun RoomsTab(
                         onClick = {
                             selectedGame?.let { game ->
                                 showCreateRoomDialog = false
-                                onCreateRoom(game, selectedMode)
+                                onCreateRoom(game, selectedMode, isPrivateRoom)
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
@@ -734,6 +767,7 @@ private fun RoomsTab(
         Button(
             onClick = {
                 pickerQuery = ""
+                isPrivateRoom = false
                 if (selectedGame == null) {
                     selectedGame = libraryGames.firstOrNull()
                 }

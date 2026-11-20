@@ -86,13 +86,13 @@ fun RoomLobbyScreen(
     val isHost = room.hostId == myUid
     val mySlot = room.slotsJson.entries.firstOrNull { it.value.userId == myUid }?.key?.toIntOrNull()
 
-    // Si somos Host de una sala LAN, anunciamos por NsdManager
-    DisposableEffect(room.id, isHost) {
-        if (isHost && room.mode == "lan" && room.localPort != null) {
+    // Si somos Host de una sala LAN pública, anunciamos por NsdManager
+    DisposableEffect(room.id, isHost, room.isPrivate) {
+        if (isHost && room.mode == "lan" && !room.isPrivate && room.localPort != null) {
             lanNsd.registerRoom(room.code, game?.title ?: "Arcade", room.localPort ?: 7000)
         }
         onDispose {
-            if (isHost && room.mode == "lan") {
+            if (isHost && room.mode == "lan" && !room.isPrivate) {
                 lanNsd.unregisterRoom()
             }
         }
@@ -209,8 +209,9 @@ fun RoomLobbyScreen(
                     modifier = Modifier.size(48.dp)
                 )
                 Column {
+                    val privacyLabel = if (room.isPrivate) " · PRIVADA" else ""
                     Text(
-                        text = "SALA #${room.code} · ${room.mode.uppercase()}",
+                        text = "SALA #${room.code} · ${room.mode.uppercase()}$privacyLabel",
                         color = PureWhite,
                         fontFamily = JetBrainsMonoFamily,
                         fontSize = 16.sp,
