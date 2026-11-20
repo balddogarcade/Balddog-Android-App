@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -73,6 +76,7 @@ import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
+import dog.bald.arcade.ui.components.ArcadeGameCard
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
@@ -303,10 +307,12 @@ fun MainShellScreen(
                 MainTab.CATALOG -> CatalogTab(
                     games = games,
                     downloadedFiles = downloadedFiles,
+                    downloadingGameId = downloadingGameId,
+                    downloadProgress = downloadProgress,
                     busy = downloadingGameId != null,
                     onRefresh = { refreshAll() },
                     onDownload = { downloadOnly(it) },
-                    onPlay = { onLaunchLocalRom(it) }
+                    onGoToLibrary = { selectedTab = MainTab.LIBRARY.ordinal }
                 )
 
                 MainTab.ROOMS -> RoomsTab(
@@ -372,7 +378,8 @@ fun MainShellScreen(
                     onDelete = { game ->
                         romManager.deleteRom(game.romFilename)
                         refreshLocalState()
-                    }
+                    },
+                    onGoToCatalog = { selectedTab = MainTab.CATALOG.ordinal }
                 )
 
                 MainTab.PROFILE -> ProfileTab(
@@ -404,19 +411,25 @@ fun MainShellScreen(
 private fun CatalogTab(
     games: List<GameDto>,
     downloadedFiles: Set<String>,
+    downloadingGameId: String?,
+    downloadProgress: Float,
     busy: Boolean,
     onRefresh: () -> Unit,
     onDownload: (GameDto) -> Unit,
-    onPlay: (GameDto) -> Unit
+    onGoToLibrary: () -> Unit
 ) {
     var filterSystem by remember { mutableStateOf("ALL") }
     val systems = listOf("ALL", "NEOGEO", "CPS2", "CO-OP")
 
-    val filtered = remember(games, filterSystem) {
+    val availableGames = remember(games, downloadedFiles) {
+        games.filterNot { downloadedFiles.contains(it.romFilename) }
+    }
+
+    val filtered = remember(availableGames, filterSystem) {
         when (filterSystem) {
-            "ALL" -> games
-            "CO-OP" -> games.filter { it.isCoop }
-            else -> games.filter { it.system.equals(filterSystem, ignoreCase = true) }
+            "ALL" -> availableGames
+            "CO-OP" -> availableGames.filter { it.isCoop }
+            else -> availableGames.filter { it.system.equals(filterSystem, ignoreCase = true) }
         }
     }
 
@@ -437,70 +450,74 @@ private fun CatalogTab(
             }
         }
 
-        if (filtered.isEmpty()) {
+        if (games.isNotEmpty() && availableGames.isEmpty()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = CarbonSurface),
                 border = BorderStroke(1.dp, CharcoalBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Catálogo vacío por ahora", color = PureWhite, fontWeight = FontWeight.Bold)
                     Text(
-                        "Agrega juegos en la tabla `games` de Supabase para descargarlos vía IPFS.",
+                        "Todos los juegos descargados",
+                        color = PureWhite,
+                        fontFamily = SpaceGroteskFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Ya tienes todo el catálogo disponible en tu Biblioteca local.",
                         color = MutedGray,
                         fontSize = 13.sp
                     )
-                    OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
-                        Text("ACTUALIZAR CATÁLOGO", color = PureWhite)
+                    OutlinedButton(onClick = onGoToLibrary, border = BorderStroke(1.dp, SteelBorder)) {
+                        Text("IR A BIBLIOTECA", color = PureWhite, fontSize = 12.sp)
+                    }
+                }
+            }
+        } else if (filtered.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (games.isEmpty()) "Catálogo vacío por ahora" else "Sin juegos en $filterSystem",
+                        color = PureWhite,
+                        fontFamily = SpaceGroteskFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        if (games.isEmpty()) {
+                            "Agrega juegos en la tabla `games` de Supabase para descargarlos vía IPFS."
+                        } else {
+                            "Prueba seleccionando otro filtro de sistema."
+                        },
+                        color = MutedGray,
+                        fontSize = 13.sp
+                    )
+                    if (games.isEmpty()) {
+                        OutlinedButton(onClick = onRefresh, border = BorderStroke(1.dp, SteelBorder)) {
+                            Text("ACTUALIZAR CATÁLOGO", color = PureWhite, fontSize = 12.sp)
+                        }
                     }
                 }
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
                 items(filtered, key = { it.id }) { game ->
-                    val isLocal = downloadedFiles.contains(game.romFilename)
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                        border = BorderStroke(1.dp, CharcoalBorder),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            GameCoverImage(
-                                slug = game.slug,
-                                contentDescription = game.title,
-                                modifier = Modifier.size(56.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(game.title, color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text(
-                                    "${game.system} · ${game.maxPlayers}P${if (game.isCoop) " · CO-OP" else ""}",
-                                    color = MutedGray,
-                                    fontSize = 12.sp
-                                )
-                            }
-                            Button(
-                                enabled = !busy,
-                                onClick = { if (isLocal) onPlay(game) else onDownload(game) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isLocal) PureWhite else GraphiteSurface,
-                                    contentColor = if (isLocal) PureBlack else PureWhite
-                                )
-                            ) {
-                                Text(
-                                    if (isLocal) "JUGAR" else "DESCARGAR",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                    }
+                    ArcadeGameCard(
+                        game = game,
+                        isDownloaded = false,
+                        isDownloading = downloadingGameId == game.id,
+                        downloadProgress = if (downloadingGameId == game.id) downloadProgress else 0f,
+                        busy = busy,
+                        onPrimaryAction = { onDownload(game) }
+                    )
                 }
             }
         }
@@ -864,60 +881,87 @@ private fun RoomsTab(
 private fun LibraryTab(
     games: List<GameDto>,
     onPlay: (GameDto) -> Unit,
-    onDelete: (GameDto) -> Unit
+    onDelete: (GameDto) -> Unit,
+    onGoToCatalog: () -> Unit
 ) {
+    var pendingDeleteGame by remember { mutableStateOf<GameDto?>(null) }
+
+    pendingDeleteGame?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteGame = null },
+            containerColor = CarbonSurface,
+            title = {
+                Text(
+                    "Eliminar ROM local",
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "¿Seguro que deseas eliminar \"${target.title}\" de tu almacenamiento local? Podrás volver a descargarlo desde el Catálogo.",
+                    color = SilverGray,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDelete(target)
+                        pendingDeleteGame = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
+                ) {
+                    Text("ELIMINAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteGame = null }) {
+                    Text("CANCELAR", color = MutedGray, fontSize = 12.sp)
+                }
+            }
+        )
+    }
+
     if (games.isEmpty()) {
         Card(
             colors = CardDefaults.cardColors(containerColor = CarbonSurface),
             border = BorderStroke(1.dp, CharcoalBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Biblioteca Local vacía", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Biblioteca Local vacía",
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
                 Text(
                     "Descarga un juego desde el Catálogo para verlo aquí y jugarlo sin conexión.",
                     color = MutedGray,
                     fontSize = 13.sp
                 )
+                OutlinedButton(onClick = onGoToCatalog, border = BorderStroke(1.dp, SteelBorder)) {
+                    Text("EXPLORAR CATÁLOGO", color = PureWhite, fontSize = 12.sp)
+                }
             }
         }
     } else {
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
             items(games, key = { it.id }) { game ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                    border = BorderStroke(1.dp, CharcoalBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        GameCoverImage(
-                            slug = game.slug,
-                            contentDescription = game.title,
-                            modifier = Modifier.size(52.dp)
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(game.title, color = PureWhite, fontWeight = FontWeight.Bold)
-                            Text("${game.system} · Verificado SHA256", color = MutedGray, fontSize = 12.sp)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { onDelete(game) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Borrar ROM", tint = SilverGray)
-                            }
-                            Button(
-                                onClick = { onPlay(game) },
-                                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
-                            ) {
-                                Text("JUGAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
+                ArcadeGameCard(
+                    game = game,
+                    isDownloaded = true,
+                    onPrimaryAction = { onPlay(game) },
+                    onDeleteClick = { pendingDeleteGame = game }
+                )
             }
         }
     }
