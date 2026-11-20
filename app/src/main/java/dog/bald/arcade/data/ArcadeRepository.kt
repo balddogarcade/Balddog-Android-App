@@ -18,6 +18,8 @@ class ArcadeRepository(context: Context) {
 
     fun currentUserId(): String? = client.auth.currentUserOrNull()?.id
 
+    fun currentUserEmail(): String? = client.auth.currentUserOrNull()?.email
+
     suspend fun restoreSession(): Boolean {
         return runCatching {
             client.auth.loadFromStorage()

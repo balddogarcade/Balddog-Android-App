@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
@@ -32,6 +33,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -76,6 +80,7 @@ import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.ArcadeGameCard
 import dog.bald.arcade.ui.components.ArcadeSearchBar
+import dog.bald.arcade.ui.components.DiceBearPixelArtAvatar
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
@@ -120,6 +125,14 @@ fun MainShellScreen(
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
     var profile by remember { mutableStateOf<ProfileDto?>(null) }
+    var userMenuExpanded by remember { mutableStateOf(false) }
+    val userEmail = remember(profile) { repo.currentUserEmail() }
+    val avatarSeed = remember(userEmail, profile) {
+        userEmail?.takeIf { it.isNotBlank() }
+            ?: profile?.username?.takeIf { it.isNotBlank() }
+            ?: repo.currentUserId()
+            ?: "guest"
+    }
     var engineStatus by remember { mutableStateOf<EngineStatus?>(null) }
     var logs by remember { mutableStateOf<List<String>>(emptyList()) }
     var syncError by remember { mutableStateOf<String?>(null) }
@@ -271,12 +284,69 @@ fun MainShellScreen(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.height(34.dp)
                 )
-                Text(
-                    text = profile?.username ?: "Jugador",
-                    color = SilverGray,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { userMenuExpanded = true }
+                    ) {
+                        DiceBearPixelArtAvatar(
+                            seed = avatarSeed,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Menú de usuario",
+                            tint = SilverGray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = userMenuExpanded,
+                        onDismissRequest = { userMenuExpanded = false },
+                        containerColor = CarbonSurface
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = profile?.username ?: "Jugador",
+                                        color = PureWhite,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
+                                    if (!userEmail.isNullOrBlank()) {
+                                        Text(
+                                            text = userEmail,
+                                            color = MutedGray,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {},
+                            enabled = false
+                        )
+                        HorizontalDivider(color = CharcoalBorder)
+                        DropdownMenuItem(
+                            text = { Text("Perfil", color = PureWhite, fontSize = 13.sp) },
+                            onClick = {
+                                userMenuExpanded = false
+                                selectedTab = MainTab.PROFILE.ordinal
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Cerrar sesión", color = SilverGray, fontSize = 13.sp) },
+                            onClick = {
+                                userMenuExpanded = false
+                                scope.launch {
+                                    runCatching { repo.signOut() }
+                                    onSignedOut()
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             if (syncError != null) {
