@@ -223,7 +223,7 @@ class GameActivity : ComponentActivity() {
                             delay(2000)
                             val r = runCatching { repo.fetchRoomById(netplayRoomId) }.getOrNull()
                             if (r == null || r.status == "closed") {
-                                netplayEndReason = "El anfitrión salió y cerró la sala."
+                                netplayEndReason = "El anfitrión se fue de la sala."
                                 stopGame()
                                 break
                             }
@@ -518,7 +518,7 @@ class GameActivity : ComponentActivity() {
             val roomIdToClose = netplayRoomId
             val appCtx = applicationContext
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { ArcadeRepository(appCtx).closeRoom(roomIdToClose) }
+                runCatching { ArcadeRepository(appCtx).deleteRoom(roomIdToClose) }
             }
         }
         controllerManager?.stop()

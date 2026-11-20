@@ -2,6 +2,8 @@ package dog.bald.arcade.ui.screens
 
 import dog.bald.arcade.data.toUserMessage
 
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -65,8 +67,13 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun RoomLobbyScreen(
@@ -77,7 +84,7 @@ fun RoomLobbyScreen(
     myUsername: String,
     myEndpoint: String,
     myUdpPort: Int,
-    onLeave: () -> Unit,
+    onLeave: (String?) -> Unit,
     onStartMatch: (room: RoomDto, mySlot: Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -88,6 +95,7 @@ fun RoomLobbyScreen(
     var chatInput by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var matchLaunched by remember { mutableStateOf(false) }
+    var leftRoom by remember { mutableStateOf(false) }
 
     val latencyMonitor = remember(room.id, myUdpPort, myUid) {
         LobbyLatencyMonitor(localPort = myUdpPort, myUserId = myUid)
@@ -147,21 +155,92 @@ fun RoomLobbyScreen(
         }
     }
 
+    fun leaveCleanly(reason: String? = null) {
+        if (leftRoom || matchLaunched) return
+        leftRoom = true
+        latencyMonitor.close()
+        scope.launch {
+            withContext(NonCancellable) {
+                if (isHost) {
+                    runCatching { repo.deleteRoom(room.id) }
+                } else if (reason == null && myUid.isNotBlank()) {
+                    runCatching {
+                        val latest = repo.fetchRoomById(room.id) ?: room
+                        val next = latest.slotsJson.filterValues { it.userId != myUid }
+                        if (next.size != latest.slotsJson.size) {
+                            repo.updateRoomSlots(room.id, next)
+                        }
+                    }
+                }
+            }
+            onLeave(reason)
+        }
+    }
+
+    BackHandler(enabled = !leftRoom && !matchLaunched) {
+        leaveCleanly()
+    }
+
+    // Si el anfitrión sale de la pantalla sin usar el botón (o se destruye el composable), eliminar la sala
+    DisposableEffect(room.id, isHost) {
+        onDispose {
+            if (isHost && !matchLaunched && !leftRoom) {
+                leftRoom = true
+                val roomIdToDelete = room.id
+                CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                    runCatching { repo.deleteRoom(roomIdToDelete) }
+                }
+            }
+        }
+    }
+
+    // Heartbeat del anfitrión para detectar cierre forzado o pérdida de conexión
+    LaunchedEffect(room.id, isHost) {
+        if (!isHost) return@LaunchedEffect
+        while (!matchLaunched && !leftRoom) {
+            runCatching { repo.touchRoomHeartbeat(room.id) }
+            delay(4000)
+        }
+    }
+
     // Polling ligero de sala y chat (con guardia de disparo único para iniciar partida)
     LaunchedEffect(room.id) {
-        while (!matchLaunched) {
+        var lastUpdatedAt = initialRoom.updatedAt
+        var lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
+        while (!matchLaunched && !leftRoom) {
             runCatching {
-                repo.fetchRoomById(room.id)?.let { updated ->
-                    room = updated
-                    val updatedSlot = updated.slotsJson.entries
-                        .firstOrNull { it.value.userId == myUid }
-                        ?.key
-                        ?.toIntOrNull()
-                    if (updated.status == "playing" && updatedSlot != null && !matchLaunched) {
-                        matchLaunched = true
+                val updated = repo.fetchRoomById(room.id)
+                if (updated == null || updated.status == "closed") {
+                    if (!leftRoom && !matchLaunched) {
+                        leftRoom = true
                         latencyMonitor.close()
-                        onStartMatch(updated, updatedSlot)
+                        onLeave("El anfitrión se fue de la sala.")
                     }
+                    return@LaunchedEffect
+                }
+                if (!isHost && updated.status == "waiting") {
+                    if (updated.updatedAt != lastUpdatedAt) {
+                        lastUpdatedAt = updated.updatedAt
+                        lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
+                    } else if (SystemClock.elapsedRealtime() - lastHeartbeatChangeMs > 15_000L) {
+                        if (!leftRoom && !matchLaunched) {
+                            leftRoom = true
+                            runCatching { repo.closeRoom(room.id) }
+                            latencyMonitor.close()
+                            onLeave("El anfitrión se fue de la sala.")
+                        }
+                        return@LaunchedEffect
+                    }
+                }
+                room = updated
+                val updatedSlot = updated.slotsJson.entries
+                    .firstOrNull { it.value.userId == myUid }
+                    ?.key
+                    ?.toIntOrNull()
+                if (updated.status == "playing" && updatedSlot != null && !matchLaunched) {
+                    matchLaunched = true
+                    latencyMonitor.close()
+                    onStartMatch(updated, updatedSlot)
                 }
                 messages = repo.fetchRoomMessages(room.id)
             }
@@ -251,12 +330,7 @@ fun RoomLobbyScreen(
                 }
             }
             OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        if (isHost) runCatching { repo.closeRoom(room.id) }
-                        onLeave()
-                    }
-                },
+                onClick = { leaveCleanly() },
                 border = BorderStroke(1.dp, SteelBorder)
             ) {
                 Text("SALIR", color = SilverGray, fontSize = 12.sp)

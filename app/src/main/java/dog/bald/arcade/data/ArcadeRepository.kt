@@ -159,6 +159,21 @@ class ArcadeRepository(context: Context) {
         }
     }
 
+    suspend fun deleteRoom(roomId: String) {
+        client.from("rooms").delete {
+            filter { eq("id", roomId) }
+        }
+    }
+
+    suspend fun touchRoomHeartbeat(roomId: String) {
+        val payload = buildJsonObject {
+            put("updated_at", java.time.Instant.now().toString())
+        }
+        client.from("rooms").update(payload) {
+            filter { eq("id", roomId) }
+        }
+    }
+
     suspend fun fetchRoomMessages(roomId: String): List<RoomMessageDto> {
         return client.from("room_messages").select {
             filter { eq("room_id", roomId) }

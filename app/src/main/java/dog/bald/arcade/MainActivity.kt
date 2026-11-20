@@ -18,9 +18,28 @@ import dog.bald.arcade.ui.components.AppPreloadScreen
 import dog.bald.arcade.ui.screens.AuthScreen
 import dog.bald.arcade.ui.screens.MainShellScreen
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : ComponentActivity() {
+    @Volatile
+    private var activeHostRoomId: String? = null
+
+    override fun onDestroy() {
+        super.onDestroy()
+        val roomId = activeHostRoomId
+        if (!roomId.isNullOrBlank()) {
+            activeHostRoomId = null
+            val appCtx = applicationContext
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runCatching { ArcadeRepository(appCtx).deleteRoom(roomId) }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -64,6 +83,7 @@ class MainActivity : ComponentActivity() {
                             romManager = romManager,
                             lanNsd = lanNsd,
                             nativeLibDir = nativeLibDir,
+                            onActiveHostRoomChanged = { roomId -> activeHostRoomId = roomId },
                             onSignedOut = { isAuthenticated = false },
                             onLaunchLocalRom = { game ->
                                 val romFile = File(romsDir, game.romFilename)

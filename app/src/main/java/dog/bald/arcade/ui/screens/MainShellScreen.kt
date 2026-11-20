@@ -118,6 +118,7 @@ fun MainShellScreen(
     romManager: IpfsRomManager,
     lanNsd: LanNsdManager,
     nativeLibDir: String,
+    onActiveHostRoomChanged: (String?) -> Unit = {},
     onSignedOut: () -> Unit,
     onLaunchLocalRom: (GameDto) -> Unit,
     onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int) -> Unit
@@ -143,6 +144,7 @@ fun MainShellScreen(
     var syncError by remember { mutableStateOf<String?>(null) }
 
     var activeRoom by remember { mutableStateOf<RoomDto?>(null) }
+    var roomNoticeMsg by remember { mutableStateOf<String?>(null) }
     var myUdpPort by remember { mutableIntStateOf(7000) }
     var myEndpoint by remember { mutableStateOf("") }
 
@@ -233,6 +235,15 @@ fun MainShellScreen(
     }
 
     val currentRoom = activeRoom
+    LaunchedEffect(currentRoom?.id, currentRoom?.hostId) {
+        val hostRoomId = if (currentRoom != null && currentRoom.hostId == repo.currentUserId()) {
+            currentRoom.id
+        } else {
+            null
+        }
+        onActiveHostRoomChanged(hostRoomId)
+    }
+
     if (currentRoom != null) {
         val roomGame = games.firstOrNull { it.id == currentRoom.gameId }
         RoomLobbyScreen(
@@ -243,8 +254,12 @@ fun MainShellScreen(
             myUsername = profile?.username ?: "Jugador",
             myEndpoint = myEndpoint,
             myUdpPort = myUdpPort,
-            onLeave = {
+            onLeave = { reason ->
                 activeRoom = null
+                selectedTab = MainTab.ROOMS.ordinal
+                if (reason != null) {
+                    roomNoticeMsg = reason
+                }
                 refreshAll()
             },
             onStartMatch = { startedRoom, mySlot ->
@@ -404,10 +419,13 @@ fun MainShellScreen(
                     allGames = games,
                     libraryGames = games.filter { downloadedFiles.contains(it.romFilename) },
                     lanNsd = lanNsd,
+                    roomNoticeMsg = roomNoticeMsg,
+                    onDismissRoomNotice = { roomNoticeMsg = null },
                     onGoToCatalog = { selectedTab = MainTab.CATALOG.ordinal },
                     onRefresh = { refreshAll() },
                     onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
                     onCreateRoom = { game, mode, isPrivate ->
+                        roomNoticeMsg = null
                         scope.launch {
                             syncError = null
                             try {
@@ -440,6 +458,7 @@ fun MainShellScreen(
                         }
                     },
                     onJoinRoom = { room ->
+                        roomNoticeMsg = null
                         scope.launch {
                             val port = (7100..7199).random()
                             myUdpPort = port
@@ -593,6 +612,8 @@ private fun RoomsTab(
     allGames: List<GameDto>,
     libraryGames: List<GameDto>,
     lanNsd: LanNsdManager,
+    roomNoticeMsg: String?,
+    onDismissRoomNotice: () -> Unit,
     onGoToCatalog: () -> Unit,
     onRefresh: () -> Unit,
     onLookupRoom: suspend (String) -> RoomDto?,
@@ -788,6 +809,33 @@ private fun RoomsTab(
                     contentDescription = "Refrescar",
                     tint = PureWhite
                 )
+            }
+        }
+
+        if (roomNoticeMsg != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GraphiteSurface),
+                border = BorderStroke(1.dp, PureWhite),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = roomNoticeMsg,
+                        color = PureWhite,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onDismissRoomNotice) {
+                        Text("OK", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
             }
         }
 

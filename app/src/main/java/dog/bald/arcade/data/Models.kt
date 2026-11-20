@@ -74,7 +74,8 @@ data class RoomDto(
     @SerialName("host_endpoint") val hostEndpoint: String? = null,
     @SerialName("local_ip") val localIp: String? = null,
     @SerialName("local_port") val localPort: Int? = null,
-    @SerialName("is_private") val isPrivate: Boolean = false
+    @SerialName("is_private") val isPrivate: Boolean = false,
+    @SerialName("updated_at") val updatedAt: String = ""
 )
 
 @Serializable
