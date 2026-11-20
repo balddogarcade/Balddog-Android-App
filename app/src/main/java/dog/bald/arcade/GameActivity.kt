@@ -291,8 +291,8 @@ class GameActivity : ComponentActivity() {
                         if (!showMenu) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = 8.dp)
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 16.dp, end = 20.dp)
                                     .background(CarbonSurface.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
                                     .border(1.dp, if (editLayoutMode) PureWhite else SteelBorder, RoundedCornerShape(12.dp))
                                     .clickable {
@@ -322,7 +322,7 @@ class GameActivity : ComponentActivity() {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.TopCenter)
-                                        .padding(top = 42.dp)
+                                        .padding(top = 16.dp)
                                         .background(PureWhite.copy(alpha = 0.94f), RoundedCornerShape(10.dp))
                                         .padding(horizontal = 14.dp, vertical = 6.dp)
                                 ) {
