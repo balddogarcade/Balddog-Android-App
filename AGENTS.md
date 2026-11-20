@@ -17,3 +17,8 @@ Este archivo define reglas obligatorias que todo agente de IA debe respetar al t
      - URLs privadas con credenciales embebidas, cadenas de conexión a bases de datos o llaves de Supabase/servicios externos (`service_role`, secretos de firma, etc.).
      - Archivos locales de configuración que deban permanecer ignorados (como `local.properties`, `.env`, etc.).
    - Si detectas cualquier dato secreto o sensible hardcodeado, **detente de inmediato**, no hagas el commit, muévelo a configuración segura/variables de entorno/archivos ignorados por `.gitignore` y notifícalo al usuario.
+
+3. **Título y descripción obligatorios y detallados en cada commit:**
+   - **SIEMPRE** incluye un **título** claro y conciso, seguido de una **descripción** (cuerpo del mensaje) lo más descriptiva posible en cada commit.
+   - El **título** debe resumir con precisión el propósito del cambio.
+   - La **descripción** debe detallar qué se modificó, por qué se realizó el cambio y cualquier contexto o impacto relevante para permitir un seguimiento adecuado en el historial del repositorio (evita commits sin cuerpo descriptivo).
