@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
                             onLaunchLocalRom = { game ->
                                 val romFile = File(romsDir, game.romFilename)
                                 val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
+                                    putExtra(GameActivity.EXTRA_GAME_ID, game.id)
                                     putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
                                     putExtra(GameActivity.EXTRA_SYSTEM_DIR, systemDir.absolutePath)
                                     putExtra(GameActivity.EXTRA_SAVE_DIR, saveDir.absolutePath)
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
                                 val peerHandles = peers.mapNotNull { it.key.toIntOrNull() }.toIntArray()
                                 val peerAddrs = ArrayList(peers.map { it.value.endpoint })
                                 val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
+                                    putExtra(GameActivity.EXTRA_GAME_ID, game.id)
                                     putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
                                     putExtra(GameActivity.EXTRA_SYSTEM_DIR, systemDir.absolutePath)
                                     putExtra(GameActivity.EXTRA_SAVE_DIR, saveDir.absolutePath)

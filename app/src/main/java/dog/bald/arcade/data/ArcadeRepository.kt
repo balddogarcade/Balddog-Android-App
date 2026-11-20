@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
@@ -215,5 +216,31 @@ class ArcadeRepository(context: Context) {
         return runCatching {
             client.from("profiles").insert(payload) { select() }.decodeSingle<ProfileDto>()
         }.getOrNull()
+    }
+
+    suspend fun incrementGameDownload(gameId: String) {
+        if (currentUserId() == null) return
+        val params = buildJsonObject {
+            put("p_game_id", gameId)
+        }
+        client.postgrest.rpc("increment_game_download", params)
+    }
+
+    suspend fun recordPlaySession(gameId: String, seconds: Long, isNewSession: Boolean) {
+        if (currentUserId() == null || gameId.isBlank() || seconds <= 0L) return
+        val params = buildJsonObject {
+            put("p_game_id", gameId)
+            put("p_seconds", seconds)
+            put("p_is_new_session", isNewSession)
+        }
+        client.postgrest.rpc("record_play_session", params)
+    }
+
+    suspend fun fetchMyGameStats(): List<UserGameStatDto> {
+        val uid = currentUserId() ?: return emptyList()
+        return client.from("user_game_stats").select {
+            filter { eq("user_id", uid) }
+            order("play_seconds", Order.DESCENDING)
+        }.decodeList<UserGameStatDto>()
     }
 }

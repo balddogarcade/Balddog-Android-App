@@ -29,7 +29,9 @@ data class GameDto(
     @SerialName("is_coop") val isCoop: Boolean = true,
     @SerialName("parent_game_id") val parentGameId: String? = null,
     @SerialName("bios_id") val biosId: String? = null,
-    @SerialName("cover_url") val coverUrl: String? = null
+    @SerialName("cover_url") val coverUrl: String? = null,
+    @SerialName("download_count") val downloadCount: Long = 0L,
+    @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L
 )
 
 @Serializable
@@ -38,7 +40,17 @@ data class ProfileDto(
     val username: String,
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("total_plays") val totalPlays: Int = 0,
+    @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
     @SerialName("is_anonymous") val isAnonymous: Boolean = false
+)
+
+@Serializable
+data class UserGameStatDto(
+    @SerialName("user_id") val userId: String,
+    @SerialName("game_id") val gameId: String,
+    @SerialName("play_seconds") val playSeconds: Long = 0L,
+    @SerialName("play_count") val playCount: Int = 0,
+    @SerialName("last_played_at") val lastPlayedAt: String = ""
 )
 
 @Serializable

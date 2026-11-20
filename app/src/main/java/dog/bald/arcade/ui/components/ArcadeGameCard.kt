@@ -166,6 +166,18 @@ fun ArcadeGameCard(
                             style = ArcadeBadgeStyle.Outline
                         )
                     }
+                    if (game.downloadCount > 0L) {
+                        ArcadeBadge(
+                            text = "↓ ${game.downloadCount}",
+                            style = ArcadeBadgeStyle.Outline
+                        )
+                    }
+                    if (game.totalPlaySeconds > 0L) {
+                        ArcadeBadge(
+                            text = formatCompactDuration(game.totalPlaySeconds),
+                            style = ArcadeBadgeStyle.Outline
+                        )
+                    }
                 }
 
                 if (isDownloading) {
@@ -238,5 +250,15 @@ fun ArcadeGameCard(
                 }
             }
         }
+    }
+}
+
+private fun formatCompactDuration(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    return when {
+        hours > 0L -> "${hours}h ${minutes}m"
+        minutes > 0L -> "${minutes}m"
+        else -> "<1m"
     }
 }

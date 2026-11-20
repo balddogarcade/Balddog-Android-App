@@ -6,6 +6,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -75,6 +76,7 @@ import java.io.File
 
 class GameActivity : ComponentActivity() {
     companion object {
+        const val EXTRA_GAME_ID = "game_id"
         const val EXTRA_ROM_PATH = "rom_path"
         const val EXTRA_SYSTEM_DIR = "system_dir"
         const val EXTRA_SAVE_DIR = "save_dir"
@@ -106,6 +108,13 @@ class GameActivity : ComponentActivity() {
     private var netplayEndReason by mutableStateOf<String?>(null)
     private var netplayRoomId: String = ""
     private var isNetplayHost: Boolean = false
+    private var gameId: String = ""
+
+    private val playTimerLock = Any()
+    private var activePlayStartMs: Long? = null
+    private var accumulatedActiveMs: Long = 0L
+    private var reportedSeconds: Long = 0L
+    private var sessionCounted: Boolean = false
 
     private var touchMaskP1: Int = 0
     private val physicalMasks = IntArray(4)
@@ -114,8 +123,8 @@ class GameActivity : ComponentActivity() {
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> setGamePaused(true)
-            AudioManager.AUDIOFOCUS_GAIN -> if (!showMenu) setGamePaused(false)
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> updateEnginePaused(true)
+            AudioManager.AUDIOFOCUS_GAIN -> if (!showMenu) updateEnginePaused(false)
         }
     }
 
@@ -151,6 +160,7 @@ class GameActivity : ComponentActivity() {
         isNetplay = intent.getBooleanExtra(EXTRA_NETPLAY_ENABLED, false)
         netplayRoomId = intent.getStringExtra(EXTRA_ROOM_ID).orEmpty()
         isNetplayHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
+        gameId = intent.getStringExtra(EXTRA_GAME_ID).orEmpty()
 
         try {
             if (romPath.isBlank()) {
@@ -198,6 +208,9 @@ class GameActivity : ComponentActivity() {
                                 netplayEndReason = "El otro jugador se desconectó de la partida."
                             }
                         }
+                        if (!showMenu) {
+                            flushPlayTime(force = false)
+                        }
                         delay(500)
                     }
                 }
@@ -224,7 +237,7 @@ class GameActivity : ComponentActivity() {
                         TouchLayoutPrefs.save(this@GameActivity, touchConfig)
                     } else {
                         showMenu = !showMenu
-                        setGamePaused(showMenu)
+                        updateEnginePaused(showMenu)
                     }
                 }
 
@@ -302,7 +315,7 @@ class GameActivity : ComponentActivity() {
                                         } else {
                                             menuStatusMsg = null
                                             showMenu = true
-                                            setGamePaused(true)
+                                            updateEnginePaused(true)
                                         }
                                     }
                                     .padding(horizontal = 14.dp, vertical = 5.dp)
@@ -349,7 +362,7 @@ class GameActivity : ComponentActivity() {
                                 onToggleEditLayout = {
                                     editLayoutMode = true
                                     showMenu = false
-                                    setGamePaused(false)
+                                    updateEnginePaused(false)
                                 },
                                 onResetLayout = {
                                     touchConfig = TouchLayoutConfig(forceShowTouch = touchConfig.forceShowTouch)
@@ -378,7 +391,7 @@ class GameActivity : ComponentActivity() {
                                 },
                                 onResume = {
                                     showMenu = false
-                                    setGamePaused(false)
+                                    updateEnginePaused(false)
                                 },
                                 onExit = { finish() }
                             )
@@ -477,19 +490,27 @@ class GameActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        setGamePaused(true)
+        updateEnginePaused(true)
     }
 
     override fun onResume() {
         super.onResume()
         enableImmersiveMode()
         if (!showMenu) {
-            setGamePaused(false)
+            updateEnginePaused(false)
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        pausePlayTimer()
+        flushPlayTime(force = true)
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        pausePlayTimer()
+        flushPlayTime(force = true)
         if (isNetplay && isNetplayHost && netplayRoomId.isNotBlank()) {
             val roomIdToClose = netplayRoomId
             val appCtx = applicationContext
@@ -501,5 +522,61 @@ class GameActivity : ComponentActivity() {
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
         NativeSurfaceBridge.detachSurface()
         stopGame()
+    }
+
+    private fun updateEnginePaused(paused: Boolean) {
+        setGamePaused(paused)
+        if (paused) pausePlayTimer() else resumePlayTimer()
+    }
+
+    private fun resumePlayTimer() {
+        if (engineError != null || gameId.isBlank()) return
+        synchronized(playTimerLock) {
+            if (activePlayStartMs == null) {
+                activePlayStartMs = SystemClock.elapsedRealtime()
+            }
+        }
+    }
+
+    private fun pausePlayTimer() {
+        synchronized(playTimerLock) {
+            val start = activePlayStartMs ?: return
+            val elapsed = (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L)
+            accumulatedActiveMs += elapsed
+            activePlayStartMs = null
+        }
+    }
+
+    private fun flushPlayTime(force: Boolean) {
+        val gid = gameId
+        if (gid.isBlank()) return
+
+        var deltaToSend = 0L
+        var isNewSession = false
+        synchronized(playTimerLock) {
+            val now = SystemClock.elapsedRealtime()
+            val start = activePlayStartMs
+            if (start != null) {
+                accumulatedActiveMs += (now - start).coerceAtLeast(0L)
+                activePlayStartMs = now
+            }
+            val totalSec = accumulatedActiveMs / 1000L
+            val delta = totalSec - reportedSeconds
+            if (delta >= 60L || (force && delta > 0L)) {
+                deltaToSend = delta
+                reportedSeconds = totalSec
+                isNewSession = !sessionCounted
+                sessionCounted = true
+            }
+        }
+
+        if (deltaToSend > 0L) {
+            val appCtx = applicationContext
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching {
+                    ArcadeRepository(appCtx).recordPlaySession(gid, deltaToSend, isNewSession)
+                }
+            }
+        }
     }
 }

@@ -66,6 +66,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.R
@@ -75,6 +76,7 @@ import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
+import dog.bald.arcade.data.UserGameStatDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.ArcadeGameCard
@@ -123,6 +125,7 @@ fun MainShellScreen(
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
     var profile by remember { mutableStateOf<ProfileDto?>(null) }
+    var myGameStats by remember { mutableStateOf<List<UserGameStatDto>>(emptyList()) }
     var userMenuExpanded by remember { mutableStateOf(false) }
     val userEmail = remember(profile) { repo.currentUserEmail() }
     val avatarSeed = remember(userEmail, profile) {
@@ -163,6 +166,7 @@ fun MainShellScreen(
                 biosList = repo.fetchBios()
                 rooms = repo.fetchOpenRooms()
                 profile = repo.fetchMyProfile()
+                myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
                 refreshLocalState()
             } catch (t: Throwable) {
                 val msg = t.message ?: "Error sincronizando catálogo"
@@ -178,12 +182,19 @@ fun MainShellScreen(
             downloadProgress = 0f
             syncError = null
             try {
+                val wasDownloaded = romManager.isGameDownloaded(game)
                 romManager.ensureGameReady(
                     game = game,
                     allGames = games,
                     allBios = biosList
                 ) { _, progress ->
                     downloadProgress = progress
+                }
+                if (!wasDownloaded) {
+                    runCatching { repo.incrementGameDownload(game.id) }
+                    games = games.map {
+                        if (it.id == game.id) it.copy(downloadCount = it.downloadCount + 1) else it
+                    }
                 }
                 refreshLocalState()
             } catch (t: Throwable) {
@@ -204,6 +215,11 @@ fun MainShellScreen(
             while (true) {
                 runCatching { rooms = repo.fetchOpenRooms() }
                 delay(3000)
+            }
+        } else if (MainTab.entries[selectedTab] == MainTab.PROFILE) {
+            runCatching {
+                profile = repo.fetchMyProfile()
+                myGameStats = repo.fetchMyGameStats()
             }
         }
     }
@@ -226,8 +242,15 @@ fun MainShellScreen(
                 if (roomGame != null) {
                     scope.launch {
                         runCatching {
+                            val wasDownloaded = romManager.isGameDownloaded(roomGame)
                             romManager.ensureGameReady(roomGame, games, biosList) { _, p ->
                                 downloadProgress = p
+                            }
+                            if (!wasDownloaded) {
+                                runCatching { repo.incrementGameDownload(roomGame.id) }
+                                games = games.map {
+                                    if (it.id == roomGame.id) it.copy(downloadCount = it.downloadCount + 1) else it
+                                }
                             }
                             activeRoom = null
                             onLaunchNetplayMatch(roomGame, startedRoom, mySlot, myUdpPort)
@@ -422,6 +445,8 @@ fun MainShellScreen(
 
                 MainTab.PROFILE -> ProfileTab(
                     profile = profile,
+                    games = games,
+                    myGameStats = myGameStats,
                     engineStatus = engineStatus,
                     cacheBytes = cacheBytes,
                     logs = logs,
@@ -930,6 +955,8 @@ private fun RoomsTab(
 @Composable
 private fun ProfileTab(
     profile: ProfileDto?,
+    games: List<GameDto>,
+    myGameStats: List<UserGameStatDto>,
     engineStatus: EngineStatus?,
     cacheBytes: Long,
     logs: List<String>,
@@ -938,6 +965,7 @@ private fun ProfileTab(
     onSignOut: () -> Unit
 ) {
     val cacheMb = cacheBytes / (1024.0 * 1024.0)
+    val gamesById = remember(games) { games.associateBy { it.id } }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
         Card(
@@ -947,6 +975,11 @@ private fun ProfileTab(
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Perfil: ${profile?.username ?: "Invitado"}", color = PureWhite, fontWeight = FontWeight.Bold)
+                Text(
+                    "Tiempo jugado: ${formatPlayDuration(profile?.totalPlaySeconds ?: 0L)} · Partidas: ${profile?.totalPlays ?: 0}",
+                    color = PureWhite,
+                    fontSize = 12.sp
+                )
                 Text(
                     "Motor Rust v${engineStatus?.engineVersion ?: "?"} · ${engineStatus?.targetArch ?: "?"} · FBNeo: ${if (engineStatus?.fbneoReady == true) "LISTO" else "NO DETECTADO"}",
                     color = SilverGray,
@@ -966,6 +999,47 @@ private fun ProfileTab(
                     }
                     OutlinedButton(onClick = onSignOut, border = BorderStroke(1.dp, CharcoalBorder)) {
                         Text("SALIR", color = MutedGray, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        if (myGameStats.isNotEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
+                border = BorderStroke(1.dp, CharcoalBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "TIEMPO POR JUEGO",
+                        color = MutedGray,
+                        fontSize = 11.sp,
+                        fontFamily = JetBrainsMonoFamily
+                    )
+                    myGameStats.take(5).forEach { stat ->
+                        val title = gamesById[stat.gameId]?.title ?: stat.gameId
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = title,
+                                color = PureWhite,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = formatPlayDuration(stat.playSeconds),
+                                color = SilverGray,
+                                fontSize = 12.sp,
+                                fontFamily = JetBrainsMonoFamily
+                            )
+                        }
                     }
                 }
             }
@@ -997,5 +1071,17 @@ private fun ProfileTab(
                 }
             }
         }
+    }
+}
+
+private fun formatPlayDuration(totalSeconds: Long): String {
+    if (totalSeconds <= 0L) return "0m"
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return when {
+        hours > 0L -> "${hours}h ${minutes}m"
+        minutes > 0L -> "${minutes}m ${seconds}s"
+        else -> "${seconds}s"
     }
 }
