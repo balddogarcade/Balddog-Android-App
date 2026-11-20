@@ -58,8 +58,10 @@ android {
                 "proguard-rules.pro"
             )
             val keystorePath = propOrEnv("BALDDOG_KEYSTORE_PATH")
-            if (keystorePath.isNotBlank()) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (keystorePath.isNotBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
         }
         debug {
