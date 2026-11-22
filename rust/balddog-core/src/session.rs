@@ -67,6 +67,42 @@ pub struct ScoreHudStats {
     pub credits_used: u8,
 }
 
+pub(crate) const RETRO_COIN_MASK: u16 = 1 << 2;
+
+/// Rastrea pulsaciones de COIN (bit 2 / SELECT) en los 4 puertos desde el frame 0,
+/// incluyendo fichas precargadas antes de pulsar Start o insertadas en P2-P4.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct CoinTracker {
+    prev_coins: [bool; 4],
+    coins_inserted: u32,
+}
+
+impl CoinTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn observe_frame(&mut self, inputs: &[u16; 4]) -> u8 {
+        for (port, &mask) in inputs.iter().enumerate() {
+            let pressed = (mask & RETRO_COIN_MASK) != 0;
+            if pressed && !self.prev_coins[port] {
+                self.coins_inserted = self.coins_inserted.saturating_add(1);
+            }
+            self.prev_coins[port] = pressed;
+        }
+        self.credits_used()
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn coins_inserted(&self) -> u32 {
+        self.coins_inserted
+    }
+
+    pub fn credits_used(&self) -> u8 {
+        self.coins_inserted.max(1).min(u8::MAX as u32) as u8
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ReplayHudStats {
     pub is_replay: bool,
@@ -283,7 +319,7 @@ impl EmulationSession {
                 let frame_duration = Duration::from_secs_f64(1.0 / target_fps);
                 let mut paused = false;
                 let mut inputs = [0u16; 4];
-                let mut prev_p1_coin = false;
+                let mut coin_tracker = CoinTracker::new();
                 let mut next_frame_at = Instant::now();
                 let mut fps_window_start = Instant::now();
                 let mut frames_in_window: u32 = 0;
@@ -525,7 +561,10 @@ impl EmulationSession {
                             stats_clone.replay_finished.store(true, Ordering::Release);
                         }
                     } else {
-                        let coin_pressed = (inputs[0] & (1 << 2)) != 0;
+                        let credits_used = coin_tracker.observe_frame(&inputs);
+                        stats_clone
+                            .credits_used
+                            .store(credits_used, Ordering::Release);
                         if let Some(ref mut rec) = recorder {
                             rec.push_frame(inputs);
                         }
@@ -535,14 +574,6 @@ impl EmulationSession {
                             if stats_clone.ranking_eligible.load(Ordering::Relaxed) {
                                 if let Some(ram) = core.system_ram() {
                                     let out = lb.evaluate_frame(ram);
-                                    if out.active && coin_pressed && !prev_p1_coin {
-                                        let cur = stats_clone.credits_used.load(Ordering::Relaxed);
-                                        if cur < u8::MAX {
-                                            stats_clone
-                                                .credits_used
-                                                .store(cur.saturating_add(1), Ordering::Release);
-                                        }
-                                    }
                                     stats_clone
                                         .current_score
                                         .store(out.current_score, Ordering::Relaxed);
@@ -561,7 +592,6 @@ impl EmulationSession {
                                 }
                             }
                         }
-                        prev_p1_coin = coin_pressed;
                     }
 
                     core.take_video_frame(|w, h, rgba| {
@@ -754,5 +784,55 @@ impl EmulationSession {
 impl Drop for EmulationSession {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CoinTracker, RETRO_COIN_MASK};
+
+    #[test]
+    fn single_coin_held_counts_as_one_credit() {
+        let mut tracker = CoinTracker::new();
+        assert_eq!(tracker.credits_used(), 1);
+        assert_eq!(tracker.coins_inserted(), 0);
+
+        // Held for 4 frames -> rising edge only once
+        for _ in 0..4 {
+            assert_eq!(tracker.observe_frame(&[RETRO_COIN_MASK, 0, 0, 0]), 1);
+        }
+        assert_eq!(tracker.coins_inserted(), 1);
+        assert_eq!(tracker.observe_frame(&[0, 0, 0, 0]), 1);
+    }
+
+    #[test]
+    fn preloaded_second_coin_disqualifies_1cc() {
+        let mut tracker = CoinTracker::new();
+        assert_eq!(tracker.observe_frame(&[RETRO_COIN_MASK, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(&[0, 0, 0, 0]), 1);
+        // Second coin inserted before pressing Start
+        assert_eq!(tracker.observe_frame(&[RETRO_COIN_MASK, 0, 0, 0]), 2);
+        assert_eq!(tracker.coins_inserted(), 2);
+    }
+
+    #[test]
+    fn p2_through_p4_coins_are_counted() {
+        let mut tracker = CoinTracker::new();
+        assert_eq!(tracker.observe_frame(&[RETRO_COIN_MASK, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(&[0, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(&[0, RETRO_COIN_MASK, 0, 0]), 2);
+        assert_eq!(tracker.observe_frame(&[0, 0, RETRO_COIN_MASK, RETRO_COIN_MASK]), 4);
+        assert_eq!(tracker.coins_inserted(), 4);
+    }
+
+    #[test]
+    fn coin_counter_saturates_at_u8_max() {
+        let mut tracker = CoinTracker::new();
+        for _ in 0..300 {
+            tracker.observe_frame(&[RETRO_COIN_MASK, 0, 0, 0]);
+            tracker.observe_frame(&[0, 0, 0, 0]);
+        }
+        assert_eq!(tracker.coins_inserted(), 300);
+        assert_eq!(tracker.credits_used(), u8::MAX);
     }
 }
