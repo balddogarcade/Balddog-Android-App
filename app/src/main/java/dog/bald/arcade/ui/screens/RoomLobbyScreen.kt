@@ -33,10 +33,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -77,11 +82,13 @@ import dog.bald.arcade.net.LobbyLatencyMonitor
 import dog.bald.arcade.net.LobbyPeerTarget
 import dog.bald.arcade.ui.components.ArcadeBadge
 import dog.bald.arcade.ui.components.ArcadeBadgeStyle
+import dog.bald.arcade.ui.components.DiceBearPixelArtAvatar
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.DangerRed
 import dog.bald.arcade.ui.theme.DangerRedBorder
+import dog.bald.arcade.ui.theme.ReadyGreenAccent
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
@@ -583,78 +590,44 @@ fun RoomLobbyScreen(
             Text(errorMsg ?: "", color = SilverGray, fontSize = 12.sp)
         }
 
-        // Slots 1P..4P (en grilla de 2 columnas si son 3 o 4 jugadores)
-        Text("SLOTS DE JUGADORES (${room.maxPlayers}P · Toca un slot libre):", color = MutedGray, fontSize = 11.sp)
-        val slotIndices = (0 until room.maxPlayers).toList()
-        val rows = slotIndices.chunked(2)
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            rows.forEach { rowSlots ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    rowSlots.forEach { slot ->
-                        val occupant = room.slotsJson[slot.toString()]
-                        val isMine = occupant?.userId == myUid
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isMine) GraphiteSurface else CarbonSurface
-                            ),
-                            border = BorderStroke(
-                                1.dp,
-                                when {
-                                    occupant == null -> CharcoalBorder
-                                    occupant.ready -> PureWhite
-                                    else -> SteelBorder
-                                }
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable(enabled = occupant == null) { claimSlot(slot) }
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text("${slot + 1}P", color = PureWhite, fontFamily = SpaceGroteskFamily, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text(
-                                    text = occupant?.username ?: "LIBRE",
-                                    color = if (occupant != null) PureWhite else MutedGray,
-                                    fontSize = 11.sp,
-                                    maxLines = 1
-                                )
-                                if (occupant != null) {
-                                    Text(
-                                        text = if (occupant.ready) "READY" else "...",
-                                        color = if (occupant.ready) PureWhite else MutedGray,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    val pingMs = latenciesMs[occupant.userId]
-                                    val pingText = when {
-                                        isMine && !isOnlineRoom -> "TÚ · LOCAL"
-                                        isMine && pingMs != null -> "$pingMs ms · TÚ"
-                                        isMine -> "-- ms · TÚ"
-                                        pingMs != null -> "$pingMs ms"
-                                        else -> "-- ms"
-                                    }
-                                    val pingColor = when {
-                                        pingMs == null -> MutedGray
-                                        pingMs <= 80 -> PureWhite
-                                        pingMs <= 150 -> SilverGray
-                                        else -> MutedGray
-                                    }
-                                    Text(
-                                        text = pingText,
-                                        color = pingColor,
-                                        fontFamily = JetBrainsMonoFamily,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    if (rowSlots.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
+        // Slots 1P..4P en una sola fila con avatares
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Groups,
+                contentDescription = null,
+                tint = SilverGray,
+                modifier = Modifier.size(15.dp)
+            )
+            Text(
+                text = "JUGADORES (${room.slotsJson.size}/${room.maxPlayers}) · TOCA UN SLOT LIBRE",
+                color = MutedGray,
+                fontFamily = JetBrainsMonoFamily,
+                fontSize = 11.sp
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            for (slot in 0 until room.maxPlayers) {
+                val occupant = room.slotsJson[slot.toString()]
+                val isMine = occupant?.userId == myUid
+                val isSlotHost = occupant != null && occupant.userId == room.hostId
+                val pingMs = occupant?.let { latenciesMs[it.userId] }
+                PlayerSlotCard(
+                    slotIndex = slot,
+                    occupant = occupant,
+                    isMine = isMine,
+                    isSlotHost = isSlotHost,
+                    isOnlineRoom = isOnlineRoom,
+                    pingMs = pingMs,
+                    onClaim = { claimSlot(slot) },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
@@ -760,6 +733,150 @@ fun RoomLobbyScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayerSlotCard(
+    slotIndex: Int,
+    occupant: RoomSlotInfo?,
+    isMine: Boolean,
+    isSlotHost: Boolean,
+    isOnlineRoom: Boolean,
+    pingMs: Int?,
+    onClaim: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val borderColor = when {
+        occupant == null -> CharcoalBorder
+        occupant.ready -> PureWhite
+        else -> SteelBorder
+    }
+    Card(
+        shape = RectangleShape,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isMine) GraphiteSurface else CarbonSurface
+        ),
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier
+            .height(132.dp)
+            .clickable(enabled = occupant == null, onClick = onClaim)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${slotIndex + 1}P",
+                    color = if (occupant != null) PureWhite else MutedGray,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+                if (isSlotHost) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Anfitrión",
+                        tint = PureWhite,
+                        modifier = Modifier.size(12.dp)
+                    )
+                } else if (isMine) {
+                    Text(
+                        text = "TÚ",
+                        color = SilverGray,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 9.sp
+                    )
+                }
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(ObsidianBlack)
+                    .border(1.dp, if (occupant != null) SteelBorder else CharcoalBorder)
+            ) {
+                if (occupant != null) {
+                    DiceBearPixelArtAvatar(
+                        seed = occupant.username.ifBlank { occupant.userId },
+                        modifier = Modifier.size(38.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = "Slot libre",
+                        tint = MutedGray,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Text(
+                text = occupant?.username ?: "LIBRE",
+                color = if (occupant != null) PureWhite else MutedGray,
+                fontSize = 11.sp,
+                fontWeight = if (occupant != null) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (occupant != null) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (occupant.ready) Icons.Default.CheckCircle else Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = if (occupant.ready) ReadyGreenAccent else MutedGray,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = if (occupant.ready) "LISTO" else "ESPERA",
+                            color = if (occupant.ready) PureWhite else MutedGray,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    val pingText = when {
+                        isMine && !isOnlineRoom -> "LOCAL"
+                        pingMs != null -> "$pingMs ms"
+                        else -> "-- ms"
+                    }
+                    val pingColor = when {
+                        pingMs == null -> MutedGray
+                        pingMs <= 80 -> PureWhite
+                        pingMs <= 150 -> SilverGray
+                        else -> MutedGray
+                    }
+                    Text(
+                        text = pingText,
+                        color = pingColor,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 9.sp
+                    )
+                }
+            } else {
+                Text(
+                    text = "TOCAR",
+                    color = MutedGray,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 9.sp
+                )
             }
         }
     }
