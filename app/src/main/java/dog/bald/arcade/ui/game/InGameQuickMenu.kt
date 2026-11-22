@@ -48,6 +48,7 @@ fun InGameQuickMenu(
     touchConfig: TouchLayoutConfig,
     editLayoutMode: Boolean,
     isNetplay: Boolean = false,
+    scoreStatusLabel: String? = null,
     voiceVolume: Float = 1.0f,
     onVoiceVolumeChange: (Float) -> Unit = {},
     onTouchConfigChange: (TouchLayoutConfig) -> Unit,
@@ -84,6 +85,15 @@ fun InGameQuickMenu(
                 color = MutedGray,
                 fontSize = 12.sp
             )
+
+            if (!scoreStatusLabel.isNullOrBlank()) {
+                Text(
+                    text = scoreStatusLabel,
+                    color = SilverGray,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
 
             if (!statusMessage.isNullOrBlank()) {
                 Text(

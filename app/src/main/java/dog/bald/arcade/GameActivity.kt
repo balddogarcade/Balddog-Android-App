@@ -8,6 +8,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.SurfaceHolder
@@ -84,6 +85,7 @@ import uniffi.balddog_android.getNetplayHudStats
 import uniffi.balddog_android.getScoreHudInfo
 import uniffi.balddog_android.getVoiceHudState
 import uniffi.balddog_android.loadGameState
+import uniffi.balddog_android.logFromAndroid
 import uniffi.balddog_android.pullVoicePlaybackPcm
 import uniffi.balddog_android.pushVoiceCapturePcm
 import uniffi.balddog_android.saveGameState
@@ -141,6 +143,7 @@ class GameActivity : ComponentActivity() {
     private var gameId: String = ""
     private var romSha256: String = ""
     private var scoreDef: String? = null
+    private var scoreHud by mutableStateOf(ScoreHudInfo(0u, 0u, 0u, false, 1u))
     private var rankingNoticeShown: Boolean = false
     private var lastSubmittedSessionScore: Long = 0L
     private var voiceMicEnabled by mutableStateOf(false)
@@ -264,6 +267,10 @@ class GameActivity : ComponentActivity() {
                     )
                 }
             } else {
+                logFromAndroid(
+                    "INFO",
+                    "Iniciando juego solo gameId=$gameId hasScoreDef=${scoreDef != null}"
+                )
                 startGameWithScore(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
                     romPath = romPath,
@@ -291,7 +298,9 @@ class GameActivity : ComponentActivity() {
                             flushPlayTime(force = false)
                         }
                         if (!isNetplay && scoreDef != null) {
-                            pollAndSubmitScore(getScoreHudInfo())
+                            val hud = getScoreHudInfo()
+                            scoreHud = hud
+                            pollAndSubmitScore(hud)
                         }
                         delay(500)
                     }
@@ -546,6 +555,13 @@ class GameActivity : ComponentActivity() {
                                 }
                             }
                         } else {
+                            val scoreLabel = when {
+                                isNetplay -> null
+                                scoreDef == null -> "Ranking: Sin configuración para este juego"
+                                !scoreHud.rankingEligible -> "Ranking: Desactivado (Save State)"
+                                scoreHud.creditsUsed.toInt() > 1 -> "Ranking: Desactivado (${scoreHud.creditsUsed} créditos)"
+                                else -> "Ranking: 1 Crédito · Score ${scoreHud.currentScore} (Máx ${scoreHud.bestSessionScore})"
+                            }
                             InGameQuickMenu(
                                 gameTitle = gameTitle,
                                 fps = currentFps,
@@ -554,6 +570,7 @@ class GameActivity : ComponentActivity() {
                                 touchConfig = touchConfig,
                                 editLayoutMode = editLayoutMode,
                                 isNetplay = isNetplay,
+                                scoreStatusLabel = scoreLabel,
                                 voiceVolume = voiceVolume,
                                 onVoiceVolumeChange = { updated ->
                                     voiceVolume = updated
@@ -846,6 +863,10 @@ class GameActivity : ComponentActivity() {
         val pending = hud.pendingSubmitScore.toLong()
         if (pending <= 0L) return
         acknowledgeScoreSubmit()
+        logFromAndroid(
+            "INFO",
+            "Score trigger recibido: score=$pending eligible=${hud.rankingEligible} credits=$credits"
+        )
 
         if (!hud.rankingEligible || credits > 1 || gameId.isBlank() || romSha256.isBlank()) return
         if (pending <= lastSubmittedSessionScore) return
@@ -867,11 +888,19 @@ class GameActivity : ComponentActivity() {
             }
             val dto = result.getOrNull()
             if (result.isSuccess && dto != null) {
+                logFromAndroid(
+                    "INFO",
+                    "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}"
+                )
                 if (dto.accepted && dto.isNewRecord) {
                     val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
                     voiceNoticeMsg = "¡Nuevo récord personal: $pending$rankText!"
+                } else if (!dto.accepted) {
+                    Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
                 }
             } else {
+                val errMsg = result.exceptionOrNull()?.message ?: "unknown"
+                logFromAndroid("WARN", "submit_high_score falló ($errMsg), encolando offline")
                 PendingScoreQueue.enqueue(
                     appCtx,
                     PendingScoreSubmission(
