@@ -1,0 +1,219 @@
+//! Verificador headless determinista de replays `.bsv.gz` para auditoría Anti-Cheat.
+//!
+//! Uso:
+//!   verify_replay --core <fbneo_libretro.so> --rom <rom.zip> --replay <file.bsv.gz> \
+//!                 --lboard <expr> [--system-dir <dir>] [--save-dir <dir>] [--expected-score <u64>]
+
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use balddog_core::retro::core::LibretroCore;
+use balddog_core::retro::leaderboard::LeaderboardEngine;
+use balddog_core::retro::replay::ReplayPlayer;
+use balddog_core::session::{clear_deterministic_nvram, CoinTracker};
+
+struct CliArgs {
+    core: PathBuf,
+    rom: PathBuf,
+    replay: PathBuf,
+    lboard: String,
+    system_dir: Option<PathBuf>,
+    save_dir: Option<PathBuf>,
+    expected_score: Option<u64>,
+}
+
+fn parse_args() -> Result<CliArgs, String> {
+    let mut args = std::env::args().skip(1);
+    let mut core = None;
+    let mut rom = None;
+    let mut replay = None;
+    let mut lboard = None;
+    let mut system_dir = None;
+    let mut save_dir = None;
+    let mut expected_score = None;
+
+    while let Some(flag) = args.next() {
+        let val = args
+            .next()
+            .ok_or_else(|| format!("Falta valor para {flag}"))?;
+        match flag.as_str() {
+            "--core" => core = Some(PathBuf::from(val)),
+            "--rom" => rom = Some(PathBuf::from(val)),
+            "--replay" => replay = Some(PathBuf::from(val)),
+            "--lboard" => lboard = Some(val),
+            "--system-dir" => system_dir = Some(PathBuf::from(val)),
+            "--save-dir" => save_dir = Some(PathBuf::from(val)),
+            "--expected-score" => {
+                let parsed = val
+                    .parse::<u64>()
+                    .map_err(|_| format!("--expected-score inválido: {val}"))?;
+                expected_score = Some(parsed);
+            }
+            other => return Err(format!("Argumento desconocido: {other}")),
+        }
+    }
+
+    Ok(CliArgs {
+        core: core.ok_or("Falta --core")?,
+        rom: rom.ok_or("Falta --rom")?,
+        replay: replay.ok_or("Falta --replay")?,
+        lboard: lboard.ok_or("Falta --lboard")?,
+        system_dir,
+        save_dir,
+        expected_score,
+    })
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+fn print_result(
+    valid: bool,
+    verified_score: u64,
+    best_score: u64,
+    triggered_score: u64,
+    coins_inserted: u32,
+    frames: u64,
+    reason: Option<&str>,
+) {
+    let reason_json = match reason {
+        Some(r) => json_escape(r),
+        None => "null".to_string(),
+    };
+    println!(
+        "{{\"valid\":{valid},\"verified_score\":{verified_score},\"best_score\":{best_score},\"triggered_score\":{triggered_score},\"coins_inserted\":{coins_inserted},\"frames\":{frames},\"reason\":{reason_json}}}"
+    );
+}
+
+fn main() -> ExitCode {
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            print_result(false, 0, 0, 0, 0, 0, Some(&e));
+            return ExitCode::from(2);
+        }
+    };
+
+    let own_temp_dir = args.save_dir.is_none();
+    let save_dir = args.save_dir.unwrap_or_else(|| {
+        std::env::temp_dir().join(format!("balddog_verify_{}", std::process::id()))
+    });
+    let system_dir = args.system_dir.unwrap_or_else(|| save_dir.clone());
+
+    let _ = std::fs::create_dir_all(&save_dir);
+    let _ = std::fs::create_dir_all(&system_dir);
+    clear_deterministic_nvram(&save_dir, &args.rom);
+
+    let mut player = match ReplayPlayer::from_gzip_file(&args.replay, None) {
+        Ok(p) => p,
+        Err(e) => {
+            if own_temp_dir {
+                let _ = std::fs::remove_dir_all(&save_dir);
+            }
+            print_result(false, 0, 0, 0, 0, 0, Some(&format!("invalid_replay: {e}")));
+            return ExitCode::from(1);
+        }
+    };
+
+    let mut leaderboard = match LeaderboardEngine::new(&args.lboard) {
+        Ok(lb) => lb,
+        Err(e) => {
+            if own_temp_dir {
+                let _ = std::fs::remove_dir_all(&save_dir);
+            }
+            print_result(false, 0, 0, 0, 0, 0, Some(&format!("invalid_lboard: {e}")));
+            return ExitCode::from(2);
+        }
+    };
+
+    let mut core = match LibretroCore::load(&args.core, &system_dir, &save_dir) {
+        Ok(c) => c,
+        Err(e) => {
+            if own_temp_dir {
+                let _ = std::fs::remove_dir_all(&save_dir);
+            }
+            print_result(false, 0, 0, 0, 0, 0, Some(&format!("core_load_failed: {e}")));
+            return ExitCode::from(2);
+        }
+    };
+
+    if let Err(e) = core.load_game(&args.rom) {
+        if own_temp_dir {
+            let _ = std::fs::remove_dir_all(&save_dir);
+        }
+        print_result(false, 0, 0, 0, 0, 0, Some(&format!("rom_load_failed: {e}")));
+        return ExitCode::from(2);
+    }
+
+    let mut coin_tracker = CoinTracker::new();
+    let mut best_score: u64 = 0;
+    let mut triggered_score: u64 = 0;
+    let mut frames: u64 = 0;
+
+    while let Some(frame_inputs) = player.next_frame() {
+        coin_tracker.observe_frame(&frame_inputs);
+        core.set_inputs(frame_inputs);
+        core.run_frame();
+        frames += 1;
+        if let Some(ram) = core.system_ram() {
+            let out = leaderboard.evaluate_frame(ram);
+            if out.current_score > best_score {
+                best_score = out.current_score;
+            }
+            if let Some(trig) = out.triggered_score {
+                if trig > triggered_score {
+                    triggered_score = trig;
+                }
+            }
+        }
+    }
+
+    if own_temp_dir {
+        let _ = std::fs::remove_dir_all(&save_dir);
+    }
+
+    let verified_score = best_score.max(triggered_score);
+    let coins = coin_tracker.coins_inserted();
+
+    let (valid, reason) = if coins > 1 {
+        (false, Some("multiple_credits_detected"))
+    } else if let Some(expected) = args.expected_score {
+        if verified_score != expected {
+            (false, Some("score_mismatch"))
+        } else {
+            (true, None)
+        }
+    } else {
+        (true, None)
+    };
+
+    print_result(
+        valid,
+        verified_score,
+        best_score,
+        triggered_score,
+        coins,
+        frames,
+        reason,
+    );
+
+    if valid {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}

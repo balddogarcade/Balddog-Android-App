@@ -67,12 +67,12 @@ pub struct ScoreHudStats {
     pub credits_used: u8,
 }
 
-pub(crate) const RETRO_COIN_MASK: u16 = 1 << 2;
+pub const RETRO_COIN_MASK: u16 = 1 << 2;
 
 /// Rastrea pulsaciones de COIN (bit 2 / SELECT) en los 4 puertos desde el frame 0,
 /// incluyendo fichas precargadas antes de pulsar Start o insertadas en P2-P4.
 #[derive(Debug, Clone, Default)]
-pub(crate) struct CoinTracker {
+pub struct CoinTracker {
     prev_coins: [bool; 4],
     coins_inserted: u32,
 }
@@ -93,7 +93,6 @@ impl CoinTracker {
         self.credits_used()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn coins_inserted(&self) -> u32 {
         self.coins_inserted
     }
