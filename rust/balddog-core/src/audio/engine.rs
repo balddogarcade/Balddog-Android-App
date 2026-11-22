@@ -1,6 +1,6 @@
 #[cfg(target_os = "android")]
 mod android_audio {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
     use std::sync::Arc;
 
     use oboe::{
@@ -12,9 +12,20 @@ mod android_audio {
 
     use crate::{record_log, CoreError};
 
+    const GAIN_FULL_Q15: i32 = 32768;
+    const GAIN_DUCKED_Q15: i32 = 13107; // ~40%
+    const GAIN_RAMP_STEP_Q15: i32 = 16;
+
+    static GLOBAL_DUCKING_ENABLED: AtomicBool = AtomicBool::new(false);
+
+    pub fn set_global_ducking(enabled: bool) {
+        GLOBAL_DUCKING_ENABLED.store(enabled, Ordering::Release);
+    }
+
     struct ArcadeAudioCallback {
         consumer: HeapCons<i16>,
         paused: Arc<AtomicBool>,
+        current_gain_q15: i32,
     }
 
     impl AudioOutputCallback for ArcadeAudioCallback {
@@ -30,10 +41,26 @@ mod android_audio {
                 return DataCallbackResult::Continue;
             }
 
+            let target_gain = if GLOBAL_DUCKING_ENABLED.load(Ordering::Relaxed) {
+                GAIN_DUCKED_Q15
+            } else {
+                GAIN_FULL_Q15
+            };
+
             for frame in frames.iter_mut() {
+                if self.current_gain_q15 < target_gain {
+                    self.current_gain_q15 =
+                        (self.current_gain_q15 + GAIN_RAMP_STEP_Q15).min(target_gain);
+                } else if self.current_gain_q15 > target_gain {
+                    self.current_gain_q15 =
+                        (self.current_gain_q15 - GAIN_RAMP_STEP_Q15).max(target_gain);
+                }
+
                 let left = self.consumer.try_pop().unwrap_or(0);
                 let right = self.consumer.try_pop().unwrap_or(0);
-                *frame = (left, right);
+                let scaled_l = ((i32::from(left) * self.current_gain_q15) >> 15) as i16;
+                let scaled_r = ((i32::from(right) * self.current_gain_q15) >> 15) as i16;
+                *frame = (scaled_l, scaled_r);
             }
             DataCallbackResult::Continue
         }
@@ -51,10 +78,12 @@ mod android_audio {
             let rb = HeapRb::<i16>::new(16384);
             let (producer, consumer) = rb.split();
             let paused = Arc::new(AtomicBool::new(false));
+            let _ = AtomicI32::new(GAIN_FULL_Q15);
 
             let callback = ArcadeAudioCallback {
                 consumer,
                 paused: Arc::clone(&paused),
+                current_gain_q15: GAIN_FULL_Q15,
             };
 
             let mut stream = AudioStreamBuilder::default()
@@ -108,6 +137,8 @@ mod android_audio {
 
         pub fn set_paused(&self, _paused: bool) {}
     }
+
+    pub fn set_global_ducking(_enabled: bool) {}
 }
 
-pub use android_audio::AudioEngine;
+pub use android_audio::{set_global_ducking, AudioEngine};

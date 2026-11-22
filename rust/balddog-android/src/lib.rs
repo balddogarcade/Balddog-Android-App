@@ -5,8 +5,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+use balddog_core::audio::engine::set_global_ducking;
 use balddog_core::session::EmulationSession;
 use balddog_core::{engine_info, recent_logs, record_log, CoreError};
+use balddog_netplay::voice::{VoicePeerEndpoint, VoiceSession, VoiceSessionConfig};
 use balddog_netplay::{
     discover_stun_endpoint, NetplayError, NetplaySessionConfig, PeerEndpoint,
 };
@@ -15,9 +17,14 @@ use thiserror::Error;
 uniffi::setup_scaffolding!();
 
 static ACTIVE_SESSION: OnceLock<Mutex<Option<EmulationSession>>> = OnceLock::new();
+static ACTIVE_VOICE: OnceLock<Mutex<Option<VoiceSession>>> = OnceLock::new();
 
 fn session_slot() -> &'static Mutex<Option<EmulationSession>> {
     ACTIVE_SESSION.get_or_init(|| Mutex::new(None))
+}
+
+fn voice_slot() -> &'static Mutex<Option<VoiceSession>> {
+    ACTIVE_VOICE.get_or_init(|| Mutex::new(None))
 }
 
 pub(crate) fn with_active_session<R>(f: impl FnOnce(&mut EmulationSession) -> R) -> Option<R> {
@@ -64,6 +71,13 @@ pub struct NetplayHudInfo {
     pub reconnecting: bool,
     pub reconnect_secs_left: u32,
     pub session_ended: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct VoiceHudInfo {
+    pub local_speaking: bool,
+    pub remote_speaking_mask: u8,
+    pub active_peers: u8,
 }
 
 #[uniffi::export]
@@ -159,6 +173,7 @@ pub fn discover_public_udp_endpoint(local_port: u16) -> Result<String, EngineBri
 
 #[uniffi::export]
 pub fn stop_game() {
+    stop_voice_session();
     if let Ok(mut guard) = session_slot().lock() {
         if let Some(mut session) = guard.take() {
             session.stop();
@@ -232,4 +247,108 @@ pub fn get_recent_logs() -> Vec<String> {
 #[uniffi::export]
 pub fn log_from_android(level: String, message: String) {
     record_log(&level, &message);
+}
+
+#[uniffi::export]
+pub fn start_voice_session(
+    local_port: u16,
+    room_id: String,
+    local_player_handle: u8,
+    peer_handles: Vec<u8>,
+    peer_addrs: Vec<String>,
+) -> Result<(), EngineBridgeError> {
+    stop_voice_session();
+    if peer_handles.len() != peer_addrs.len() {
+        return Err(EngineBridgeError::Core {
+            detail: "peer_handles y peer_addrs deben tener el mismo tamaño".into(),
+        });
+    }
+
+    let mut peers = Vec::with_capacity(peer_addrs.len());
+    for (h, raw_addr) in peer_handles.into_iter().zip(peer_addrs.into_iter()) {
+        let addr: SocketAddr = raw_addr.parse().map_err(|e| EngineBridgeError::Core {
+            detail: format!("Dirección de voz inválida '{raw_addr}': {e}"),
+        })?;
+        peers.push(VoicePeerEndpoint {
+            player_handle: h,
+            addr,
+        });
+    }
+
+    let cfg = VoiceSessionConfig {
+        local_port,
+        room_id,
+        local_player_handle,
+        peers,
+    };
+    let session = VoiceSession::start(cfg)?;
+    if let Ok(mut guard) = voice_slot().lock() {
+        *guard = Some(session);
+    }
+    Ok(())
+}
+
+#[uniffi::export]
+pub fn stop_voice_session() {
+    set_global_ducking(false);
+    if let Ok(mut guard) = voice_slot().lock() {
+        if let Some(mut session) = guard.take() {
+            session.stop();
+        }
+    }
+}
+
+#[uniffi::export]
+pub fn push_voice_capture_pcm(samples: Vec<i16>) {
+    if let Ok(guard) = voice_slot().lock() {
+        if let Some(session) = guard.as_ref() {
+            session.push_capture_pcm(&samples);
+        }
+    }
+}
+
+#[uniffi::export]
+pub fn pull_voice_playback_pcm(max_samples: u32) -> Vec<i16> {
+    if let Ok(guard) = voice_slot().lock() {
+        if let Some(session) = guard.as_ref() {
+            return session.pull_playback_pcm(max_samples as usize);
+        }
+    }
+    Vec::new()
+}
+
+#[uniffi::export]
+pub fn set_voice_controls(mic_enabled: bool, listen_enabled: bool, volume: f32, paused: bool) {
+    if let Ok(guard) = voice_slot().lock() {
+        if let Some(session) = guard.as_ref() {
+            session.set_controls(mic_enabled, listen_enabled, volume, paused);
+        }
+    }
+    if !listen_enabled {
+        set_global_ducking(false);
+    }
+}
+
+#[uniffi::export]
+pub fn get_voice_hud_state() -> VoiceHudInfo {
+    if let Ok(guard) = voice_slot().lock() {
+        if let Some(session) = guard.as_ref() {
+            let st = session.hud_state();
+            return VoiceHudInfo {
+                local_speaking: st.local_speaking,
+                remote_speaking_mask: st.remote_speaking_mask,
+                active_peers: st.active_peers,
+            };
+        }
+    }
+    VoiceHudInfo {
+        local_speaking: false,
+        remote_speaking_mask: 0,
+        active_peers: 0,
+    }
+}
+
+#[uniffi::export]
+pub fn set_audio_ducking(enabled: bool) {
+    set_global_ducking(enabled);
 }
