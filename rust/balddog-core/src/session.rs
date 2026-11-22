@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -13,6 +13,7 @@ use ggrs::{GgrsEvent, GgrsRequest, InputStatus, SessionState};
 
 use crate::audio::engine::AudioEngine;
 use crate::retro::core::LibretroCore;
+use crate::retro::leaderboard::LeaderboardEngine;
 use crate::video::renderer::WgpuRenderer;
 use crate::{record_log, CoreError};
 
@@ -45,6 +46,14 @@ pub enum SessionCommand {
     Stop,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ScoreHudStats {
+    pub current_score: u64,
+    pub best_session_score: u64,
+    pub pending_submit_score: u64,
+    pub ranking_eligible: bool,
+}
+
 #[derive(Default)]
 struct SharedStats {
     fps_x100: AtomicU32,
@@ -54,6 +63,9 @@ struct SharedStats {
     reconnect_secs_left: AtomicU32,
     session_ended: AtomicBool,
     ranking_eligible: AtomicBool,
+    current_score: AtomicU64,
+    best_session_score: AtomicU64,
+    pending_submit_score: AtomicU64,
 }
 
 pub struct EmulationSession {
@@ -70,6 +82,7 @@ impl EmulationSession {
         system_dir: PathBuf,
         save_dir: PathBuf,
         netplay: Option<NetplaySessionConfig>,
+        score_def: Option<String>,
     ) -> Result<Self, CoreError> {
         let (cmd_tx, cmd_rx) = unbounded::<SessionCommand>();
         let (init_tx, init_rx) = bounded::<Result<(), CoreError>>(1);
@@ -121,6 +134,21 @@ impl EmulationSession {
                 };
 
                 let mut renderer = WgpuRenderer::new(av_info.geometry.aspect_ratio);
+                let mut leaderboard = if netplay.is_none() {
+                    score_def
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .and_then(|def| match LeaderboardEngine::new(def) {
+                            Ok(lb) => Some(lb),
+                            Err(e) => {
+                                record_log("WARN", &format!("Leaderboard deshabilitado: {e}"));
+                                None
+                            }
+                        })
+                } else {
+                    None
+                };
                 let _ = init_tx.send(Ok(()));
 
                 let target_fps = if av_info.timing.fps > 10.0 {
@@ -305,6 +333,28 @@ impl EmulationSession {
                     } else {
                         core.set_inputs(inputs);
                         core.run_frame();
+                        if let Some(ref mut lb) = leaderboard {
+                            if stats_clone.ranking_eligible.load(Ordering::Relaxed) {
+                                if let Some(ram) = core.system_ram() {
+                                    let out = lb.evaluate_frame(ram);
+                                    stats_clone
+                                        .current_score
+                                        .store(out.current_score, Ordering::Relaxed);
+                                    if out.current_score > 0 {
+                                        stats_clone
+                                            .best_session_score
+                                            .fetch_max(out.current_score, Ordering::Relaxed);
+                                    }
+                                    if let Some(triggered) = out.triggered_score {
+                                        if triggered > 0 {
+                                            stats_clone
+                                                .pending_submit_score
+                                                .fetch_max(triggered, Ordering::Release);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     core.take_video_frame(|w, h, rgba| {
@@ -413,6 +463,19 @@ impl EmulationSession {
 
     pub fn is_ranking_eligible(&self) -> bool {
         self.stats.ranking_eligible.load(Ordering::Acquire)
+    }
+
+    pub fn score_hud_stats(&self) -> ScoreHudStats {
+        ScoreHudStats {
+            current_score: self.stats.current_score.load(Ordering::Relaxed),
+            best_session_score: self.stats.best_session_score.load(Ordering::Relaxed),
+            pending_submit_score: self.stats.pending_submit_score.load(Ordering::Acquire),
+            ranking_eligible: self.stats.ranking_eligible.load(Ordering::Acquire),
+        }
+    }
+
+    pub fn acknowledge_score_submit(&self) {
+        self.stats.pending_submit_score.store(0, Ordering::Release);
     }
 
     pub fn current_fps(&self) -> f32 {

@@ -80,6 +80,14 @@ pub struct VoiceHudInfo {
     pub active_peers: u8,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ScoreHudInfo {
+    pub current_score: u64,
+    pub best_session_score: u64,
+    pub pending_submit_score: u64,
+    pub ranking_eligible: bool,
+}
+
 #[uniffi::export]
 pub fn ping_engine(native_lib_dir: String) -> Result<EngineStatus, EngineBridgeError> {
     let info = engine_info(&native_lib_dir)?;
@@ -97,6 +105,17 @@ pub fn start_game(
     system_dir: String,
     save_dir: String,
 ) -> Result<(), EngineBridgeError> {
+    start_game_with_score(native_lib_dir, rom_path, system_dir, save_dir, None)
+}
+
+#[uniffi::export]
+pub fn start_game_with_score(
+    native_lib_dir: String,
+    rom_path: String,
+    system_dir: String,
+    save_dir: String,
+    score_def: Option<String>,
+) -> Result<(), EngineBridgeError> {
     stop_game();
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
     let session = EmulationSession::start(
@@ -105,6 +124,7 @@ pub fn start_game(
         PathBuf::from(system_dir),
         PathBuf::from(save_dir),
         None,
+        score_def,
     )?;
     if let Ok(mut guard) = session_slot().lock() {
         *guard = Some(session);
@@ -159,6 +179,7 @@ pub fn start_netplay_game(
         PathBuf::from(system_dir),
         PathBuf::from(save_dir),
         Some(netplay_cfg),
+        None,
     )?;
     if let Ok(mut guard) = session_slot().lock() {
         *guard = Some(session);
@@ -351,4 +372,28 @@ pub fn get_voice_hud_state() -> VoiceHudInfo {
 #[uniffi::export]
 pub fn set_audio_ducking(enabled: bool) {
     set_global_ducking(enabled);
+}
+
+#[uniffi::export]
+pub fn get_score_hud_info() -> ScoreHudInfo {
+    with_active_session(|s| {
+        let st = s.score_hud_stats();
+        ScoreHudInfo {
+            current_score: st.current_score,
+            best_session_score: st.best_session_score,
+            pending_submit_score: st.pending_submit_score,
+            ranking_eligible: st.ranking_eligible,
+        }
+    })
+    .unwrap_or(ScoreHudInfo {
+        current_score: 0,
+        best_session_score: 0,
+        pending_submit_score: 0,
+        ranking_eligible: false,
+    })
+}
+
+#[uniffi::export]
+pub fn acknowledge_score_submit() {
+    with_active_session(|s| s.acknowledge_score_submit());
 }
