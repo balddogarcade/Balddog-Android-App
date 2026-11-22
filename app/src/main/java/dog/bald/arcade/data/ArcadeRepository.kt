@@ -233,6 +233,29 @@ class ArcadeRepository(context: Context) {
         return client.postgrest.rpc("get_my_game_rank", params).decodeSingleOrNull<LeaderboardEntryDto>()
     }
 
+    suspend fun fetchMyHighScores(): List<MyHighScoreDto> {
+        if (currentUserId() == null) return emptyList()
+        return client.postgrest.rpc("get_my_high_scores").decodeList<MyHighScoreDto>()
+    }
+
+    suspend fun updateUsername(newUsername: String): ProfileDto {
+        val uid = currentUserId() ?: error("Sesión no iniciada")
+        val sanitized = newUsername.trim()
+        require(sanitized.length in 3..24) {
+            "El nombre debe tener entre 3 y 24 caracteres"
+        }
+        require(sanitized.all { it.isLetterOrDigit() || it == '_' || it == '-' || it == '.' }) {
+            "Solo se permiten letras, números, '_', '-' y '.'"
+        }
+        val payload = buildJsonObject {
+            put("username", sanitized)
+        }
+        return client.from("profiles").update(payload) {
+            filter { eq("id", uid) }
+            select()
+        }.decodeSingle<ProfileDto>()
+    }
+
     suspend fun fetchMyProfile(): ProfileDto? {
         val uid = currentUserId() ?: return null
         val existing = client.from("profiles").select {

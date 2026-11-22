@@ -130,3 +130,13 @@ data class GameLeaderboardData(
     val entries: List<LeaderboardEntryDto> = emptyList(),
     val myEntry: LeaderboardEntryDto? = null
 )
+
+@Serializable
+data class MyHighScoreDto(
+    @SerialName("game_id") val gameId: String,
+    val score: Long,
+    @SerialName("achieved_at") val achievedAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
+    val rank: Long,
+    @SerialName("total_players") val totalPlayers: Long = 0L
+)

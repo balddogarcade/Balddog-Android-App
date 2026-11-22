@@ -34,6 +34,10 @@ object PendingScoreQueue {
         "invalid_score"
     )
 
+    fun pendingCount(context: Context): Int {
+        return synchronized(lock) { readLocked(context).size }
+    }
+
     fun enqueue(context: Context, entry: PendingScoreSubmission) {
         if (entry.gameId.isBlank() || entry.score <= 0L) return
         synchronized(lock) {
