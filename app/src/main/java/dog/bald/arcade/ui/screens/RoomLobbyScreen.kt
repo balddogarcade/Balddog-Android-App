@@ -43,8 +43,10 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
@@ -787,18 +789,42 @@ fun RoomLobbyScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             if (!isHost && mySlot != null) {
+                val amReady = room.slotsJson[mySlot.toString()]?.ready == true
                 Button(
                     onClick = { toggleReady() },
-                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
-                    border = BorderStroke(1.dp, PureWhite),
-                    modifier = Modifier.weight(1f)
+                    shape = RectangleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (amReady) GraphiteSurface else PureWhite,
+                        contentColor = if (amReady) PureWhite else PureBlack
+                    ),
+                    border = BorderStroke(1.dp, if (amReady) ReadyGreenAccent else PureWhite),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
                 ) {
-                    Text("LISTO / READY", fontWeight = FontWeight.Bold)
+                    Icon(
+                        imageVector = if (amReady) Icons.Default.CheckCircle else Icons.Default.Check,
+                        contentDescription = null,
+                        tint = if (amReady) ReadyGreenAccent else PureBlack,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (amReady) "LISTO · TOCA PARA ESPERAR" else "MARCAR LISTO",
+                        fontFamily = SpaceGroteskFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
                 }
             }
             if (isHost && mySlot != null) {
                 val seated = room.slotsJson.values
                 val canStart = seated.size >= 2 && seated.all { it.ready }
+                val waitingLabel = if (seated.size < 2) {
+                    "ESPERANDO JUGADORES (${seated.size}/2+)"
+                } else {
+                    "ESPERANDO QUE TODOS ESTÉN LISTOS"
+                }
                 Button(
                     enabled = canStart,
                     onClick = {
@@ -812,12 +838,29 @@ fun RoomLobbyScreen(
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
-                    modifier = Modifier.weight(1f)
+                    shape = RectangleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PureWhite,
+                        contentColor = PureBlack,
+                        disabledContainerColor = GraphiteSurface,
+                        disabledContentColor = MutedGray
+                    ),
+                    border = if (canStart) null else BorderStroke(1.dp, CharcoalBorder),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
                 ) {
+                    Icon(
+                        imageVector = if (canStart) Icons.Default.PlayArrow else Icons.Default.HourglassTop,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        if (canStart) "INICIAR PARTIDA" else "ESPERANDO JUGADORES (${seated.size}/2+)",
-                        fontWeight = FontWeight.Bold
+                        text = if (canStart) "INICIAR PARTIDA" else waitingLabel,
+                        fontFamily = SpaceGroteskFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
                     )
                 }
             }
