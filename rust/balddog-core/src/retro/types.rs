@@ -33,6 +33,7 @@ pub const RETRO_PIXEL_FORMAT_XRGB8888: c_uint = 1;
 pub const RETRO_PIXEL_FORMAT_RGB565: c_uint = 2;
 
 pub const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
+pub const RETRO_MEMORY_SYSTEM_RAM: c_uint = 2;
 
 pub const RETRO_ENVIRONMENT_EXPERIMENTAL: c_uint = 0x10000;
 pub const RETRO_ENVIRONMENT_SET_ROTATION: c_uint = 1;

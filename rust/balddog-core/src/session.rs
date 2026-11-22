@@ -53,6 +53,7 @@ struct SharedStats {
     reconnecting: AtomicBool,
     reconnect_secs_left: AtomicU32,
     session_ended: AtomicBool,
+    ranking_eligible: AtomicBool,
 }
 
 pub struct EmulationSession {
@@ -75,6 +76,9 @@ impl EmulationSession {
 
         let running = Arc::new(AtomicBool::new(true));
         let stats = Arc::new(SharedStats::default());
+        stats
+            .ranking_eligible
+            .store(netplay.is_none(), Ordering::Release);
         let running_clone = Arc::clone(&running);
         let stats_clone = Arc::clone(&stats);
 
@@ -191,6 +195,15 @@ impl EmulationSession {
                                         })
                                         .and_then(|bytes| core.load_state_bytes(&bytes))
                                 };
+                                if res.is_ok() {
+                                    stats_clone
+                                        .ranking_eligible
+                                        .store(false, Ordering::Release);
+                                    record_log(
+                                        "INFO",
+                                        "SaveState cargado: ranking deshabilitado para esta sesión",
+                                    );
+                                }
                                 let _ = ack.send(res);
                             }
                             SessionCommand::Stop => {
@@ -396,6 +409,10 @@ impl EmulationSession {
         ack_rx
             .recv_timeout(Duration::from_secs(3))
             .map_err(|_| CoreError::State("Timeout cargando savestate".into()))?
+    }
+
+    pub fn is_ranking_eligible(&self) -> bool {
+        self.stats.ranking_eligible.load(Ordering::Acquire)
     }
 
     pub fn current_fps(&self) -> f32 {

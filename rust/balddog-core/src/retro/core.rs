@@ -283,6 +283,8 @@ pub struct LibretroCore {
     retro_serialize_size: unsafe extern "C" fn() -> usize,
     retro_serialize: unsafe extern "C" fn(*mut c_void, usize) -> bool,
     retro_unserialize: unsafe extern "C" fn(*const c_void, usize) -> bool,
+    retro_get_memory_data: unsafe extern "C" fn(c_uint) -> *mut c_void,
+    retro_get_memory_size: unsafe extern "C" fn(c_uint) -> usize,
     game_loaded: bool,
 }
 
@@ -351,6 +353,14 @@ impl LibretroCore {
             b"retro_unserialize\0",
             unsafe extern "C" fn(*const c_void, usize) -> bool
         );
+        let retro_get_memory_data = load_sym!(
+            b"retro_get_memory_data\0",
+            unsafe extern "C" fn(c_uint) -> *mut c_void
+        );
+        let retro_get_memory_size = load_sym!(
+            b"retro_get_memory_size\0",
+            unsafe extern "C" fn(c_uint) -> usize
+        );
 
         ACTIVE_CTX.with(|cell| {
             *cell.borrow_mut() = Some(CallbackContext {
@@ -398,6 +408,8 @@ impl LibretroCore {
             retro_serialize_size,
             retro_serialize,
             retro_unserialize,
+            retro_get_memory_data,
+            retro_get_memory_size,
             game_loaded: false,
         })
     }
@@ -508,6 +520,29 @@ impl LibretroCore {
             return Err(CoreError::State("retro_unserialize falló".into()));
         }
         Ok(())
+    }
+
+    /// Devuelve una vista de solo lectura de una región de memoria del core Libretro.
+    pub fn memory_slice(&self, id: c_uint) -> Option<&[u8]> {
+        if !self.game_loaded {
+            return None;
+        }
+        // SAFETY: Llamado desde el hilo de emulación mientras el juego está cargado.
+        let size = unsafe { (self.retro_get_memory_size)(id) };
+        if size == 0 {
+            return None;
+        }
+        // SAFETY: El core garantiza un puntero válido de `size` bytes mientras no se descargue el juego.
+        let ptr = unsafe { (self.retro_get_memory_data)(id) } as *const u8;
+        if ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { std::slice::from_raw_parts(ptr, size) })
+    }
+
+    /// Devuelve la RAM principal del sistema emulado (`RETRO_MEMORY_SYSTEM_RAM`).
+    pub fn system_ram(&self) -> Option<&[u8]> {
+        self.memory_slice(RETRO_MEMORY_SYSTEM_RAM)
     }
 }
 
