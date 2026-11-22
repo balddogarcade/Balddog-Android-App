@@ -61,6 +61,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -249,6 +252,32 @@ fun MainShellScreen(
 
     LaunchedEffect(Unit) {
         refreshAll()
+    }
+
+    // Refrescar catálogo, tiempos y récords al volver desde GameActivity (ON_RESUME)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasResumedOnce by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (!hasResumedOnce) {
+                    hasResumedOnce = true
+                } else {
+                    scope.launch {
+                        runCatching { PendingScoreQueue.flushAll(context, repo) }
+                        runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
+                        pendingScoreCount = PendingScoreQueue.pendingCount(context)
+                        runCatching { games = repo.fetchGames() }
+                        runCatching { profile = repo.fetchMyProfile() }
+                        runCatching { myHighScores = repo.fetchMyHighScores() }
+                        runCatching { myMatchHistory = repo.fetchMyMatchHistory() }
+                        runCatching { myGameStats = repo.fetchMyGameStats() }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Auto-refrescar salas cada 3s mientras el usuario está en la pestaña Salas

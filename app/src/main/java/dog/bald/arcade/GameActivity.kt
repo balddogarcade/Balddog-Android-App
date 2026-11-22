@@ -1005,8 +1005,9 @@ class GameActivity : ComponentActivity() {
         val roomId = if (isNetplay && netplayRoomId.isNotBlank()) netplayRoomId else null
         val startedIso = matchStartedAtIso.ifBlank { java.time.Instant.now().toString() }
         val endedIso = java.time.Instant.now().toString()
+        val latestSessionBest = runCatching { getScoreHudInfo().bestSessionScore.toLong() }.getOrDefault(0L)
         val bestScore = if (!isNetplay) {
-            maxOf(lastSubmittedSessionScore, scoreHud.bestSessionScore.toLong()).takeIf { it > 0L }
+            maxOf(lastSubmittedSessionScore, scoreHud.bestSessionScore.toLong(), latestSessionBest).takeIf { it > 0L }
         } else {
             null
         }
@@ -1103,7 +1104,9 @@ class GameActivity : ComponentActivity() {
             }
             val dto = result.getOrNull()
             if (result.isSuccess && dto != null) {
-                exportedReplay?.delete()
+                if (uploadedReplay != null || score < currentBest) {
+                    exportedReplay?.delete()
+                }
                 logFromAndroid(
                     "INFO",
                     "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}"

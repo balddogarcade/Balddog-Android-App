@@ -230,6 +230,10 @@ class ArcadeRepository(context: Context) {
                 if (code in 200..299) {
                     Triple(objectPath, bytes.size, sha256)
                 } else {
+                    val errBody = runCatching {
+                        conn.errorStream?.bufferedReader()?.use { it.readText() }
+                    }.getOrNull().orEmpty()
+                    android.util.Log.w("BaldDogReplay", "uploadReplay failed HTTP $code: $errBody")
                     null
                 }
             } finally {
