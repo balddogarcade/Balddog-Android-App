@@ -16,6 +16,11 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
   - Real-time lobbies, player slots, and chat with **Supabase Realtime**.
 - **ROM & BIOS Management (`IpfsRomManager`)**:
   - Downloads from IPFS with integrity verification (`sha256` / `crc32`) based on the catalog and BIOS (`game_bios`) defined in Supabase.
+- **Competitive Leaderboards & 1CC Engine (`rcheevos`)**:
+  - Real-time memory scanning of `RETRO_MEMORY_SYSTEM_RAM` via the embedded `rcheevos` evaluation engine.
+  - Strict **1CC (One Coin Clear)** enforcement: scores are only submitted if completed with 1 credit.
+  - In-game live score indicator & 1CC eligibility in `InGameQuickMenu`.
+  - Global Top 50 leaderboards and personal rank sheets with offline score queuing (`PendingScoreQueue`).
 - **Adaptive Controls**:
   - Physical gamepad support (`ControllerManager`, `RetroJoypad`).
   - Customizable touch overlay (`ArcadeTouchOverlay`, `TouchLayoutPrefs`) and in-game quick menu (`InGameQuickMenu`).
@@ -110,6 +115,17 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 2. `supabase/migrations/002_seed_curated_games.sql` — Inserts the initial curated game catalog.
 3. `supabase/migrations/003_private_rooms.sql` — Adds `rooms.is_private` and `idx_rooms_status_private` for private rooms.
 4. `supabase/migrations/004_game_stats.sql` — Adds download/play-time counters, `user_game_stats`, and atomic RPCs (`increment_game_download`, `record_play_session`).
+5. `supabase/migrations/005_leaderboards_schema.sql` — High scores table with `UNIQUE(game_id, user_id)` and strict client RLS.
+6. `supabase/migrations/006_leaderboard_rpcs.sql` — Atomic RPCs (`submit_high_score`, `get_game_leaderboard`, `get_my_game_rank`).
+7. `supabase/migrations/007_seed_score_configs.sql` — Initial `score_config` seed with verified `max_valid_score`.
+8. `supabase/migrations/008_seed_captcomm_score_config.sql`..`012_seed_remaining_score_configs.sql` — Empirical RAM expressions for verified games (CPS-1, CPS-2, Neo Geo, Toaplan, Konami, etc.).
+
+---
+
+## Documentation
+
+- **[Adding New Games to bald.dog ARCADE](docs/ADDING_GAMES.md)**: Comprehensive, step-by-step guide on ROM sourcing, Pinata/IPFS distribution, memory reverse-engineering with `ram_probe`, `rcheevos` leaderboard expression calibration, and Android validation.
+- **[Brand Manual](docs/BRAND_MANUAL.md)**: Design guidelines, color palette, typography, and logo usage.
 
 ---
 

@@ -148,3 +148,15 @@ Cuando el usuario solicite subir el APK a Pinata (o "piñata", IPFS, etc.), **SI
      - Pinata Gateway: `https://gateway.pinata.cloud/ipfs/<CID>`
      - IPFS.io Gateway: `https://ipfs.io/ipfs/<CID>`
      - dweb.link: `https://dweb.link/ipfs/<CID>`
+
+---
+
+## Protocolo: Integrar Nuevos Juegos Arcade
+
+Para integrar y certificar nuevos juegos arcade en el catálogo de bald.dog ARCADE (metadatos, IPFS, ingeniería inversa de RAM y leaderboards 1CC):
+- **Guía Técnica Exhaustiva:** Consulta obligatoriamente [docs/ADDING_GAMES.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/ADDING_GAMES.md).
+- **Herramientas de Diagnóstico:**
+  - `rust/balddog-core/examples/ram_probe.rs` para inspeccionar `RETRO_MEMORY_SYSTEM_RAM` con `--scan [out.ppm]` y `--scan find:<score>`.
+  - Core nativo de diagnóstico para Linux: `/tmp/fbneo-linux/src/burner/libretro/fbneo_libretro.so`.
+- **Regla de Integridad de Leaderboards:** **NUNCA** inventes ni asumas direcciones de memoria de puntaje o banderas `P1_ACTIVE`. Toda expresión `rcheevos` debe ser verificada empíricamente contra capturas HUD reales en `ram_probe`, incorporada en los tests unitarios de `rust/balddog-core/src/retro/leaderboard.rs`, y sembrada en Supabase mediante una migración SQL numerada.
+
