@@ -744,6 +744,7 @@ private fun CatalogTab(
             ) {
                 items(filtered, key = { it.id }) { game ->
                     val isDownloaded = downloadedFiles.contains(game.romFilename)
+                    val hasLeaderboard = !game.scoreConfig?.lboard.isNullOrBlank()
                     ArcadeGameCard(
                         game = game,
                         isDownloaded = isDownloaded,
@@ -753,7 +754,11 @@ private fun CatalogTab(
                         onPrimaryAction = {
                             if (isDownloaded) onPlay(game) else onDownload(game)
                         },
-                        onLeaderboardClick = { onLeaderboard(game) }
+                        onLeaderboardClick = if (hasLeaderboard) {
+                            { onLeaderboard(game) }
+                        } else {
+                            null
+                        }
                     )
                 }
             }
