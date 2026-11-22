@@ -30,12 +30,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Public
@@ -68,8 +75,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.ArcadeRepository
@@ -390,7 +401,28 @@ fun RoomLobbyScreen(
         )
     }
 
-    val quickStickers = listOf("Ready!", "Insert Coin!", "GG!", "Wait...")
+    val quickActions = remember {
+        listOf(
+            "¡Listo!" to Icons.Default.Check,
+            "¡GG!" to Icons.Default.EmojiEvents,
+            "¡Espera!" to Icons.Default.HourglassEmpty
+        )
+    }
+    val chatListState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            chatListState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    fun sendChatMessage() {
+        val txt = chatInput.trim()
+        if (txt.isBlank()) return
+        chatInput = ""
+        scope.launch {
+            runCatching { repo.sendRoomMessage(room.id, myUsername, txt) }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -631,18 +663,29 @@ fun RoomLobbyScreen(
             }
         }
 
-        // Chat rápido / Stickers
+        // Chat rápido en español con iconografía
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(quickStickers) { sticker ->
+            items(quickActions) { (label, icon) ->
                 OutlinedButton(
                     onClick = {
                         scope.launch {
-                            runCatching { repo.sendRoomMessage(room.id, myUsername, sticker) }
+                            runCatching { repo.sendRoomMessage(room.id, myUsername, label) }
                         }
                     },
-                    border = BorderStroke(1.dp, CharcoalBorder)
+                    shape = RectangleShape,
+                    colors = ButtonDefaults.outlinedButtonColors(containerColor = GraphiteSurface),
+                    border = BorderStroke(1.dp, CharcoalBorder),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    modifier = Modifier.height(34.dp)
                 ) {
-                    Text(sticker, color = PureWhite, fontSize = 11.sp)
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = SilverGray,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(label, color = PureWhite, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -652,15 +695,45 @@ fun RoomLobbyScreen(
                 .fillMaxWidth()
                 .weight(1f)
                 .background(CarbonSurface, RectangleShape)
+                .border(1.dp, CharcoalBorder)
                 .padding(10.dp)
         ) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(messages, key = { it.id }) { msg ->
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Forum,
+                        contentDescription = null,
+                        tint = MutedGray,
+                        modifier = Modifier.size(22.dp)
+                    )
                     Text(
-                        text = "${msg.username}: ${msg.message}",
-                        color = SilverGray,
+                        text = "Sin mensajes aún. Saluda o usa un mensaje rápido.",
+                        color = MutedGray,
                         fontSize = 12.sp
                     )
+                }
+            } else {
+                LazyColumn(
+                    state = chatListState,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(messages, key = { it.id }) { msg ->
+                        Text(
+                            text = buildAnnotatedString {
+                                withStyle(SpanStyle(color = PureWhite, fontWeight = FontWeight.SemiBold)) {
+                                    append("${msg.username}: ")
+                                }
+                                withStyle(SpanStyle(color = SilverGray)) {
+                                    append(msg.message)
+                                }
+                            },
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -673,27 +746,41 @@ fun RoomLobbyScreen(
             OutlinedTextField(
                 value = chatInput,
                 onValueChange = { chatInput = it },
-                placeholder = { Text("Mensaje rápido...", fontSize = 12.sp) },
+                placeholder = { Text("Mensaje rápido...", color = MutedGray, fontSize = 12.sp) },
                 singleLine = true,
+                shape = RectangleShape,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { sendChatMessage() }),
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = CarbonSurface,
+                    unfocusedContainerColor = CarbonSurface,
                     focusedBorderColor = PureWhite,
                     unfocusedBorderColor = CharcoalBorder,
                     focusedTextColor = PureWhite,
-                    unfocusedTextColor = PureWhite
+                    unfocusedTextColor = PureWhite,
+                    cursorColor = PureWhite
                 ),
                 modifier = Modifier.weight(1f)
             )
             Button(
                 enabled = chatInput.isNotBlank(),
-                onClick = {
-                    val txt = chatInput.trim()
-                    chatInput = ""
-                    scope.launch {
-                        runCatching { repo.sendRoomMessage(room.id, myUsername, txt) }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
+                onClick = { sendChatMessage() },
+                shape = RectangleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PureWhite,
+                    contentColor = PureBlack,
+                    disabledContainerColor = GraphiteSurface,
+                    disabledContentColor = MutedGray
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                modifier = Modifier.height(50.dp)
             ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Enviar mensaje",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
                 Text("ENVIAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
