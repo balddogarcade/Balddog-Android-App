@@ -139,5 +139,27 @@ data class MyHighScoreDto(
     @SerialName("achieved_at") val achievedAt: String = "",
     @SerialName("updated_at") val updatedAt: String = "",
     val rank: Long,
-    @SerialName("total_players") val totalPlayers: Long = 0L
+    @SerialName("total_players") val totalPlayers: Long = 0L,
+    @SerialName("replay_path") val replayPath: String? = null,
+    @SerialName("replay_size_bytes") val replaySizeBytes: Int? = null
+)
+
+@Serializable
+data class MatchHistoryPlayerDto(
+    @SerialName("user_id") val userId: String,
+    val username: String,
+    val slot: Int = 0
+)
+
+@Serializable
+data class MatchHistoryDto(
+    val id: String,
+    @SerialName("game_id") val gameId: String,
+    val mode: String,
+    @SerialName("room_id") val roomId: String? = null,
+    @SerialName("players_json") val playersJson: List<MatchHistoryPlayerDto> = emptyList(),
+    @SerialName("started_at") val startedAt: String = "",
+    @SerialName("ended_at") val endedAt: String? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int = 0,
+    val score: Long? = null
 )

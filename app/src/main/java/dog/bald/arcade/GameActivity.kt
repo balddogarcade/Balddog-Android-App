@@ -56,8 +56,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import dog.bald.arcade.audio.VoiceAudioManager
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.MatchHistoryPlayerDto
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.PendingScoreSubmission
+import kotlinx.serialization.json.Json
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
 import dog.bald.arcade.input.TouchLayoutConfig
@@ -127,6 +129,9 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_PEER_ADDRS = "peer_addrs"
         const val EXTRA_INPUT_DELAY = "input_delay"
         const val EXTRA_ROOM_ID = "room_id"
+        const val EXTRA_NETPLAY_MODE = "netplay_mode"
+        const val EXTRA_ROOM_IS_PRIVATE = "room_is_private"
+        const val EXTRA_ROOM_PLAYERS_JSON = "room_players_json"
         const val EXTRA_IS_HOST = "is_host"
         const val EXTRA_REPLAY_PATH = "replay_path"
         const val EXTRA_REPLAY_PLAYER_NAME = "replay_player_name"
@@ -152,7 +157,13 @@ class GameActivity : ComponentActivity() {
     private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u, false))
     private var netplayEndReason by mutableStateOf<String?>(null)
     private var netplayRoomId: String = ""
+    private var netplayMode: String = "online"
+    private var roomIsPrivate: Boolean = false
+    private var roomPlayersJson: String = "[]"
     private var isNetplayHost: Boolean = false
+    private var matchSessionId: String = ""
+    private var matchStartedAtIso: String = ""
+    private var matchHistoryRecorded: Boolean = false
     private var gameId: String = ""
     private var romSha256: String = ""
     private var scoreDef: String? = null
@@ -233,7 +244,16 @@ class GameActivity : ComponentActivity() {
 
         isNetplay = intent.getBooleanExtra(EXTRA_NETPLAY_ENABLED, false)
         netplayRoomId = intent.getStringExtra(EXTRA_ROOM_ID).orEmpty()
+        netplayMode = intent.getStringExtra(EXTRA_NETPLAY_MODE).orEmpty().ifBlank { "online" }
+        roomIsPrivate = intent.getBooleanExtra(EXTRA_ROOM_IS_PRIVATE, false)
+        roomPlayersJson = intent.getStringExtra(EXTRA_ROOM_PLAYERS_JSON).orEmpty().ifBlank { "[]" }
         isNetplayHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
+        matchSessionId = if (isNetplay && netplayRoomId.isNotBlank()) {
+            netplayRoomId
+        } else {
+            java.util.UUID.randomUUID().toString()
+        }
+        matchStartedAtIso = java.time.Instant.now().toString()
         gameId = intent.getStringExtra(EXTRA_GAME_ID).orEmpty()
         romSha256 = intent.getStringExtra(EXTRA_ROM_SHA256).orEmpty()
         scoreDef = intent.getStringExtra(EXTRA_SCORE_DEF)?.takeIf { it.isNotBlank() }
@@ -828,6 +848,7 @@ class GameActivity : ComponentActivity() {
         }
         controllerManager?.stop()
         flushBestScoreOnExit()
+        recordMatchHistoryOnExit()
         voiceAudioManager?.release()
         voiceAudioManager = null
         stopVoiceSession()
@@ -964,6 +985,59 @@ class GameActivity : ComponentActivity() {
         submitOrQueueScore(score = candidate, credits = credits, notifyUi = false)
     }
 
+    private fun recordMatchHistoryOnExit() {
+        if (matchHistoryRecorded || isReplayMode || engineError != null) return
+        if (isNetplay && roomIsPrivate) return
+        val gid = gameId
+        if (gid.isBlank() || matchSessionId.isBlank()) return
+
+        val totalSeconds = synchronized(playTimerLock) {
+            (accumulatedActiveMs / 1000L).toInt()
+        }
+        if (totalSeconds < 5) return
+        matchHistoryRecorded = true
+
+        val mode = if (isNetplay) netplayMode else "local"
+        val roomId = if (isNetplay && netplayRoomId.isNotBlank()) netplayRoomId else null
+        val startedIso = matchStartedAtIso.ifBlank { java.time.Instant.now().toString() }
+        val endedIso = java.time.Instant.now().toString()
+        val bestScore = if (!isNetplay) {
+            maxOf(lastSubmittedSessionScore, scoreHud.bestSessionScore.toLong()).takeIf { it > 0L }
+        } else {
+            null
+        }
+        val playersJsonStr = roomPlayersJson
+        val appCtx = applicationContext
+        val sessionId = matchSessionId
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val repo = ArcadeRepository(appCtx)
+            val uid = repo.currentUserId() ?: return@launch
+            val players = if (isNetplay) {
+                runCatching {
+                    Json { ignoreUnknownKeys = true }.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
+                }.getOrDefault(emptyList())
+            } else {
+                val username = runCatching { repo.fetchMyProfile()?.username }.getOrNull() ?: "Jugador"
+                listOf(MatchHistoryPlayerDto(userId = uid, username = username, slot = 0))
+            }
+            runCatching {
+                repo.recordMatchHistory(
+                    clientSessionId = sessionId,
+                    gameId = gid,
+                    mode = mode,
+                    roomId = roomId,
+                    isPrivate = false,
+                    players = players,
+                    startedAtIso = startedIso,
+                    endedAtIso = endedIso,
+                    durationSeconds = totalSeconds,
+                    score = bestScore
+                )
+            }
+        }
+    }
+
     private fun submitOrQueueScore(score: Long, credits: Int, notifyUi: Boolean) {
         if (score <= 0L || gameId.isBlank() || romSha256.isBlank()) return
         if (score <= lastSubmittedSessionScore) return
@@ -980,8 +1054,13 @@ class GameActivity : ComponentActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             val repo = ArcadeRepository(appCtx)
-            val uploadedReplay = exportedReplay?.let { file ->
-                runCatching { repo.uploadReplay(gid, file) }.getOrNull()
+            val currentBest = runCatching { repo.fetchMyGameRank(gid)?.score }.getOrNull() ?: 0L
+            val uploadedReplay = if (score >= currentBest) {
+                exportedReplay?.let { file ->
+                    runCatching { repo.uploadReplay(gid, file) }.getOrNull()
+                }
+            } else {
+                null
             }
             val result = runCatching {
                 repo.submitHighScore(

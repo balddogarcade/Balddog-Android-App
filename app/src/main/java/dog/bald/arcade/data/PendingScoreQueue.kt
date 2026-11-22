@@ -64,10 +64,15 @@ object PendingScoreQueue {
         var syncedCount = 0
 
         for (item in snapshot) {
-            val uploaded = item.replayLocalPath
-                ?.let { java.io.File(it) }
-                ?.takeIf { it.exists() && it.length() > 0L }
-                ?.let { file -> runCatching { repo.uploadReplay(item.gameId, file) }.getOrNull() }
+            val currentBest = runCatching { repo.fetchMyGameRank(item.gameId)?.score }.getOrNull() ?: 0L
+            val uploaded = if (item.score >= currentBest) {
+                item.replayLocalPath
+                    ?.let { java.io.File(it) }
+                    ?.takeIf { it.exists() && it.length() > 0L }
+                    ?.let { file -> runCatching { repo.uploadReplay(item.gameId, file) }.getOrNull() }
+            } else {
+                null
+            }
             val result = runCatching {
                 repo.submitHighScore(
                     gameId = item.gameId,

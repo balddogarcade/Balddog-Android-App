@@ -149,6 +149,22 @@ class MainActivity : ComponentActivity() {
                                     putStringArrayListExtra(GameActivity.EXTRA_PEER_ADDRS, peerAddrs)
                                     putExtra(GameActivity.EXTRA_INPUT_DELAY, if (room.mode == "lan") 1 else 2)
                                     putExtra(GameActivity.EXTRA_ROOM_ID, room.id)
+                                    putExtra(GameActivity.EXTRA_NETPLAY_MODE, room.mode)
+                                    putExtra(GameActivity.EXTRA_ROOM_IS_PRIVATE, room.isPrivate)
+                                    val playersJson = kotlinx.serialization.json.buildJsonArray {
+                                        room.slotsJson.entries
+                                            .sortedBy { it.key.toIntOrNull() ?: 0 }
+                                            .forEach { (slotKey, slotInfo) ->
+                                                add(
+                                                    kotlinx.serialization.json.buildJsonObject {
+                                                        put("user_id", kotlinx.serialization.json.JsonPrimitive(slotInfo.userId))
+                                                        put("username", kotlinx.serialization.json.JsonPrimitive(slotInfo.username))
+                                                        put("slot", kotlinx.serialization.json.JsonPrimitive(slotKey.toIntOrNull() ?: 0))
+                                                    }
+                                                )
+                                            }
+                                    }.toString()
+                                    putExtra(GameActivity.EXTRA_ROOM_PLAYERS_JSON, playersJson)
                                     putExtra(GameActivity.EXTRA_IS_HOST, room.hostId == repo.currentUserId())
                                     putExtra(GameActivity.EXTRA_VOICE_LOCAL_PORT, voiceLocalPort)
                                     putExtra(GameActivity.EXTRA_VOICE_PEER_HANDLES, voicePeerHandles)

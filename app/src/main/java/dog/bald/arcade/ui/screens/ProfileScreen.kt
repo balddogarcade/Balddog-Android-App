@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
@@ -45,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.UserGameStatDto
@@ -55,7 +58,9 @@ import dog.bald.arcade.ui.components.EditUsernameDialog
 import dog.bald.arcade.ui.components.PendingScoresBanner
 import dog.bald.arcade.ui.components.ProfileActivityRow
 import dog.bald.arcade.ui.components.ProfileHeroCard
+import dog.bald.arcade.ui.components.ProfileMatchHistoryRow
 import dog.bald.arcade.ui.components.ProfileRecordRow
+import dog.bald.arcade.ui.components.ProfileReplayRow
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.DangerRed
@@ -73,16 +78,20 @@ import uniffi.balddog_android.EngineStatus
 
 private enum class ProfileActivitySection(val label: String) {
     RECORDS("RÉCORDS"),
-    ACTIVITY("ACTIVIDAD")
+    REPLAYS("REPLAYS"),
+    HISTORY("HISTORIAL"),
+    ACTIVITY("TIEMPO")
 }
 
 @Composable
 fun ProfileScreen(
     profile: ProfileDto?,
     userEmail: String?,
+    myUserId: String?,
     avatarSeed: String,
     games: List<GameDto>,
     myHighScores: List<MyHighScoreDto>,
+    myMatchHistory: List<MatchHistoryDto>,
     myGameStats: List<UserGameStatDto>,
     pendingScoreCount: Int,
     engineStatus: EngineStatus?,
@@ -90,6 +99,7 @@ fun ProfileScreen(
     onUpdateUsername: suspend (String) -> Unit,
     onFlushPendingScores: suspend () -> Unit,
     onOpenLeaderboard: (GameDto) -> Unit,
+    onWatchReplay: suspend (MyHighScoreDto, GameDto) -> Unit,
     onOpenDiagnostics: () -> Unit,
     onClearCache: () -> Unit,
     onSignOut: () -> Unit,
@@ -109,9 +119,19 @@ fun ProfileScreen(
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
     var syncingScores by remember { mutableStateOf(false) }
+    var loadingReplayGameId by remember { mutableStateOf<String?>(null) }
 
+    val myReplays = remember(myHighScores) {
+        myHighScores.filter { !it.replayPath.isNullOrBlank() }
+    }
     val displayedRecords = remember(myHighScores, showAllItems) {
         if (showAllItems) myHighScores else myHighScores.take(5)
+    }
+    val displayedReplays = remember(myReplays, showAllItems) {
+        if (showAllItems) myReplays else myReplays.take(5)
+    }
+    val displayedHistory = remember(myMatchHistory, showAllItems) {
+        if (showAllItems) myMatchHistory else myMatchHistory.take(5)
     }
     val displayedStats = remember(myGameStats, showAllItems) {
         if (showAllItems) myGameStats else myGameStats.take(5)
@@ -163,10 +183,11 @@ fun ProfileScreen(
             ) {
                 ProfileActivitySection.entries.forEachIndexed { idx, section ->
                     val active = selectedSection == idx
-                    val count = if (section == ProfileActivitySection.RECORDS) {
-                        myHighScores.size
-                    } else {
-                        myGameStats.size
+                    val count = when (section) {
+                        ProfileActivitySection.RECORDS -> myHighScores.size
+                        ProfileActivitySection.REPLAYS -> myReplays.size
+                        ProfileActivitySection.HISTORY -> myMatchHistory.size
+                        ProfileActivitySection.ACTIVITY -> myGameStats.size
                     }
                     Box(
                         modifier = Modifier
@@ -176,7 +197,7 @@ fun ProfileScreen(
                                 selectedSection = idx
                                 showAllItems = false
                             }
-                            .padding(vertical = 10.dp),
+                            .padding(vertical = 10.dp, horizontal = 2.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -184,65 +205,140 @@ fun ProfileScreen(
                             color = if (active) PureBlack else SilverGray,
                             fontFamily = JetBrainsMonoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            letterSpacing = 0.5.sp
+                            fontSize = 9.5.sp,
+                            maxLines = 1,
+                            letterSpacing = 0.2.sp
                         )
                     }
                 }
             }
         }
 
-        if (selectedSection == ProfileActivitySection.RECORDS.ordinal) {
-            if (myHighScores.isEmpty()) {
-                item(key = "empty_records") {
-                    ProfileEmptyCard(
-                        icon = Icons.Default.EmojiEvents,
-                        title = "Sin récords registrados",
-                        subtitle = "Juega en solitario con 1 crédito y sin Save States para entrar al ranking global."
-                    )
-                }
-            } else {
-                items(displayedRecords, key = { "rec_${it.gameId}" }) { record ->
-                    val game = gamesById[record.gameId]
-                    ProfileRecordRow(
-                        record = record,
-                        game = game,
-                        onClick = game?.let { g -> { onOpenLeaderboard(g) } }
-                    )
-                }
-                if (myHighScores.size > 5) {
-                    item(key = "toggle_records") {
-                        ExpandListButton(
-                            expanded = showAllItems,
-                            totalCount = myHighScores.size,
-                            onClick = { showAllItems = !showAllItems }
+        when (ProfileActivitySection.entries[selectedSection]) {
+            ProfileActivitySection.RECORDS -> {
+                if (myHighScores.isEmpty()) {
+                    item(key = "empty_records") {
+                        ProfileEmptyCard(
+                            icon = Icons.Default.EmojiEvents,
+                            title = "Sin récords registrados",
+                            subtitle = "Juega en solitario con 1 crédito y sin Save States para entrar al ranking global."
                         )
+                    }
+                } else {
+                    items(displayedRecords, key = { "rec_${it.gameId}" }) { record ->
+                        val game = gamesById[record.gameId]
+                        ProfileRecordRow(
+                            record = record,
+                            game = game,
+                            onClick = game?.let { g -> { onOpenLeaderboard(g) } }
+                        )
+                    }
+                    if (myHighScores.size > 5) {
+                        item(key = "toggle_records") {
+                            ExpandListButton(
+                                expanded = showAllItems,
+                                totalCount = myHighScores.size,
+                                onClick = { showAllItems = !showAllItems }
+                            )
+                        }
                     }
                 }
             }
-        } else {
-            if (myGameStats.isEmpty()) {
-                item(key = "empty_activity") {
-                    ProfileEmptyCard(
-                        icon = Icons.Default.Schedule,
-                        title = "Sin actividad reciente",
-                        subtitle = "Tu tiempo jugado y número de partidas por juego aparecerán aquí."
-                    )
-                }
-            } else {
-                items(displayedStats, key = { "stat_${it.gameId}" }) { stat ->
-                    ProfileActivityRow(
-                        stat = stat,
-                        game = gamesById[stat.gameId]
-                    )
-                }
-                if (myGameStats.size > 5) {
-                    item(key = "toggle_stats") {
-                        ExpandListButton(
-                            expanded = showAllItems,
-                            totalCount = myGameStats.size,
-                            onClick = { showAllItems = !showAllItems }
+
+            ProfileActivitySection.REPLAYS -> {
+                if (myReplays.isEmpty()) {
+                    item(key = "empty_replays") {
+                        ProfileEmptyCard(
+                            icon = Icons.Default.PlayCircleOutline,
+                            title = "Sin replays guardados",
+                            subtitle = "Tus récords en solitario (1 crédito) guardarán automáticamente su replay aquí."
                         )
+                    }
+                } else {
+                    items(displayedReplays, key = { "rep_${it.gameId}" }) { record ->
+                        val game = gamesById[record.gameId]
+                        ProfileReplayRow(
+                            record = record,
+                            game = game,
+                            loading = loadingReplayGameId == record.gameId,
+                            onWatchReplay = game?.let { g ->
+                                {
+                                    if (loadingReplayGameId == null) {
+                                        scope.launch {
+                                            loadingReplayGameId = record.gameId
+                                            runCatching { onWatchReplay(record, g) }
+                                            loadingReplayGameId = null
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    if (myReplays.size > 5) {
+                        item(key = "toggle_replays") {
+                            ExpandListButton(
+                                expanded = showAllItems,
+                                totalCount = myReplays.size,
+                                onClick = { showAllItems = !showAllItems }
+                            )
+                        }
+                    }
+                }
+            }
+
+            ProfileActivitySection.HISTORY -> {
+                if (myMatchHistory.isEmpty()) {
+                    item(key = "empty_history") {
+                        ProfileEmptyCard(
+                            icon = Icons.Default.History,
+                            title = "Sin historial de partidas",
+                            subtitle = "Tus partidas en solitario, LAN e Internet (salas públicas) aparecerán aquí."
+                        )
+                    }
+                } else {
+                    items(displayedHistory, key = { "hist_${it.id}" }) { match ->
+                        ProfileMatchHistoryRow(
+                            match = match,
+                            game = gamesById[match.gameId],
+                            myUserId = myUserId
+                        )
+                    }
+                    if (myMatchHistory.size > 5) {
+                        item(key = "toggle_history") {
+                            ExpandListButton(
+                                expanded = showAllItems,
+                                totalCount = myMatchHistory.size,
+                                onClick = { showAllItems = !showAllItems }
+                            )
+                        }
+                    }
+                }
+            }
+
+            ProfileActivitySection.ACTIVITY -> {
+                if (myGameStats.isEmpty()) {
+                    item(key = "empty_activity") {
+                        ProfileEmptyCard(
+                            icon = Icons.Default.Schedule,
+                            title = "Sin actividad reciente",
+                            subtitle = "Tu tiempo jugado y número de partidas por juego aparecerán aquí."
+                        )
+                    }
+                } else {
+                    items(displayedStats, key = { "stat_${it.gameId}" }) { stat ->
+                        ProfileActivityRow(
+                            stat = stat,
+                            game = gamesById[stat.gameId]
+                        )
+                    }
+                    if (myGameStats.size > 5) {
+                        item(key = "toggle_stats") {
+                            ExpandListButton(
+                                expanded = showAllItems,
+                                totalCount = myGameStats.size,
+                                onClick = { showAllItems = !showAllItems }
+                            )
+                        }
                     }
                 }
             }

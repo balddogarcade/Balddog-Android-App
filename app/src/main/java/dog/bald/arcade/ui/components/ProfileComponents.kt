@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.UserGameStatDto
@@ -662,4 +664,216 @@ fun formatPlayDuration(totalSeconds: Long): String {
         minutes > 0L -> "${minutes}m ${seconds}s"
         else -> "${seconds}s"
     }
+}
+
+@Composable
+fun ProfileReplayRow(
+    record: MyHighScoreDto,
+    game: GameDto?,
+    loading: Boolean,
+    onWatchReplay: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
+    val sizeKb = record.replaySizeBytes?.let { (it / 1024.0) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(CarbonSurface, RectangleShape)
+            .border(1.dp, CharcoalBorder, RectangleShape)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        GameCoverImage(
+            slug = game?.slug ?: "",
+            contentDescription = game?.title ?: record.gameId,
+            contentScale = ContentScale.Crop,
+            shape = RectangleShape,
+            backgroundColor = ObsidianBlack,
+            modifier = Modifier.size(width = 40.dp, height = 52.dp)
+        )
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = game?.title ?: record.gameId,
+                color = PureWhite,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "${numberFmt.format(record.score)} pts",
+                    color = SilverGray,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+                Text(
+                    text = "#${record.rank}",
+                    color = MutedGray,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 10.sp
+                )
+                if (sizeKb != null && sizeKb > 0) {
+                    Text(
+                        text = "• ${"%.1f".format(sizeKb)} KB",
+                        color = MutedGray,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+
+        OutlinedButton(
+            onClick = { onWatchReplay?.invoke() },
+            enabled = !loading && onWatchReplay != null,
+            shape = RectangleShape,
+            border = BorderStroke(1.dp, PureWhite),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    color = PureWhite,
+                    strokeWidth = 1.5.dp,
+                    modifier = Modifier.size(12.dp)
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = PureWhite,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "VER",
+                    color = PureWhite,
+                    fontSize = 10.sp,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileMatchHistoryRow(
+    match: MatchHistoryDto,
+    game: GameDto?,
+    myUserId: String?,
+    modifier: Modifier = Modifier
+) {
+    val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
+    val modeLabel = when (match.mode.lowercase()) {
+        "lan" -> "LAN"
+        "online" -> "ONLINE"
+        else -> "SOLO"
+    }
+    val companions = remember(match.playersJson, myUserId) {
+        match.playersJson
+            .filter { it.userId != myUserId }
+            .map { it.username }
+    }
+    val dateLabel = remember(match.endedAt, match.startedAt) {
+        formatMatchDate(match.endedAt ?: match.startedAt)
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(CarbonSurface, RectangleShape)
+            .border(1.dp, CharcoalBorder, RectangleShape)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        GameCoverImage(
+            slug = game?.slug ?: "",
+            contentDescription = game?.title ?: match.gameId,
+            contentScale = ContentScale.Crop,
+            shape = RectangleShape,
+            backgroundColor = ObsidianBlack,
+            modifier = Modifier.size(width = 40.dp, height = 52.dp)
+        )
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = game?.title ?: match.gameId,
+                color = PureWhite,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ArcadeBadge(
+                    text = modeLabel,
+                    style = if (match.mode == "local") ArcadeBadgeStyle.Outline else ArcadeBadgeStyle.Solid
+                )
+                if (companions.isNotEmpty()) {
+                    Text(
+                        text = "con ${companions.joinToString(", ")}",
+                        color = SilverGray,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                } else if (match.score != null && match.score > 0L) {
+                    Text(
+                        text = "${numberFmt.format(match.score)} pts",
+                        color = SilverGray,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = formatPlayDuration(match.durationSeconds.toLong()),
+                color = PureWhite,
+                fontFamily = JetBrainsMonoFamily,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp
+            )
+            if (dateLabel.isNotBlank()) {
+                Text(
+                    text = dateLabel,
+                    color = MutedGray,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 9.sp
+                )
+            }
+        }
+    }
+}
+
+private fun formatMatchDate(iso: String): String {
+    if (iso.isBlank()) return ""
+    return runCatching {
+        val instant = java.time.Instant.parse(iso)
+        val zoned = instant.atZone(java.time.ZoneId.systemDefault())
+        java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm").format(zoned)
+    }.getOrElse { "" }
 }

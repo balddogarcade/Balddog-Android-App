@@ -381,4 +381,67 @@ class ArcadeRepository(context: Context) {
             order("play_seconds", Order.DESCENDING)
         }.decodeList<UserGameStatDto>()
     }
+
+    suspend fun recordMatchHistory(
+        clientSessionId: String,
+        gameId: String,
+        mode: String,
+        roomId: String? = null,
+        isPrivate: Boolean = false,
+        players: List<MatchHistoryPlayerDto>,
+        startedAtIso: String,
+        endedAtIso: String,
+        durationSeconds: Int,
+        score: Long? = null,
+    ) {
+        val uid = currentUserId() ?: return
+        if (isPrivate || gameId.isBlank() || clientSessionId.isBlank()) return
+        val effectivePlayers = if (players.isEmpty()) {
+            listOf(MatchHistoryPlayerDto(userId = uid, username = "Jugador", slot = 0))
+        } else {
+            players
+        }
+        val playersJsonArray = kotlinx.serialization.json.buildJsonArray {
+            effectivePlayers.forEach { p ->
+                add(
+                    buildJsonObject {
+                        put("user_id", p.userId)
+                        put("username", p.username)
+                        put("slot", p.slot)
+                    }
+                )
+            }
+        }
+        val participantIdsArray = kotlinx.serialization.json.buildJsonArray {
+            effectivePlayers.map { it.userId }.distinct().forEach { pid ->
+                add(kotlinx.serialization.json.JsonPrimitive(pid))
+            }
+        }
+        val params = buildJsonObject {
+            put("p_client_session_id", clientSessionId)
+            put("p_game_id", gameId)
+            put("p_mode", mode)
+            if (!roomId.isNullOrBlank()) put("p_room_id", roomId)
+            put("p_is_private", false)
+            put("p_players_json", playersJsonArray)
+            put("p_participant_ids", participantIdsArray)
+            put("p_started_at", startedAtIso)
+            put("p_ended_at", endedAtIso)
+            put("p_duration_seconds", durationSeconds.coerceAtLeast(0))
+            if (score != null && score > 0L) put("p_score", score)
+        }
+        client.postgrest.rpc("record_match_history", params)
+    }
+
+    suspend fun fetchMyMatchHistory(
+        limit: Int = 50,
+        offset: Int = 0,
+    ): List<MatchHistoryDto> {
+        if (currentUserId() == null) return emptyList()
+        val params = buildJsonObject {
+            put("p_limit", limit)
+            put("p_offset", offset)
+        }
+        return client.postgrest.rpc("get_my_match_history", params).decodeList<MatchHistoryDto>()
+    }
 }

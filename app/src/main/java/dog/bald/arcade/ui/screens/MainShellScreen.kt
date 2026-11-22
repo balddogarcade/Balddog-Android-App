@@ -77,6 +77,8 @@ import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.IpfsRomManager
+import dog.bald.arcade.data.LeaderboardEntryDto
+import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.ProfileDto
@@ -138,6 +140,7 @@ fun MainShellScreen(
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
     var profile by remember { mutableStateOf<ProfileDto?>(null) }
     var myHighScores by remember { mutableStateOf<List<MyHighScoreDto>>(emptyList()) }
+    var myMatchHistory by remember { mutableStateOf<List<MatchHistoryDto>>(emptyList()) }
     var myGameStats by remember { mutableStateOf<List<UserGameStatDto>>(emptyList()) }
     var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context)) }
     var showDiagnosticsSheet by remember { mutableStateOf(false) }
@@ -198,6 +201,7 @@ fun MainShellScreen(
                     rooms = repo.fetchOpenRooms()
                     profile = repo.fetchMyProfile()
                     myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(emptyList())
+                    myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(emptyList())
                     myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
                     pendingScoreCount = PendingScoreQueue.pendingCount(context)
                     refreshLocalState()
@@ -256,6 +260,7 @@ fun MainShellScreen(
             runCatching {
                 profile = repo.fetchMyProfile()
                 myHighScores = repo.fetchMyHighScores()
+                myMatchHistory = repo.fetchMyMatchHistory()
                 myGameStats = repo.fetchMyGameStats()
                 pendingScoreCount = PendingScoreQueue.pendingCount(context)
             }
@@ -512,9 +517,11 @@ fun MainShellScreen(
                 MainTab.PROFILE -> ProfileScreen(
                     profile = profile,
                     userEmail = userEmail,
+                    myUserId = repo.currentUserId(),
                     avatarSeed = avatarSeed,
                     games = games,
                     myHighScores = myHighScores,
+                    myMatchHistory = myMatchHistory,
                     myGameStats = myGameStats,
                     pendingScoreCount = pendingScoreCount,
                     engineStatus = engineStatus,
@@ -528,6 +535,33 @@ fun MainShellScreen(
                         myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
                     },
                     onOpenLeaderboard = { leaderboardGame = it },
+                    onWatchReplay = { record, game ->
+                        val rPath = record.replayPath
+                        if (!rPath.isNullOrBlank()) {
+                            runCatching {
+                                romManager.ensureGameReady(game, games, biosList) { _, _ -> }
+                                val uid = repo.currentUserId().orEmpty()
+                                val dest = java.io.File(context.cacheDir, "replays/${game.slug}_${uid}.bsv.gz")
+                                repo.downloadReplay(rPath, dest)
+                            }.onSuccess { replayFile ->
+                                val entry = LeaderboardEntryDto(
+                                    rank = record.rank,
+                                    userId = repo.currentUserId().orEmpty(),
+                                    username = profile?.username ?: "Tú",
+                                    score = record.score,
+                                    achievedAt = record.achievedAt,
+                                    replayPath = rPath
+                                )
+                                onLaunchReplay(game, replayFile, entry)
+                            }.onFailure { err ->
+                                android.widget.Toast.makeText(
+                                    context,
+                                    err.toUserMessage("No se pudo abrir el replay"),
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    },
                     onOpenDiagnostics = {
                         engineStatus = runCatching { pingEngine(nativeLibDir) }.getOrNull()
                         logs = getRecentLogs()
