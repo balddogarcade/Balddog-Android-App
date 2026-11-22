@@ -14,6 +14,7 @@ const BTN_UP: u16 = 1 << 4;
 const BTN_DOWN: u16 = 1 << 5;
 const BTN_LEFT: u16 = 1 << 6;
 const BTN_RIGHT: u16 = 1 << 7;
+const BTN_A: u16 = 1 << 8;
 
 fn press_simple(core: &mut LibretroCore, mask: u16, hold: u32, wait: u32) {
     for _ in 0..hold {
@@ -40,20 +41,23 @@ fn decode_bcd_be(bytes: &[u8]) -> Option<u64> {
 }
 
 fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>) {
-    press_simple(core, 0, 0, 850);
+    press_simple(core, 0, 0, 1400);
     let ram_boot = core.system_ram().unwrap_or(&[]).to_vec();
+    press_simple(core, BTN_SELECT, 6, 30);
     press_simple(core, BTN_SELECT, 6, 30);
     let ram_coin = core.system_ram().unwrap_or(&[]).to_vec();
     press_simple(core, BTN_START, 6, 180);
+    press_simple(core, BTN_START, 6, 120);
+    press_simple(core, BTN_A, 6, 60);
     press_simple(core, BTN_B, 6, 60);
     press_simple(core, BTN_Y, 6, 60);
     press_simple(core, BTN_B, 6, 60);
     press_simple(core, BTN_START, 6, 420);
     let ram_s0 = core.system_ram().unwrap_or(&[]).to_vec();
 
-    print!("CREDITS(0->1->0):");
+    print!("CREDITS(0->2->0):");
     for i in 0..ram_boot.len().min(ram_s0.len()) {
-        if ram_boot[i] == 0 && ram_coin[i] == 1 && ram_s0[i] == 0 {
+        if ram_boot[i] == 0 && ram_coin[i] >= 1 && ram_s0[i] == 0 {
             print!(" 0x{i:04X}");
         }
     }
@@ -70,8 +74,9 @@ fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>) {
     let start_off = if ram_s0.len() == 65536 { 0x8000 } else { 0 };
     for step in 0..70 {
         press_simple(core, BTN_RIGHT, 8, 0);
-        press_simple(core, BTN_B, 4, 4);
-        press_simple(core, BTN_Y, 4, 4);
+        press_simple(core, BTN_A, 4, 3);
+        press_simple(core, BTN_B, 4, 3);
+        press_simple(core, BTN_Y, 4, 3);
         if step % 10 == 5 {
             press_simple(core, BTN_DOWN | BTN_B, 6, 4);
         }
@@ -81,23 +86,37 @@ fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>) {
         let dir = if step % 12 < 8 { BTN_RIGHT } else { BTN_LEFT };
         let v = if step % 8 == 0 { BTN_UP } else if step % 8 == 4 { BTN_DOWN } else { 0 };
         press_simple(core, dir | v, 6, 0);
-        press_simple(core, BTN_B, 4, 4);
-        press_simple(core, BTN_Y, 4, 4);
+        press_simple(core, BTN_A, 4, 3);
+        press_simple(core, BTN_B, 4, 3);
+        press_simple(core, BTN_Y, 4, 3);
     }
     let ram_s2 = core.system_ram().unwrap_or(&[]).to_vec();
     if let Some(val_str) = snap_path.and_then(|s| s.strip_prefix("find:")) {
         let target: u64 = val_str.parse().unwrap_or(0);
-        println!("FIND {target} in 0x0000..0xFFFF:");
-        for i in (0..ram_s2.len().saturating_sub(4)).step_by(2) {
-            let sw2 = [ram_s2[i + 1], ram_s2[i], ram_s2[i + 3], ram_s2[i + 2]];
-            if decode_bcd_be(&sw2) == Some(target) {
-                println!("  bcd4_sw @ 0x{i:04X} raw={:02X?}", &ram_s2[i..i + 4]);
+        println!("FIND {target} in 0x0000..0x{:X}:", ram_s2.len());
+        for i in 0..ram_s2.len().saturating_sub(4) {
+            if i % 2 == 0 {
+                let sw2 = [ram_s2[i + 1], ram_s2[i], ram_s2[i + 3], ram_s2[i + 2]];
+                if decode_bcd_be(&sw2) == Some(target) {
+                    println!("  bcd4_sw @ 0x{i:04X} raw={:02X?}", &ram_s2[i..i + 4]);
+                }
+                if u32::from_be_bytes(sw2) as u64 == target {
+                    println!("  u32_sw  @ 0x{i:04X} raw={:02X?}", &ram_s2[i..i + 4]);
+                }
             }
-            if u32::from_be_bytes(sw2) as u64 == target {
-                println!("  u32_sw  @ 0x{i:04X} raw={:02X?}", &ram_s2[i..i + 4]);
+            let b = &ram_s2[i..i + 4];
+            if decode_bcd_be(b) == Some(target) {
+                println!("  bcd4_be @ 0x{i:04X} raw={b:02X?}");
             }
-            if decode_bcd_be(&ram_s2[i..i + 4]) == Some(target) {
-                println!("  bcd4_be @ 0x{i:04X} raw={:02X?}", &ram_s2[i..i + 4]);
+            let le = [b[3], b[2], b[1], b[0]];
+            if decode_bcd_be(&le) == Some(target) {
+                println!("  bcd4_le @ 0x{i:04X} raw={b:02X?}");
+            }
+            if u32::from_be_bytes([b[0], b[1], b[2], b[3]]) as u64 == target {
+                println!("  u32_be  @ 0x{i:04X} raw={b:02X?}");
+            }
+            if u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as u64 == target {
+                println!("  u32_le  @ 0x{i:04X} raw={b:02X?}");
             }
         }
         return;
