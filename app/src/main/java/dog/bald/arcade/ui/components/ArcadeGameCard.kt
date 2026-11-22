@@ -25,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -107,29 +109,16 @@ fun ArcadeGameCard(
                         text = game.system.uppercase(),
                         style = ArcadeBadgeStyle.Overlay
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(ObsidianBlack.copy(alpha = 0.84f))
-                            .border(1.dp, SteelBorder, RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Descargas",
-                            tint = PureWhite,
-                            modifier = Modifier.size(11.dp)
-                        )
-                        Text(
-                            text = "${game.downloadCount}",
-                            color = PureWhite,
-                            fontFamily = JetBrainsMonoFamily,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 10.sp,
-                            letterSpacing = 0.4.sp,
-                            maxLines = 1
+                    OverlayStatPill(
+                        icon = Icons.Default.Download,
+                        contentDescription = "Descargas",
+                        text = "${game.downloadCount}"
+                    )
+                    if (game.totalPlaySeconds > 0L) {
+                        OverlayStatPill(
+                            icon = Icons.Default.Schedule,
+                            contentDescription = "Tiempo jugado",
+                            text = formatCompactDuration(game.totalPlaySeconds)
                         )
                     }
                 }
@@ -192,12 +181,6 @@ fun ArcadeGameCard(
                         val sizeMb = (game.sizeBytes / (1024.0 * 1024.0)).roundToInt().coerceAtLeast(1)
                         ArcadeBadge(
                             text = "$sizeMb MB",
-                            style = ArcadeBadgeStyle.Outline
-                        )
-                    }
-                    if (game.totalPlaySeconds > 0L) {
-                        ArcadeBadge(
-                            text = formatCompactDuration(game.totalPlaySeconds),
                             style = ArcadeBadgeStyle.Outline
                         )
                     }
@@ -273,6 +256,39 @@ fun ArcadeGameCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OverlayStatPill(
+    icon: ImageVector,
+    contentDescription: String,
+    text: String
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(ObsidianBlack.copy(alpha = 0.84f))
+            .border(1.dp, SteelBorder, RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = PureWhite,
+            modifier = Modifier.size(11.dp)
+        )
+        Text(
+            text = text,
+            color = PureWhite,
+            fontFamily = JetBrainsMonoFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 10.sp,
+            letterSpacing = 0.4.sp,
+            maxLines = 1
+        )
     }
 }
 
