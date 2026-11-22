@@ -752,6 +752,7 @@ class GameActivity : ComponentActivity() {
             }
         }
         controllerManager?.stop()
+        flushBestScoreOnExit()
         voiceAudioManager?.release()
         voiceAudioManager = null
         stopVoiceSession()
@@ -868,9 +869,30 @@ class GameActivity : ComponentActivity() {
             "Score trigger recibido: score=$pending eligible=${hud.rankingEligible} credits=$credits"
         )
 
-        if (!hud.rankingEligible || credits > 1 || gameId.isBlank() || romSha256.isBlank()) return
-        if (pending <= lastSubmittedSessionScore) return
-        lastSubmittedSessionScore = pending
+        if (!hud.rankingEligible || credits > 1) return
+        submitOrQueueScore(score = pending, credits = credits, notifyUi = true)
+    }
+
+    private fun flushBestScoreOnExit() {
+        if (isNetplay || scoreDef == null) return
+        val hud = runCatching { getScoreHudInfo() }.getOrNull() ?: return
+        val credits = hud.creditsUsed.toInt()
+        if (!hud.rankingEligible || credits > 1) return
+
+        val candidate = maxOf(hud.pendingSubmitScore.toLong(), hud.bestSessionScore.toLong())
+        if (candidate <= lastSubmittedSessionScore) return
+        acknowledgeScoreSubmit()
+        logFromAndroid(
+            "INFO",
+            "Envío de score al salir: score=$candidate credits=$credits"
+        )
+        submitOrQueueScore(score = candidate, credits = credits, notifyUi = false)
+    }
+
+    private fun submitOrQueueScore(score: Long, credits: Int, notifyUi: Boolean) {
+        if (score <= 0L || gameId.isBlank() || romSha256.isBlank()) return
+        if (score <= lastSubmittedSessionScore) return
+        lastSubmittedSessionScore = score
 
         val appCtx = applicationContext
         val gid = gameId
@@ -880,7 +902,7 @@ class GameActivity : ComponentActivity() {
             val result = runCatching {
                 repo.submitHighScore(
                     gameId = gid,
-                    score = pending,
+                    score = score,
                     romSha256 = sha,
                     creditsUsed = credits,
                     isHardcore = true
@@ -892,9 +914,9 @@ class GameActivity : ComponentActivity() {
                     "INFO",
                     "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}"
                 )
-                if (dto.accepted && dto.isNewRecord) {
+                if (notifyUi && dto.accepted && dto.isNewRecord) {
                     val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
-                    voiceNoticeMsg = "¡Nuevo récord personal: $pending$rankText!"
+                    voiceNoticeMsg = "¡Nuevo récord personal: $score$rankText!"
                 } else if (!dto.accepted) {
                     Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
                 }
@@ -905,13 +927,15 @@ class GameActivity : ComponentActivity() {
                     appCtx,
                     PendingScoreSubmission(
                         gameId = gid,
-                        score = pending,
+                        score = score,
                         romSha256 = sha,
                         creditsUsed = credits,
                         isHardcore = true
                     )
                 )
-                voiceNoticeMsg = "Récord guardado offline ($pending)"
+                if (notifyUi) {
+                    voiceNoticeMsg = "Récord guardado offline ($score)"
+                }
             }
         }
     }
