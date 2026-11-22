@@ -1,5 +1,6 @@
 package dog.bald.arcade
 
+import android.Manifest
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.media.AudioAttributes
@@ -15,19 +16,28 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.HeadsetOff
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -126,6 +136,17 @@ class GameActivity : ComponentActivity() {
     private var voiceListenEnabled by mutableStateOf(false)
     private var voiceVolume by mutableFloatStateOf(1.0f)
     private var voiceHud by mutableStateOf(VoiceHudInfo(false, 0u, 0u))
+    private var voiceNoticeMsg by mutableStateOf<String?>(null)
+
+    private val recordAudioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                voiceMicEnabled = true
+                syncVoiceControls()
+            } else {
+                voiceNoticeMsg = "Permiso de micrófono denegado"
+            }
+        }
 
     private val playTimerLock = Any()
     private var activePlayStartMs: Long? = null
@@ -153,6 +174,9 @@ class GameActivity : ComponentActivity() {
         enableImmersiveMode()
 
         touchConfig = TouchLayoutPrefs.load(this)
+        voiceVolume = getSharedPreferences("balddog_voice_prefs", MODE_PRIVATE)
+            .getFloat("voice_volume", 1.0f)
+            .coerceIn(0f, 1.5f)
 
         val romPath = intent.getStringExtra(EXTRA_ROM_PATH).orEmpty()
         val systemDir = intent.getStringExtra(EXTRA_SYSTEM_DIR).orEmpty()
@@ -256,6 +280,25 @@ class GameActivity : ComponentActivity() {
                     }
                 }
 
+                // Polling rápido de voz para pulso de micrófono, badge de hablante y ducking
+                LaunchedEffect(isNetplay) {
+                    if (isNetplay) {
+                        while (true) {
+                            voiceHud = getVoiceHudState()
+                            val someoneSpeaking = voiceListenEnabled && voiceHud.remoteSpeakingMask.toInt() != 0
+                            setAudioDucking(someoneSpeaking)
+                            delay(150)
+                        }
+                    }
+                }
+
+                LaunchedEffect(voiceNoticeMsg) {
+                    if (voiceNoticeMsg != null) {
+                        delay(3000)
+                        voiceNoticeMsg = null
+                    }
+                }
+
                 // Vigilar estado de la sala en Supabase: si el Host cierra la sala, avisar y desbloquear
                 LaunchedEffect(isNetplay, netplayRoomId) {
                     if (isNetplay && netplayRoomId.isNotBlank()) {
@@ -343,37 +386,131 @@ class GameActivity : ComponentActivity() {
                         }
 
                         if (!showMenu) {
-                            Box(
+                            Row(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 16.dp, end = 20.dp)
-                                    .background(CarbonSurface.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                                    .border(1.dp, if (editLayoutMode) PureWhite else SteelBorder, RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        if (editLayoutMode) {
-                                            editLayoutMode = false
-                                            TouchLayoutPrefs.save(this@GameActivity, touchConfig)
-                                        } else {
-                                            menuStatusMsg = null
-                                            showMenu = true
-                                            updateEnginePaused(true)
+                                    .padding(top = 16.dp, end = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isNetplay) {
+                                    val speakerMask = voiceHud.remoteSpeakingMask.toInt()
+                                    if (voiceListenEnabled && speakerMask != 0) {
+                                        val speakingPlayers = (0 until 4)
+                                            .filter { (speakerMask and (1 shl it)) != 0 }
+                                            .joinToString("·") { "P${it + 1}" }
+                                        if (speakingPlayers.isNotEmpty()) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(PureWhite.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = speakingPlayers,
+                                                    color = PureBlack,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
+                                            }
                                         }
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 5.dp)
-                            ) {
-                                Text(
-                                    text = when {
-                                        editLayoutMode -> "GUARDAR LAYOUT"
-                                        isNetplay -> {
-                                            val pingLabel = if (netplayHud.pingMs > 0u) "${netplayHud.pingMs} ms" else "-- ms"
-                                            "MENU · ${"%.0f".format(currentFps)} FPS · $pingLabel"
+
+                                    // Toggle Micrófono (Mute / Unmute)
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                if (voiceMicEnabled) PureWhite.copy(alpha = 0.18f) else CarbonSurface.copy(alpha = 0.8f),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .border(
+                                                width = if (voiceHud.localSpeaking) 2.dp else 1.dp,
+                                                color = when {
+                                                    voiceHud.localSpeaking -> PureWhite
+                                                    voiceMicEnabled -> SilverGray
+                                                    else -> SteelBorder
+                                                },
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { toggleVoiceMic() }
+                                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (voiceMicEnabled) Icons.Default.Mic else Icons.Default.MicOff,
+                                            contentDescription = if (voiceMicEnabled) "Silenciar micrófono" else "Activar micrófono",
+                                            tint = if (voiceMicEnabled) PureWhite else SilverGray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    // Toggle Audio de otros jugadores (Deafen / Undeafen)
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                if (voiceListenEnabled) PureWhite.copy(alpha = 0.18f) else CarbonSurface.copy(alpha = 0.8f),
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (voiceListenEnabled) SilverGray else SteelBorder,
+                                                shape = RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { toggleVoiceListen() }
+                                            .padding(horizontal = 9.dp, vertical = 5.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (voiceListenEnabled) Icons.Default.Headset else Icons.Default.HeadsetOff,
+                                            contentDescription = if (voiceListenEnabled) "Silenciar a los demás" else "Escuchar a los demás",
+                                            tint = if (voiceListenEnabled) PureWhite else SilverGray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .background(CarbonSurface.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                                        .border(1.dp, if (editLayoutMode) PureWhite else SteelBorder, RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            if (editLayoutMode) {
+                                                editLayoutMode = false
+                                                TouchLayoutPrefs.save(this@GameActivity, touchConfig)
+                                            } else {
+                                                menuStatusMsg = null
+                                                showMenu = true
+                                                updateEnginePaused(true)
+                                            }
                                         }
-                                        else -> "MENU · ${"%.0f".format(currentFps)} FPS"
-                                    },
-                                    color = if (editLayoutMode) PureWhite else SilverGray,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                        .padding(horizontal = 14.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            editLayoutMode -> "GUARDAR LAYOUT"
+                                            isNetplay -> {
+                                                val pingLabel = if (netplayHud.pingMs > 0u) "${netplayHud.pingMs} ms" else "-- ms"
+                                                "MENU · ${"%.0f".format(currentFps)} FPS · $pingLabel"
+                                            }
+                                            else -> "MENU · ${"%.0f".format(currentFps)} FPS"
+                                        },
+                                        color = if (editLayoutMode) PureWhite else SilverGray,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            val notice = voiceNoticeMsg
+                            if (notice != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 52.dp, end = 20.dp)
+                                        .background(CarbonSurface.copy(alpha = 0.92f), RoundedCornerShape(8.dp))
+                                        .border(1.dp, SteelBorder, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(text = notice, color = PureWhite, fontSize = 11.sp)
+                                }
                             }
                             if (isNetplay && netplayHud.reconnecting) {
                                 Box(
@@ -399,6 +536,16 @@ class GameActivity : ComponentActivity() {
                                 hasPhysicalController = hasPhysicalController,
                                 touchConfig = touchConfig,
                                 editLayoutMode = editLayoutMode,
+                                isNetplay = isNetplay,
+                                voiceVolume = voiceVolume,
+                                onVoiceVolumeChange = { updated ->
+                                    voiceVolume = updated
+                                    getSharedPreferences("balddog_voice_prefs", MODE_PRIVATE)
+                                        .edit()
+                                        .putFloat("voice_volume", updated)
+                                        .apply()
+                                    syncVoiceControls()
+                                },
                                 onTouchConfigChange = { updated ->
                                     touchConfig = updated
                                     TouchLayoutPrefs.save(this@GameActivity, updated)
@@ -577,6 +724,39 @@ class GameActivity : ComponentActivity() {
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
         NativeSurfaceBridge.detachSurface()
         stopGame()
+    }
+
+    private fun syncVoiceControls() {
+        setVoiceControls(
+            micEnabled = voiceMicEnabled,
+            listenEnabled = voiceListenEnabled,
+            volume = voiceVolume,
+            paused = false
+        )
+        voiceAudioManager?.setCaptureEnabled(voiceMicEnabled)
+        voiceAudioManager?.setPlaybackEnabled(voiceListenEnabled)
+        if (!voiceListenEnabled) {
+            setAudioDucking(false)
+        }
+    }
+
+    private fun toggleVoiceMic() {
+        if (!voiceMicEnabled) {
+            val hasPerm = voiceAudioManager?.hasRecordPermission() == true
+            if (!hasPerm) {
+                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                return
+            }
+            voiceMicEnabled = true
+        } else {
+            voiceMicEnabled = false
+        }
+        syncVoiceControls()
+    }
+
+    private fun toggleVoiceListen() {
+        voiceListenEnabled = !voiceListenEnabled
+        syncVoiceControls()
     }
 
     private fun updateEnginePaused(paused: Boolean) {

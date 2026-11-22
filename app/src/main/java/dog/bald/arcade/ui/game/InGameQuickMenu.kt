@@ -47,6 +47,9 @@ fun InGameQuickMenu(
     hasPhysicalController: Boolean,
     touchConfig: TouchLayoutConfig,
     editLayoutMode: Boolean,
+    isNetplay: Boolean = false,
+    voiceVolume: Float = 1.0f,
+    onVoiceVolumeChange: (Float) -> Unit = {},
     onTouchConfigChange: (TouchLayoutConfig) -> Unit,
     onToggleEditLayout: () -> Unit,
     onResetLayout: () -> Unit,
@@ -125,6 +128,16 @@ fun InGameQuickMenu(
                 valueRange = 0.75f..1.4f,
                 colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
             )
+
+            if (isNetplay) {
+                Text("Volumen Voz (${(voiceVolume * 100).toInt()}%)", color = PureWhite, fontSize = 12.sp)
+                Slider(
+                    value = voiceVolume,
+                    onValueChange = onVoiceVolumeChange,
+                    valueRange = 0.0f..1.5f,
+                    colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
+                )
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
