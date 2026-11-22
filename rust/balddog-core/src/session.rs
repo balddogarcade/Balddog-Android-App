@@ -68,17 +68,20 @@ pub struct ScoreHudStats {
 }
 
 pub const RETRO_COIN_MASK: u16 = 1 << 2;
+pub const RETRO_START_MASK: u16 = 1 << 3;
 
 /// Rastrea créditos 1CC sin falsos positivos durante la pantalla de arranque del core:
-/// - Ignora pulsaciones de COIN previas a que el juego esté activo (`active == false`),
-///   evitando descalificar si el usuario pulsa COIN antes de que la ROM acepte fichas.
-/// - Descalifica si se inserta cualquier moneda en P1-P4 mientras el juego está activo (`active == true`).
-/// - Descalifica si se inicia una segunda partida/Continue (`active` pasa de `false -> true` > 1 vez),
-///   cerrando también el hueco de fichas precargadas antes de Start.
+/// - No activa el conteo ni la lectura de puntaje hasta que P1 pulsa START al menos una vez
+///   (`player_started == true`), evitando que pulsaciones de COIN durante la carga de la ROM
+///   o valores de attract mode descalifiquen o contaminen el historial.
+/// - Una vez iniciado (`player_started == true`), descalifica si se inserta cualquier moneda
+///   en P1-P4 mientras el juego está activo (`active == true`) o si inicia una 2ª partida
+///   (`active` pasa de `false -> true` > 1 vez, cerrando fichas precargadas).
 #[derive(Debug, Clone, Default)]
 pub struct CoinTracker {
     prev_coins: [bool; 4],
     prev_active: bool,
+    player_started: bool,
     runs_started: u32,
     in_game_coins: u32,
 }
@@ -88,7 +91,23 @@ impl CoinTracker {
         Self::default()
     }
 
+    pub fn has_player_started(&self) -> bool {
+        self.player_started
+    }
+
     pub fn observe_frame(&mut self, active: bool, inputs: &[u16; 4]) -> u8 {
+        if (inputs[0] & RETRO_START_MASK) != 0 {
+            self.player_started = true;
+        }
+
+        if !self.player_started {
+            for (port, &mask) in inputs.iter().enumerate() {
+                self.prev_coins[port] = (mask & RETRO_COIN_MASK) != 0;
+            }
+            self.prev_active = false;
+            return 1;
+        }
+
         if active && !self.prev_active {
             self.runs_started = self.runs_started.saturating_add(1);
         }
@@ -584,19 +603,21 @@ impl EmulationSession {
                                     stats_clone
                                         .credits_used
                                         .store(credits_used, Ordering::Release);
-                                    stats_clone
-                                        .current_score
-                                        .store(out.current_score, Ordering::Relaxed);
-                                    if out.current_score > 0 {
+                                    if coin_tracker.has_player_started() {
                                         stats_clone
-                                            .best_session_score
-                                            .fetch_max(out.current_score, Ordering::Relaxed);
-                                    }
-                                    if let Some(triggered) = out.triggered_score {
-                                        if triggered > 0 {
+                                            .current_score
+                                            .store(out.current_score, Ordering::Relaxed);
+                                        if out.current_score > 0 {
                                             stats_clone
-                                                .pending_submit_score
-                                                .fetch_max(triggered, Ordering::Release);
+                                                .best_session_score
+                                                .fetch_max(out.current_score, Ordering::Relaxed);
+                                        }
+                                        if let Some(triggered) = out.triggered_score {
+                                            if triggered > 0 {
+                                                stats_clone
+                                                    .pending_submit_score
+                                                    .fetch_max(triggered, Ordering::Release);
+                                            }
                                         }
                                     }
                                 }
@@ -799,27 +820,29 @@ impl Drop for EmulationSession {
 
 #[cfg(test)]
 mod tests {
-    use super::{CoinTracker, RETRO_COIN_MASK};
+    use super::{CoinTracker, RETRO_COIN_MASK, RETRO_START_MASK};
 
     #[test]
-    fn coin_presses_during_boot_before_active_do_not_disqualify() {
+    fn coin_presses_during_boot_before_start_do_not_disqualify_even_if_active_is_true() {
         let mut tracker = CoinTracker::new();
         assert_eq!(tracker.credits_used(), 1);
+        assert!(!tracker.has_player_started());
 
-        // User taps COIN 3 times while ROM is still booting (active = false)
+        // Even if ROM boot/attract mode sets active=true, COIN before START is ignored
         for _ in 0..3 {
-            assert_eq!(tracker.observe_frame(false, &[RETRO_COIN_MASK, 0, 0, 0]), 1);
-            assert_eq!(tracker.observe_frame(false, &[0, 0, 0, 0]), 1);
+            assert_eq!(tracker.observe_frame(true, &[RETRO_COIN_MASK, 0, 0, 0]), 1);
+            assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
         }
-        // Game starts (active = true) -> still 1 credit!
-        assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
+        // Player presses START -> game begins with 1 credit
+        assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
+        assert!(tracker.has_player_started());
         assert_eq!(tracker.coins_inserted(), 1);
     }
 
     #[test]
     fn preloaded_coins_used_to_continue_disqualify_1cc() {
         let mut tracker = CoinTracker::new();
-        assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
         // Game Over / Continue screen (active = false)
         assert_eq!(tracker.observe_frame(false, &[0, 0, 0, 0]), 1);
         // Second run started using preloaded credits (active = true again)
@@ -830,7 +853,7 @@ mod tests {
     #[test]
     fn p1_through_p4_in_game_coins_are_counted() {
         let mut tracker = CoinTracker::new();
-        assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
         assert_eq!(tracker.observe_frame(true, &[RETRO_COIN_MASK, 0, 0, 0]), 2);
         assert_eq!(tracker.observe_frame(true, &[0, RETRO_COIN_MASK, 0, 0]), 3);
         assert_eq!(
@@ -843,7 +866,7 @@ mod tests {
     #[test]
     fn coin_counter_saturates_at_u8_max() {
         let mut tracker = CoinTracker::new();
-        assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
         for _ in 0..300 {
             tracker.observe_frame(true, &[RETRO_COIN_MASK, 0, 0, 0]);
             tracker.observe_frame(true, &[0, 0, 0, 0]);

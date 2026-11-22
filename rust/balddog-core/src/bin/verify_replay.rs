@@ -171,12 +171,14 @@ fn main() -> ExitCode {
         if let Some(ram) = core.system_ram() {
             let out = leaderboard.evaluate_frame(ram);
             coin_tracker.observe_frame(out.active, &frame_inputs);
-            if out.current_score > best_score {
-                best_score = out.current_score;
-            }
-            if let Some(trig) = out.triggered_score {
-                if trig > triggered_score {
-                    triggered_score = trig;
+            if coin_tracker.has_player_started() {
+                if out.current_score > best_score {
+                    best_score = out.current_score;
+                }
+                if let Some(trig) = out.triggered_score {
+                    if trig > triggered_score {
+                        triggered_score = trig;
+                    }
                 }
             }
         } else {
