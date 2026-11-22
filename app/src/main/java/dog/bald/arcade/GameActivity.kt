@@ -43,6 +43,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import dog.bald.arcade.audio.VoiceAudioManager
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
@@ -63,15 +64,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.balddog_android.NetplayHudInfo
+import uniffi.balddog_android.VoiceHudInfo
 import uniffi.balddog_android.getCurrentFps
 import uniffi.balddog_android.getNetplayHudStats
+import uniffi.balddog_android.getVoiceHudState
 import uniffi.balddog_android.loadGameState
+import uniffi.balddog_android.pullVoicePlaybackPcm
+import uniffi.balddog_android.pushVoiceCapturePcm
 import uniffi.balddog_android.saveGameState
+import uniffi.balddog_android.setAudioDucking
 import uniffi.balddog_android.setGamePaused
 import uniffi.balddog_android.setPlayerInput
+import uniffi.balddog_android.setVoiceControls
 import uniffi.balddog_android.startGame
 import uniffi.balddog_android.startNetplayGame
+import uniffi.balddog_android.startVoiceSession
 import uniffi.balddog_android.stopGame
+import uniffi.balddog_android.stopVoiceSession
 import java.io.File
 
 class GameActivity : ComponentActivity() {
@@ -98,6 +107,7 @@ class GameActivity : ComponentActivity() {
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null
     private var controllerManager: ControllerManager? = null
+    private var voiceAudioManager: VoiceAudioManager? = null
 
     private var engineError by mutableStateOf<String?>(null)
     private var showMenu by mutableStateOf(false)
@@ -112,6 +122,10 @@ class GameActivity : ComponentActivity() {
     private var netplayRoomId: String = ""
     private var isNetplayHost: Boolean = false
     private var gameId: String = ""
+    private var voiceMicEnabled by mutableStateOf(false)
+    private var voiceListenEnabled by mutableStateOf(false)
+    private var voiceVolume by mutableFloatStateOf(1.0f)
+    private var voiceHud by mutableStateOf(VoiceHudInfo(false, 0u, 0u))
 
     private val playTimerLock = Any()
     private var activePlayStartMs: Long? = null
@@ -188,6 +202,30 @@ class GameActivity : ComponentActivity() {
                     peerAddrs = peerAddrs,
                     inputDelay = inputDelay.toUByte()
                 )
+                val voiceLocalPort = intent.getIntExtra(EXTRA_VOICE_LOCAL_PORT, localPort + 1000)
+                val rawVoiceHandles = intent.getIntArrayExtra(EXTRA_VOICE_PEER_HANDLES) ?: intArrayOf()
+                val voicePeerHandles = ByteArray(rawVoiceHandles.size) { rawVoiceHandles[it].toByte() }
+                val voicePeerAddrs = intent.getStringArrayListExtra(EXTRA_VOICE_PEER_ADDRS) ?: arrayListOf()
+                runCatching {
+                    startVoiceSession(
+                        localPort = voiceLocalPort.toUShort(),
+                        roomId = netplayRoomId.ifBlank { "default-room" },
+                        localPlayerHandle = localHandle.toUByte(),
+                        peerHandles = voicePeerHandles,
+                        peerAddrs = voicePeerAddrs
+                    )
+                    setVoiceControls(
+                        micEnabled = false,
+                        listenEnabled = false,
+                        volume = voiceVolume,
+                        paused = false
+                    )
+                    voiceAudioManager = VoiceAudioManager(
+                        context = this,
+                        onCapturePcm = { frame -> pushVoiceCapturePcm(frame.toList()) },
+                        onPullPlaybackPcm = { maxSamples -> pullVoicePlaybackPcm(maxSamples.toUInt()).toShortArray() }
+                    )
+                }
             } else {
                 startGame(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
@@ -497,6 +535,10 @@ class GameActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         updateEnginePaused(true)
+        if (isNetplay) {
+            voiceAudioManager?.setPaused(true)
+            setVoiceControls(voiceMicEnabled, voiceListenEnabled, voiceVolume, paused = true)
+        }
     }
 
     override fun onResume() {
@@ -504,6 +546,10 @@ class GameActivity : ComponentActivity() {
         enableImmersiveMode()
         if (!showMenu) {
             updateEnginePaused(false)
+        }
+        if (isNetplay) {
+            voiceAudioManager?.setPaused(false)
+            setVoiceControls(voiceMicEnabled, voiceListenEnabled, voiceVolume, paused = false)
         }
     }
 
@@ -525,6 +571,9 @@ class GameActivity : ComponentActivity() {
             }
         }
         controllerManager?.stop()
+        voiceAudioManager?.release()
+        voiceAudioManager = null
+        stopVoiceSession()
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
         NativeSurfaceBridge.detachSurface()
         stopGame()
