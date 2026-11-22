@@ -302,7 +302,7 @@ impl EmulationSession {
                     None
                 };
                 let mut replay_player = initial_replay_player;
-                let mut recorder = if netplay.is_none() && replay_player.is_none() {
+                let mut recorder = if netplay.is_none() && replay_player.is_none() && leaderboard.is_some() {
                     Some(ReplayRecorder::new(0))
                 } else {
                     None

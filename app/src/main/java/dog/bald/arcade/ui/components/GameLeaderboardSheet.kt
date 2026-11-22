@@ -81,8 +81,15 @@ fun GameLeaderboardSheet(
     var data by remember(game.id) { mutableStateOf(GameLeaderboardData()) }
     val currentUid = remember { repo.currentUserId() }
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
+    val hasLeaderboard = !game.scoreConfig?.lboard.isNullOrBlank()
 
-    LaunchedEffect(game.id, refreshKey) {
+    LaunchedEffect(game.id, refreshKey, hasLeaderboard) {
+        if (!hasLeaderboard) {
+            loading = false
+            errorMsg = null
+            data = GameLeaderboardData()
+            return@LaunchedEffect
+        }
         loading = true
         errorMsg = null
         runCatching {
@@ -163,6 +170,24 @@ fun GameLeaderboardSheet(
             Spacer(modifier = Modifier.height(12.dp))
 
             when {
+                !hasLeaderboard -> {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .background(CarbonSurface)
+                            .border(1.dp, CharcoalBorder, RectangleShape)
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Modo Libre: el ranking 1-Crédito y replays para este título estarán disponibles próximamente.\nTu tiempo jugado e historial de partidas sí se registran.",
+                            color = SilverGray,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
                 loading -> {
                     Box(
                         contentAlignment = Alignment.Center,

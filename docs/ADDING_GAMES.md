@@ -349,3 +349,21 @@ adb shell am start -n dog.bald.arcade.debug/dog.bald.arcade.MainActivity
 | **El puntaje en el menú rápido siempre muestra 0** | La dirección de memoria en `score_config` es incorrecta o usa sintaxis LE en lugar de BCD word-swapped. | Ejecutar `ram_probe --scan find:<score>` con el puntaje exacto visible en pantalla para identificar el offset correcto. |
 | **1CC muestra `DISQUALIFIED (>1 CREDIT)`** | El jugador insertó 2 o más monedas en la misma sesión. | Por diseño competitivo, los récords solo son válidos bajo la regla 1CC (1 sola ficha). |
 | **Error 401 Unauthorized al subir a Pinata** | El JWT expiró o se usó solo la API Key pública sin la clave secreta. | Pinata exige JWT Bearer completo o el par `pinata_api_key` + `pinata_secret_api_key`. |
+
+---
+
+## 10. Auditoría de Catálogo sin `score_config`
+
+Los juegos sin `score_config->>'lboard'` funcionan en **Modo Libre** (registran tiempo jugado e historial de partidas, sin grabar replays ni participar en leaderboards 1CC).
+
+Para consultar en Supabase qué títulos del catálogo aún requieren certificación empírica con `ram_probe`:
+
+```sql
+select slug, title, system
+from public.games
+where coalesce(score_config->>'lboard', '') = ''
+order by slug;
+```
+
+Actualmente (tras las migraciones `008`–`014`), 22 de los 30 títulos curados cuentan con `score_config` verificado; restan por certificar con ROM local y `ram_probe`: `btoads`, `nbajam`, `pbobble`, `snowbro2`, `spidman`, `tmnt`, `tmnt2`, `wwfwfestu`.
+
