@@ -901,24 +901,47 @@ private fun PlayerSlotCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = "${slotIndex + 1}P",
                     color = if (occupant != null) PureWhite else MutedGray,
                     fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    modifier = Modifier.align(Alignment.CenterStart)
                 )
+                if (occupant != null) {
+                    val pingText = when {
+                        isMine && !isOnlineRoom -> "LOCAL"
+                        pingMs != null -> "$pingMs ms"
+                        else -> "-- ms"
+                    }
+                    val pingColor = when {
+                        pingMs == null -> MutedGray
+                        pingMs <= 80 -> PureWhite
+                        pingMs <= 150 -> SilverGray
+                        else -> MutedGray
+                    }
+                    Text(
+                        text = pingText,
+                        color = pingColor,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 9.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
                 if (isSlotHost) {
                     Icon(
                         imageVector = Icons.Default.Star,
                         contentDescription = "Anfitrión",
                         tint = PureWhite,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier
+                            .size(12.dp)
+                            .align(Alignment.CenterEnd)
                     )
                 } else if (isMine) {
                     Text(
@@ -926,7 +949,8 @@ private fun PlayerSlotCard(
                         color = SilverGray,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Medium,
-                        fontSize = 9.sp
+                        fontSize = 9.sp,
+                        modifier = Modifier.align(Alignment.CenterEnd)
                     )
                 }
             }
@@ -963,41 +987,22 @@ private fun PlayerSlotCard(
             )
 
             if (occupant != null) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (occupant.ready) Icons.Default.CheckCircle else Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = if (occupant.ready) ReadyGreenAccent else MutedGray,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Text(
-                            text = if (occupant.ready) "LISTO" else "ESPERA",
-                            color = if (occupant.ready) PureWhite else MutedGray,
-                            fontFamily = JetBrainsMonoFamily,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    val pingText = when {
-                        isMine && !isOnlineRoom -> "LOCAL"
-                        pingMs != null -> "$pingMs ms"
-                        else -> "-- ms"
-                    }
-                    val pingColor = when {
-                        pingMs == null -> MutedGray
-                        pingMs <= 80 -> PureWhite
-                        pingMs <= 150 -> SilverGray
-                        else -> MutedGray
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = if (occupant.ready) Icons.Default.CheckCircle else Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = if (occupant.ready) ReadyGreenAccent else MutedGray,
+                        modifier = Modifier.size(10.dp)
+                    )
                     Text(
-                        text = pingText,
-                        color = pingColor,
+                        text = if (occupant.ready) "LISTO" else "ESPERA",
+                        color = if (occupant.ready) PureWhite else MutedGray,
                         fontFamily = JetBrainsMonoFamily,
-                        fontSize = 9.sp
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             } else {
