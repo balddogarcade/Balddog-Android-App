@@ -65,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +77,8 @@ import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.IpfsRomManager
+import dog.bald.arcade.data.MyHighScoreDto
+import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.UserGameStatDto
@@ -84,6 +87,7 @@ import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.AppPreloadScreen
 import dog.bald.arcade.ui.components.ArcadeGameCard
 import dog.bald.arcade.ui.components.ArcadeSearchBar
+import dog.bald.arcade.ui.components.DiagnosticsSheet
 import dog.bald.arcade.ui.components.DiceBearPixelArtAvatar
 import dog.bald.arcade.ui.components.GameLeaderboardSheet
 import dog.bald.arcade.ui.components.GameCoverImage
@@ -125,13 +129,17 @@ fun MainShellScreen(
     onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int, Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(MainTab.CATALOG.ordinal) }
     var isInitialLoading by remember { mutableStateOf(true) }
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
     var profile by remember { mutableStateOf<ProfileDto?>(null) }
+    var myHighScores by remember { mutableStateOf<List<MyHighScoreDto>>(emptyList()) }
     var myGameStats by remember { mutableStateOf<List<UserGameStatDto>>(emptyList()) }
+    var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context)) }
+    var showDiagnosticsSheet by remember { mutableStateOf(false) }
     var userMenuExpanded by remember { mutableStateOf(false) }
     val userEmail = remember(profile) { repo.currentUserEmail() }
     val avatarSeed = remember(userEmail, profile) {
@@ -188,7 +196,9 @@ fun MainShellScreen(
                     biosList = repo.fetchBios()
                     rooms = repo.fetchOpenRooms()
                     profile = repo.fetchMyProfile()
+                    myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(emptyList())
                     myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
+                    pendingScoreCount = PendingScoreQueue.pendingCount(context)
                     refreshLocalState()
                 } catch (t: Throwable) {
                     val msg = t.toUserMessage("Error sincronizando catálogo")
@@ -244,7 +254,9 @@ fun MainShellScreen(
         } else if (MainTab.entries[selectedTab] == MainTab.PROFILE) {
             runCatching {
                 profile = repo.fetchMyProfile()
+                myHighScores = repo.fetchMyHighScores()
                 myGameStats = repo.fetchMyGameStats()
+                pendingScoreCount = PendingScoreQueue.pendingCount(context)
             }
         }
     }
@@ -398,6 +410,15 @@ fun MainShellScreen(
                             }
                         )
                         DropdownMenuItem(
+                            text = { Text("Diagnóstico", color = SilverGray, fontSize = 13.sp) },
+                            onClick = {
+                                userMenuExpanded = false
+                                engineStatus = runCatching { pingEngine(nativeLibDir) }.getOrNull()
+                                logs = getRecentLogs()
+                                showDiagnosticsSheet = true
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Cerrar sesión", color = SilverGray, fontSize = 13.sp) },
                             onClick = {
                                 userMenuExpanded = false
@@ -487,16 +508,29 @@ fun MainShellScreen(
                     }
                 )
 
-                MainTab.PROFILE -> ProfileTab(
+                MainTab.PROFILE -> ProfileScreen(
                     profile = profile,
+                    userEmail = userEmail,
+                    avatarSeed = avatarSeed,
                     games = games,
+                    myHighScores = myHighScores,
                     myGameStats = myGameStats,
+                    pendingScoreCount = pendingScoreCount,
                     engineStatus = engineStatus,
                     cacheBytes = cacheBytes,
-                    logs = logs,
-                    onRefreshLogs = {
+                    onUpdateUsername = { newName ->
+                        profile = repo.updateUsername(newName)
+                    },
+                    onFlushPendingScores = {
+                        PendingScoreQueue.flushAll(context, repo)
+                        pendingScoreCount = PendingScoreQueue.pendingCount(context)
+                        myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
+                    },
+                    onOpenLeaderboard = { leaderboardGame = it },
+                    onOpenDiagnostics = {
                         engineStatus = runCatching { pingEngine(nativeLibDir) }.getOrNull()
                         logs = getRecentLogs()
+                        showDiagnosticsSheet = true
                     },
                     onClearCache = {
                         romManager.clearAllCache()
@@ -518,6 +552,18 @@ fun MainShellScreen(
             game = game,
             repo = repo,
             onDismiss = { leaderboardGame = null }
+        )
+    }
+
+    if (showDiagnosticsSheet) {
+        DiagnosticsSheet(
+            engineStatus = engineStatus,
+            logs = logs,
+            onRefreshLogs = {
+                engineStatus = runCatching { pingEngine(nativeLibDir) }.getOrNull()
+                logs = getRecentLogs()
+            },
+            onDismiss = { showDiagnosticsSheet = false }
         )
     }
 }
@@ -1032,139 +1078,5 @@ private fun RoomsTab(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ProfileTab(
-    profile: ProfileDto?,
-    games: List<GameDto>,
-    myGameStats: List<UserGameStatDto>,
-    engineStatus: EngineStatus?,
-    cacheBytes: Long,
-    logs: List<String>,
-    onRefreshLogs: () -> Unit,
-    onClearCache: () -> Unit,
-    onSignOut: () -> Unit
-) {
-    val cacheMb = cacheBytes / (1024.0 * 1024.0)
-    val gamesById = remember(games) { games.associateBy { it.id } }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-            border = BorderStroke(1.dp, CharcoalBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Perfil: ${profile?.username ?: "Invitado"}", color = PureWhite, fontWeight = FontWeight.Bold)
-                Text(
-                    "Tiempo jugado: ${formatPlayDuration(profile?.totalPlaySeconds ?: 0L)} · Partidas: ${profile?.totalPlays ?: 0}",
-                    color = PureWhite,
-                    fontSize = 12.sp
-                )
-                Text(
-                    "Motor Rust v${engineStatus?.engineVersion ?: "?"} · ${engineStatus?.targetArch ?: "?"} · FBNeo: ${if (engineStatus?.fbneoReady == true) "LISTO" else "NO DETECTADO"}",
-                    color = SilverGray,
-                    fontSize = 12.sp
-                )
-                Text(
-                    "Caché local (ROMs/BIOS/States): ${"%.1f".format(cacheMb)} MB",
-                    color = MutedGray,
-                    fontSize = 12.sp
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onRefreshLogs, border = BorderStroke(1.dp, SteelBorder)) {
-                        Text("PING", color = PureWhite, fontSize = 11.sp)
-                    }
-                    OutlinedButton(onClick = onClearCache, border = BorderStroke(1.dp, SteelBorder)) {
-                        Text("LIMPIAR CACHÉ", color = SilverGray, fontSize = 11.sp)
-                    }
-                    OutlinedButton(onClick = onSignOut, border = BorderStroke(1.dp, CharcoalBorder)) {
-                        Text("SALIR", color = MutedGray, fontSize = 11.sp)
-                    }
-                }
-            }
-        }
-
-        if (myGameStats.isNotEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = CarbonSurface),
-                border = BorderStroke(1.dp, CharcoalBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        "TIEMPO POR JUEGO",
-                        color = MutedGray,
-                        fontSize = 11.sp,
-                        fontFamily = JetBrainsMonoFamily
-                    )
-                    myGameStats.take(5).forEach { stat ->
-                        val title = gamesById[stat.gameId]?.title ?: stat.gameId
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = title,
-                                color = PureWhite,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = formatPlayDuration(stat.playSeconds),
-                                color = SilverGray,
-                                fontSize = 12.sp,
-                                fontFamily = JetBrainsMonoFamily
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(CarbonSurface, androidx.compose.ui.graphics.RectangleShape)
-                .padding(12.dp)
-        ) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                item {
-                    Text(
-                        "LOGS INTERNOS (RUST):",
-                        color = MutedGray,
-                        fontSize = 11.sp,
-                        fontFamily = JetBrainsMonoFamily
-                    )
-                }
-                items(logs) { line ->
-                    Text(
-                        line,
-                        color = SilverGray,
-                        fontSize = 11.sp,
-                        fontFamily = JetBrainsMonoFamily
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun formatPlayDuration(totalSeconds: Long): String {
-    if (totalSeconds <= 0L) return "0m"
-    val hours = totalSeconds / 3600L
-    val minutes = (totalSeconds % 3600L) / 60L
-    val seconds = totalSeconds % 60L
-    return when {
-        hours > 0L -> "${hours}h ${minutes}m"
-        minutes > 0L -> "${minutes}m ${seconds}s"
-        else -> "${seconds}s"
     }
 }
