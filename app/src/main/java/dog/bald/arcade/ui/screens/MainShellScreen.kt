@@ -85,6 +85,7 @@ import dog.bald.arcade.ui.components.AppPreloadScreen
 import dog.bald.arcade.ui.components.ArcadeGameCard
 import dog.bald.arcade.ui.components.ArcadeSearchBar
 import dog.bald.arcade.ui.components.DiceBearPixelArtAvatar
+import dog.bald.arcade.ui.components.GameLeaderboardSheet
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
@@ -145,6 +146,7 @@ fun MainShellScreen(
 
     var activeRoom by remember { mutableStateOf<RoomDto?>(null) }
     var roomNoticeMsg by remember { mutableStateOf<String?>(null) }
+    var leaderboardGame by remember { mutableStateOf<GameDto?>(null) }
     var myUdpPort by remember { mutableIntStateOf(7000) }
     var myEndpoint by remember { mutableStateOf("") }
     var myVoiceUdpPort by remember { mutableIntStateOf(8000) }
@@ -425,7 +427,8 @@ fun MainShellScreen(
                     busy = downloadingGameId != null,
                     onRefresh = { refreshAll() },
                     onDownload = { downloadOnly(it) },
-                    onPlay = { onLaunchLocalRom(it) }
+                    onPlay = { onLaunchLocalRom(it) },
+                    onLeaderboard = { leaderboardGame = it }
                 )
 
                 MainTab.ROOMS -> RoomsTab(
@@ -509,6 +512,14 @@ fun MainShellScreen(
             }
         }
     }
+
+    leaderboardGame?.let { game ->
+        GameLeaderboardSheet(
+            game = game,
+            repo = repo,
+            onDismiss = { leaderboardGame = null }
+        )
+    }
 }
 
 private fun GameDto.matchesQuery(query: String): Boolean {
@@ -528,7 +539,8 @@ private fun CatalogTab(
     busy: Boolean,
     onRefresh: () -> Unit,
     onDownload: (GameDto) -> Unit,
-    onPlay: (GameDto) -> Unit
+    onPlay: (GameDto) -> Unit,
+    onLeaderboard: (GameDto) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -606,7 +618,8 @@ private fun CatalogTab(
                         busy = busy,
                         onPrimaryAction = {
                             if (isDownloaded) onPlay(game) else onDownload(game)
-                        }
+                        },
+                        onLeaderboardClick = { onLeaderboard(game) }
                     )
                 }
             }

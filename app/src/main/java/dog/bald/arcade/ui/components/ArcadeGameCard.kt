@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -67,6 +68,7 @@ fun ArcadeGameCard(
     downloadProgress: Float = 0f,
     busy: Boolean = false,
     onPrimaryAction: () -> Unit,
+    onLeaderboardClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -122,24 +124,49 @@ fun ArcadeGameCard(
                     }
                 }
 
-                if (onDeleteClick != null) {
-                    Box(
-                        contentAlignment = Alignment.Center,
+                if (onLeaderboardClick != null || onDeleteClick != null) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(8.dp)
-                            .size(30.dp)
-                            .clip(RectangleShape)
-                            .background(ObsidianBlack.copy(alpha = 0.84f))
-                            .border(1.dp, CharcoalBorder, RectangleShape)
-                            .clickable(onClick = onDeleteClick)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Eliminar ROM",
-                            tint = SilverGray,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        if (onLeaderboardClick != null) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RectangleShape)
+                                    .background(ObsidianBlack.copy(alpha = 0.84f))
+                                    .border(1.dp, CharcoalBorder, RectangleShape)
+                                    .clickable(onClick = onLeaderboardClick)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.EmojiEvents,
+                                    contentDescription = "Ver ranking",
+                                    tint = PureWhite,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        if (onDeleteClick != null) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RectangleShape)
+                                    .background(ObsidianBlack.copy(alpha = 0.84f))
+                                    .border(1.dp, CharcoalBorder, RectangleShape)
+                                    .clickable(onClick = onDeleteClick)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = "Eliminar ROM",
+                                    tint = SilverGray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
