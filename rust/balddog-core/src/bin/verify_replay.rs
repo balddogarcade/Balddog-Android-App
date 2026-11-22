@@ -165,12 +165,12 @@ fn main() -> ExitCode {
     let mut frames: u64 = 0;
 
     while let Some(frame_inputs) = player.next_frame() {
-        coin_tracker.observe_frame(&frame_inputs);
         core.set_inputs(frame_inputs);
         core.run_frame();
         frames += 1;
         if let Some(ram) = core.system_ram() {
             let out = leaderboard.evaluate_frame(ram);
+            coin_tracker.observe_frame(out.active, &frame_inputs);
             if out.current_score > best_score {
                 best_score = out.current_score;
             }
@@ -179,6 +179,8 @@ fn main() -> ExitCode {
                     triggered_score = trig;
                 }
             }
+        } else {
+            coin_tracker.observe_frame(false, &frame_inputs);
         }
     }
 
