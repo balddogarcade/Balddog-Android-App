@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -100,7 +100,7 @@ fun AuthScreen(
         Card(
             colors = CardDefaults.cardColors(containerColor = CarbonSurface),
             border = BorderStroke(1.dp, CharcoalBorder),
-            shape = RoundedCornerShape(16.dp),
+            shape = RectangleShape,
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(

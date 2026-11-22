@@ -2,7 +2,7 @@ package dog.bald.arcade.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -66,7 +66,7 @@ fun ArcadeSearchBar(
         },
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = PureWhite),
-        shape = RoundedCornerShape(12.dp),
+        shape = RectangleShape,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
         colors = OutlinedTextFieldDefaults.colors(

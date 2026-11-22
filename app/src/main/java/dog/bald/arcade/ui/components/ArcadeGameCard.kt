@@ -19,8 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
@@ -71,7 +70,7 @@ fun ArcadeGameCard(
     onDeleteClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val cardShape = RoundedCornerShape(14.dp)
+    val cardShape = RectangleShape
 
     Card(
         colors = CardDefaults.cardColors(containerColor = CarbonSurface),
@@ -91,7 +90,7 @@ fun ArcadeGameCard(
                     slug = game.slug,
                     contentDescription = game.title,
                     contentScale = ContentScale.Fit,
-                    shape = RoundedCornerShape(0.dp),
+                    shape = RectangleShape,
                     backgroundColor = ObsidianBlack,
                     showBorder = false,
                     modifier = Modifier
@@ -130,9 +129,9 @@ fun ArcadeGameCard(
                             .align(Alignment.TopEnd)
                             .padding(8.dp)
                             .size(30.dp)
-                            .clip(CircleShape)
+                            .clip(RectangleShape)
                             .background(ObsidianBlack.copy(alpha = 0.84f))
-                            .border(1.dp, CharcoalBorder, CircleShape)
+                            .border(1.dp, CharcoalBorder, RectangleShape)
                             .clickable(onClick = onDeleteClick)
                     ) {
                         Icon(
@@ -218,7 +217,7 @@ fun ArcadeGameCard(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp))
+                                    .clip(RectangleShape)
                             )
                         }
                     }
@@ -226,7 +225,7 @@ fun ArcadeGameCard(
                     Button(
                         enabled = !busy,
                         onClick = onPrimaryAction,
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RectangleShape,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isDownloaded) PureWhite else GraphiteSurface,
@@ -269,9 +268,9 @@ private fun OverlayStatPill(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RectangleShape)
             .background(ObsidianBlack.copy(alpha = 0.84f))
-            .border(1.dp, SteelBorder, RoundedCornerShape(6.dp))
+            .border(1.dp, SteelBorder, RectangleShape)
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Icon(

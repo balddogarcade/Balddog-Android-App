@@ -12,3 +12,9 @@ val MutedGray = Color(0xFF8E8E98)
 val SilverGray = Color(0xFFC8C8D0)
 val PureWhite = Color(0xFFFAFAFA)
 val PureBlack = Color(0xFF000000)
+
+// Semantic Action Tokens
+val DangerRed = Color(0xFFC62828)
+val DangerRedBorder = Color(0xFFE53935)
+val ReadyGreen = Color(0xFF2E7D32)
+val ReadyGreenAccent = Color(0xFF4CAF50)

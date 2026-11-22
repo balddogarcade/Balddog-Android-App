@@ -1119,7 +1119,7 @@ private fun ProfileTab(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(CarbonSurface, RoundedCornerShape(10.dp))
+                .background(CarbonSurface, androidx.compose.ui.graphics.RectangleShape)
                 .padding(12.dp)
         ) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
