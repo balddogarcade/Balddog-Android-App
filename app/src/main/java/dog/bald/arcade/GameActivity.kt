@@ -139,6 +139,8 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_VOICE_LOCAL_PORT = "voice_local_port"
         const val EXTRA_VOICE_PEER_HANDLES = "voice_peer_handles"
         const val EXTRA_VOICE_PEER_ADDRS = "voice_peer_addrs"
+
+        private val jsonFormat = Json { ignoreUnknownKeys = true }
     }
 
     private var audioManager: AudioManager? = null
@@ -1015,7 +1017,7 @@ class GameActivity : ComponentActivity() {
             val uid = repo.currentUserId() ?: return@launch
             val players = if (isNetplay) {
                 runCatching {
-                    Json { ignoreUnknownKeys = true }.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
+                    jsonFormat.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
                 }.getOrDefault(emptyList())
             } else {
                 val username = runCatching { repo.fetchMyProfile()?.username }.getOrNull() ?: "Jugador"
