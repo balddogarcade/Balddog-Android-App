@@ -89,7 +89,7 @@ fun AuthScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Arcade with Teeth.",
+            text = "El patio de recreo de los perros calvos.",
             color = MutedGray,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium
