@@ -31,7 +31,15 @@ data class GameDto(
     @SerialName("bios_id") val biosId: String? = null,
     @SerialName("cover_url") val coverUrl: String? = null,
     @SerialName("download_count") val downloadCount: Long = 0L,
-    @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L
+    @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
+    @SerialName("max_valid_score") val maxValidScore: Long? = null,
+    @SerialName("score_config") val scoreConfig: ScoreConfigDto? = null
+)
+
+@Serializable
+data class ScoreConfigDto(
+    val lboard: String = "",
+    val format: String = "rcheevos"
 )
 
 @Serializable
@@ -96,4 +104,29 @@ data class HighScoreDto(
     @SerialName("user_id") val userId: String,
     val score: Long,
     @SerialName("achieved_at") val achievedAt: String = ""
+)
+
+@Serializable
+data class LeaderboardEntryDto(
+    val rank: Long,
+    @SerialName("user_id") val userId: String,
+    val username: String,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("is_anonymous") val isAnonymous: Boolean = false,
+    val score: Long,
+    @SerialName("achieved_at") val achievedAt: String = ""
+)
+
+@Serializable
+data class SubmitScoreResultDto(
+    val accepted: Boolean = false,
+    @SerialName("is_new_record") val isNewRecord: Boolean = false,
+    @SerialName("best_score") val bestScore: Long = 0L,
+    val rank: Long? = null,
+    val reason: String? = null
+)
+
+data class GameLeaderboardData(
+    val entries: List<LeaderboardEntryDto> = emptyList(),
+    val myEntry: LeaderboardEntryDto? = null
 )

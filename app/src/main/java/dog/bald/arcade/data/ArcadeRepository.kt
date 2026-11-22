@@ -194,22 +194,43 @@ class ArcadeRepository(context: Context) {
         client.from("room_messages").insert(payload)
     }
 
-    suspend fun submitHighScore(gameId: String, score: Long) {
-        val uid = currentUserId() ?: return
-        val payload = buildJsonObject {
-            put("game_id", gameId)
-            put("user_id", uid)
-            put("score", score)
+    suspend fun submitHighScore(
+        gameId: String,
+        score: Long,
+        romSha256: String,
+        creditsUsed: Int = 1,
+        isHardcore: Boolean = true,
+    ): SubmitScoreResultDto? {
+        if (currentUserId() == null || gameId.isBlank() || score <= 0L) return null
+        val params = buildJsonObject {
+            put("p_game_id", gameId)
+            put("p_score", score)
+            put("p_rom_sha256", romSha256)
+            put("p_credits_used", creditsUsed)
+            put("p_is_hardcore", isHardcore)
         }
-        client.from("high_scores").insert(payload)
+        return client.postgrest.rpc("submit_high_score", params).decodeAs<SubmitScoreResultDto>()
     }
 
-    suspend fun fetchTopHighScores(gameId: String): List<HighScoreDto> {
-        return client.from("high_scores").select {
-            filter { eq("game_id", gameId) }
-            order("score", Order.DESCENDING)
-            limit(10)
-        }.decodeList<HighScoreDto>()
+    suspend fun fetchGameLeaderboard(
+        gameId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+    ): List<LeaderboardEntryDto> {
+        val params = buildJsonObject {
+            put("p_game_id", gameId)
+            put("p_limit", limit)
+            put("p_offset", offset)
+        }
+        return client.postgrest.rpc("get_game_leaderboard", params).decodeList<LeaderboardEntryDto>()
+    }
+
+    suspend fun fetchMyGameRank(gameId: String): LeaderboardEntryDto? {
+        if (currentUserId() == null) return null
+        val params = buildJsonObject {
+            put("p_game_id", gameId)
+        }
+        return client.postgrest.rpc("get_my_game_rank", params).decodeSingleOrNull<LeaderboardEntryDto>()
     }
 
     suspend fun fetchMyProfile(): ProfileDto? {
