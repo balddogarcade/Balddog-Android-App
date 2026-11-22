@@ -363,6 +363,34 @@ private fun LeaderboardRow(
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
+                when (entry.verificationStatus) {
+                    "verified" -> {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "✓ VERIF.",
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF81C784),
+                            modifier = Modifier
+                                .border(1.dp, Color(0xFF388E3C), RectangleShape)
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                    "pending", "verifying" -> {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "AUDITORÍA",
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SilverGray,
+                            modifier = Modifier
+                                .border(1.dp, CharcoalBorder, RectangleShape)
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
             }
         }
         Spacer(modifier = Modifier.width(8.dp))

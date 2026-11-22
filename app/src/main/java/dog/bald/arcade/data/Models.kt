@@ -115,7 +115,8 @@ data class LeaderboardEntryDto(
     @SerialName("is_anonymous") val isAnonymous: Boolean = false,
     val score: Long,
     @SerialName("achieved_at") val achievedAt: String = "",
-    @SerialName("replay_path") val replayPath: String? = null
+    @SerialName("replay_path") val replayPath: String? = null,
+    @SerialName("verification_status") val verificationStatus: String = "unverified"
 )
 
 @Serializable
@@ -141,7 +142,8 @@ data class MyHighScoreDto(
     val rank: Long,
     @SerialName("total_players") val totalPlayers: Long = 0L,
     @SerialName("replay_path") val replayPath: String? = null,
-    @SerialName("replay_size_bytes") val replaySizeBytes: Int? = null
+    @SerialName("replay_size_bytes") val replaySizeBytes: Int? = null,
+    @SerialName("verification_status") val verificationStatus: String = "unverified"
 )
 
 @Serializable
