@@ -55,6 +55,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import dog.bald.arcade.audio.VoiceAudioManager
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.PendingScoreQueue
+import dog.bald.arcade.data.PendingScoreSubmission
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
 import dog.bald.arcade.input.TouchLayoutConfig
@@ -74,9 +76,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.balddog_android.NetplayHudInfo
+import uniffi.balddog_android.ScoreHudInfo
 import uniffi.balddog_android.VoiceHudInfo
+import uniffi.balddog_android.acknowledgeScoreSubmit
 import uniffi.balddog_android.getCurrentFps
 import uniffi.balddog_android.getNetplayHudStats
+import uniffi.balddog_android.getScoreHudInfo
 import uniffi.balddog_android.getVoiceHudState
 import uniffi.balddog_android.loadGameState
 import uniffi.balddog_android.pullVoicePlaybackPcm
@@ -86,7 +91,7 @@ import uniffi.balddog_android.setAudioDucking
 import uniffi.balddog_android.setGamePaused
 import uniffi.balddog_android.setPlayerInput
 import uniffi.balddog_android.setVoiceControls
-import uniffi.balddog_android.startGame
+import uniffi.balddog_android.startGameWithScore
 import uniffi.balddog_android.startNetplayGame
 import uniffi.balddog_android.startVoiceSession
 import uniffi.balddog_android.stopGame
@@ -100,6 +105,8 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_SYSTEM_DIR = "system_dir"
         const val EXTRA_SAVE_DIR = "save_dir"
         const val EXTRA_GAME_TITLE = "game_title"
+        const val EXTRA_ROM_SHA256 = "rom_sha256"
+        const val EXTRA_SCORE_DEF = "score_def"
         const val EXTRA_NETPLAY_ENABLED = "netplay_enabled"
         const val EXTRA_LOCAL_PORT = "local_port"
         const val EXTRA_LOCAL_HANDLE = "local_handle"
@@ -132,6 +139,10 @@ class GameActivity : ComponentActivity() {
     private var netplayRoomId: String = ""
     private var isNetplayHost: Boolean = false
     private var gameId: String = ""
+    private var romSha256: String = ""
+    private var scoreDef: String? = null
+    private var rankingNoticeShown: Boolean = false
+    private var lastSubmittedSessionScore: Long = 0L
     private var voiceMicEnabled by mutableStateOf(false)
     private var voiceListenEnabled by mutableStateOf(false)
     private var voiceVolume by mutableFloatStateOf(1.0f)
@@ -202,6 +213,8 @@ class GameActivity : ComponentActivity() {
         netplayRoomId = intent.getStringExtra(EXTRA_ROOM_ID).orEmpty()
         isNetplayHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
         gameId = intent.getStringExtra(EXTRA_GAME_ID).orEmpty()
+        romSha256 = intent.getStringExtra(EXTRA_ROM_SHA256).orEmpty()
+        scoreDef = intent.getStringExtra(EXTRA_SCORE_DEF)?.takeIf { it.isNotBlank() }
 
         try {
             if (romPath.isBlank()) {
@@ -251,11 +264,12 @@ class GameActivity : ComponentActivity() {
                     )
                 }
             } else {
-                startGame(
+                startGameWithScore(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
                     romPath = romPath,
                     systemDir = systemDir,
-                    saveDir = saveDir
+                    saveDir = saveDir,
+                    scoreDef = scoreDef
                 )
             }
         } catch (t: Throwable) {
@@ -275,6 +289,9 @@ class GameActivity : ComponentActivity() {
                         }
                         if (!showMenu) {
                             flushPlayTime(force = false)
+                        }
+                        if (!isNetplay && scoreDef != null) {
+                            pollAndSubmitScore(getScoreHudInfo())
                         }
                         delay(500)
                     }
@@ -811,6 +828,61 @@ class GameActivity : ComponentActivity() {
                 runCatching {
                     ArcadeRepository(appCtx).recordPlaySession(gid, deltaToSend, isNewSession)
                 }
+            }
+        }
+    }
+
+    private fun pollAndSubmitScore(hud: ScoreHudInfo) {
+        val credits = hud.creditsUsed.toInt()
+        if ((!hud.rankingEligible || credits > 1) && !rankingNoticeShown) {
+            rankingNoticeShown = true
+            voiceNoticeMsg = if (credits > 1) {
+                "Ranking 1-Crédito desactivado (usaste Continue)"
+            } else {
+                "Ranking desactivado en esta sesión (Save State)"
+            }
+        }
+
+        val pending = hud.pendingSubmitScore.toLong()
+        if (pending <= 0L) return
+        acknowledgeScoreSubmit()
+
+        if (!hud.rankingEligible || credits > 1 || gameId.isBlank() || romSha256.isBlank()) return
+        if (pending <= lastSubmittedSessionScore) return
+        lastSubmittedSessionScore = pending
+
+        val appCtx = applicationContext
+        val gid = gameId
+        val sha = romSha256
+        CoroutineScope(Dispatchers.IO).launch {
+            val repo = ArcadeRepository(appCtx)
+            val result = runCatching {
+                repo.submitHighScore(
+                    gameId = gid,
+                    score = pending,
+                    romSha256 = sha,
+                    creditsUsed = credits,
+                    isHardcore = true
+                )
+            }
+            val dto = result.getOrNull()
+            if (result.isSuccess && dto != null) {
+                if (dto.accepted && dto.isNewRecord) {
+                    val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
+                    voiceNoticeMsg = "¡Nuevo récord personal: $pending$rankText!"
+                }
+            } else {
+                PendingScoreQueue.enqueue(
+                    appCtx,
+                    PendingScoreSubmission(
+                        gameId = gid,
+                        score = pending,
+                        romSha256 = sha,
+                        creditsUsed = credits,
+                        isHardcore = true
+                    )
+                )
+                voiceNoticeMsg = "Récord guardado offline ($pending)"
             }
         }
     }

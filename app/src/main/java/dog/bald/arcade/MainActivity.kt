@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.IpfsRomManager
+import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.AppPreloadScreen
 import dog.bald.arcade.ui.screens.AuthScreen
@@ -65,6 +66,12 @@ class MainActivity : ComponentActivity() {
                     checkingSession = false
                 }
 
+                LaunchedEffect(isAuthenticated) {
+                    if (isAuthenticated) {
+                        PendingScoreQueue.flushAll(this@MainActivity, repo)
+                    }
+                }
+
                 when {
                     checkingSession -> {
                         AppPreloadScreen(message = "Iniciando Bald Dog...")
@@ -93,6 +100,10 @@ class MainActivity : ComponentActivity() {
                                     putExtra(GameActivity.EXTRA_SYSTEM_DIR, systemDir.absolutePath)
                                     putExtra(GameActivity.EXTRA_SAVE_DIR, saveDir.absolutePath)
                                     putExtra(GameActivity.EXTRA_GAME_TITLE, game.title)
+                                    putExtra(GameActivity.EXTRA_ROM_SHA256, game.sha256)
+                                    game.scoreConfig?.lboard?.takeIf { it.isNotBlank() }?.let { lboard ->
+                                        putExtra(GameActivity.EXTRA_SCORE_DEF, lboard)
+                                    }
                                 }
                                 startActivity(intent)
                             },
