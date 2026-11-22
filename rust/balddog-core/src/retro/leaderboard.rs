@@ -232,4 +232,34 @@ mod tests {
         assert!(!out.active);
         assert_eq!(out.triggered_score, Some(500));
     }
+
+    #[test]
+    fn evaluates_captcomm_bcd_word_swapped_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xHA855=1_0xHAA7D>0::CAN:0=1::SUB:0xHA855=0::VAL:A:b0x AA74*10000_M:b0x AA76",
+        )
+        .expect("captcomm lboard válido");
+
+        let mut ram = vec![0u8; 0x10000];
+        // Boot idle
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+
+        // Stage 1 active: P1 active=1, lives=2, score=12,340 -> [0x01, 0x00, 0x40, 0x23]
+        ram[0xA855] = 1;
+        ram[0xAA7D] = 2;
+        ram[0xAA74] = 0x01;
+        ram[0xAA75] = 0x00;
+        ram[0xAA76] = 0x40;
+        ram[0xAA77] = 0x23;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 12340);
+
+        // Game Over: P1 active=0
+        ram[0xA855] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(12340));
+    }
 }
