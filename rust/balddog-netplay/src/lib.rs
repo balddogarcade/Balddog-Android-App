@@ -4,6 +4,8 @@ use std::time::Duration;
 use ggrs::{Config, P2PSession, PlayerType, SessionBuilder, UdpNonBlockingSocket};
 use thiserror::Error;
 
+pub mod voice;
+
 #[derive(Debug, Error)]
 pub enum NetplayError {
     #[error("Error de transporte de red: {0}")]

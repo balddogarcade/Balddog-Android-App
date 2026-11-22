@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUST_DIR="$APP_ROOT/rust"
 source "$SCRIPT_DIR/env.sh"
+export CMAKE_POLICY_VERSION_MINIMUM="${CMAKE_POLICY_VERSION_MINIMUM:-3.5}"
 
 PROFILE="${1:-debug}"
 CARGO_FLAGS=()

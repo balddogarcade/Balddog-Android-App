@@ -10,3 +10,4 @@ thiserror.workspace = true
 serde.workspace = true
 ggrs = "0.10"
 bytemuck = { version = "1.16", features = ["derive"] }
+opus = "0.4"
