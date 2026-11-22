@@ -57,6 +57,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import dog.bald.arcade.audio.VoiceAudioManager
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.MatchHistoryPlayerDto
+import dog.bald.arcade.data.PendingMatchHistoryEntry
+import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.PendingScoreSubmission
 import kotlinx.serialization.json.Json
@@ -1011,19 +1013,39 @@ class GameActivity : ComponentActivity() {
         val playersJsonStr = roomPlayersJson
         val appCtx = applicationContext
         val sessionId = matchSessionId
+        val initialPlayers = if (isNetplay) {
+            runCatching {
+                jsonFormat.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
+            }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+
+        // Write-ahead enqueue so match history is never lost if offline or killed mid-exit
+        val pendingEntry = PendingMatchHistoryEntry(
+            clientSessionId = sessionId,
+            gameId = gid,
+            mode = mode,
+            roomId = roomId,
+            isPrivate = false,
+            players = initialPlayers,
+            startedAtIso = startedIso,
+            endedAtIso = endedIso,
+            durationSeconds = totalSeconds,
+            score = bestScore
+        )
+        PendingMatchHistoryQueue.enqueue(appCtx, pendingEntry)
 
         CoroutineScope(Dispatchers.IO).launch {
             val repo = ArcadeRepository(appCtx)
             val uid = repo.currentUserId() ?: return@launch
             val players = if (isNetplay) {
-                runCatching {
-                    jsonFormat.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
-                }.getOrDefault(emptyList())
+                initialPlayers
             } else {
                 val username = runCatching { repo.fetchMyProfile()?.username }.getOrNull() ?: "Jugador"
                 listOf(MatchHistoryPlayerDto(userId = uid, username = username, slot = 0))
             }
-            runCatching {
+            val result = runCatching {
                 repo.recordMatchHistory(
                     clientSessionId = sessionId,
                     gameId = gid,
@@ -1036,6 +1058,9 @@ class GameActivity : ComponentActivity() {
                     durationSeconds = totalSeconds,
                     score = bestScore
                 )
+            }
+            if (result.isSuccess) {
+                PendingMatchHistoryQueue.removeBySessionId(appCtx, sessionId)
             }
         }
     }

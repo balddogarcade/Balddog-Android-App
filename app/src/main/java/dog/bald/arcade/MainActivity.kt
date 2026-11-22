@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.IpfsRomManager
+import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.AppPreloadScreen
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(isAuthenticated) {
                     if (isAuthenticated) {
                         PendingScoreQueue.flushAll(this@MainActivity, repo)
+                        PendingMatchHistoryQueue.flushAll(this@MainActivity, repo)
                     }
                 }
 

@@ -80,6 +80,7 @@ import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.LeaderboardEntryDto
 import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
+import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.RoomDto
@@ -196,6 +197,7 @@ fun MainShellScreen(
                     syncError = t.toUserMessage("Error conectando con motor nativo")
                 }
                 try {
+                    runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
                     games = repo.fetchGames()
                     biosList = repo.fetchBios()
                     rooms = repo.fetchOpenRooms()
@@ -258,6 +260,7 @@ fun MainShellScreen(
             }
         } else if (MainTab.entries[selectedTab] == MainTab.PROFILE) {
             runCatching {
+                PendingMatchHistoryQueue.flushAll(context, repo)
                 profile = repo.fetchMyProfile()
                 myHighScores = repo.fetchMyHighScores()
                 myMatchHistory = repo.fetchMyMatchHistory()
@@ -531,8 +534,10 @@ fun MainShellScreen(
                     },
                     onFlushPendingScores = {
                         PendingScoreQueue.flushAll(context, repo)
+                        PendingMatchHistoryQueue.flushAll(context, repo)
                         pendingScoreCount = PendingScoreQueue.pendingCount(context)
                         myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
+                        myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(myMatchHistory)
                     },
                     onOpenLeaderboard = { leaderboardGame = it },
                     onWatchReplay = { record, game ->
