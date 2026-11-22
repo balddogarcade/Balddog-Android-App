@@ -64,6 +64,8 @@ import dog.bald.arcade.input.TouchLayoutConfig
 import dog.bald.arcade.input.TouchLayoutPrefs
 import dog.bald.arcade.ui.game.ArcadeTouchOverlay
 import dog.bald.arcade.ui.game.InGameQuickMenu
+import dog.bald.arcade.ui.game.MediaExportHelper
+import dog.bald.arcade.ui.game.ReplayHudOverlay
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.MutedGray
@@ -77,6 +79,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import uniffi.balddog_android.NetplayHudInfo
+import uniffi.balddog_android.ReplayHudInfo
 import uniffi.balddog_android.ScoreHudInfo
 import uniffi.balddog_android.VoiceHudInfo
 import uniffi.balddog_android.acknowledgeScoreSubmit
@@ -155,6 +158,12 @@ class GameActivity : ComponentActivity() {
     private var scoreHud by mutableStateOf(ScoreHudInfo(0u, 0u, 0u, false, 1u))
     private var rankingNoticeShown: Boolean = false
     private var lastSubmittedSessionScore: Long = 0L
+    private var isReplayMode by mutableStateOf(false)
+    private var replayPath: String = ""
+    private var replayPlayerName by mutableStateOf("")
+    private var replayTargetScore by mutableStateOf(0L)
+    private var replayHud by mutableStateOf(ReplayHudInfo(false, 0u, 0u, 1u, false, false))
+    private var exportProgressPct by mutableStateOf<Int?>(null)
     private var voiceMicEnabled by mutableStateOf(false)
     private var voiceListenEnabled by mutableStateOf(false)
     private var voiceVolume by mutableFloatStateOf(1.0f)
@@ -227,10 +236,23 @@ class GameActivity : ComponentActivity() {
         gameId = intent.getStringExtra(EXTRA_GAME_ID).orEmpty()
         romSha256 = intent.getStringExtra(EXTRA_ROM_SHA256).orEmpty()
         scoreDef = intent.getStringExtra(EXTRA_SCORE_DEF)?.takeIf { it.isNotBlank() }
+        replayPath = intent.getStringExtra(EXTRA_REPLAY_PATH).orEmpty()
+        isReplayMode = replayPath.isNotBlank()
+        replayPlayerName = intent.getStringExtra(EXTRA_REPLAY_PLAYER_NAME).orEmpty()
+        replayTargetScore = intent.getLongExtra(EXTRA_REPLAY_TARGET_SCORE, 0L)
 
         try {
             if (romPath.isBlank()) {
                 engineError = "No se especificó ruta de ROM"
+            } else if (isReplayMode) {
+                startReplayGame(
+                    nativeLibDir = applicationInfo.nativeLibraryDir,
+                    romPath = romPath,
+                    systemDir = systemDir,
+                    saveDir = saveDir,
+                    replayPath = replayPath,
+                    scoreDef = scoreDef
+                )
             } else if (isNetplay) {
                 val localPort = intent.getIntExtra(EXTRA_LOCAL_PORT, 7000)
                 val localHandle = intent.getIntExtra(EXTRA_LOCAL_HANDLE, 0)
@@ -306,12 +328,18 @@ class GameActivity : ComponentActivity() {
                         if (!showMenu) {
                             flushPlayTime(force = false)
                         }
-                        if (!isNetplay && scoreDef != null) {
+                        if (!isNetplay && !isReplayMode && scoreDef != null) {
                             val hud = getScoreHudInfo()
                             scoreHud = hud
                             pollAndSubmitScore(hud)
                         }
-                        delay(500)
+                        if (isReplayMode) {
+                            replayHud = getReplayHudInfo()
+                            if (scoreDef != null) {
+                                scoreHud = getScoreHudInfo()
+                            }
+                        }
+                        delay(if (isReplayMode) 200 else 500)
                     }
                 }
 
@@ -407,7 +435,7 @@ class GameActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxSize()
                         )
 
-                        val shouldShowTouch = !hasPhysicalController || touchConfig.forceShowTouch || editLayoutMode
+                        val shouldShowTouch = !isReplayMode && (!hasPhysicalController || touchConfig.forceShowTouch || editLayoutMode)
                         if (shouldShowTouch && !showMenu) {
                             ArcadeTouchOverlay(
                                 config = touchConfig,
@@ -416,6 +444,38 @@ class GameActivity : ComponentActivity() {
                                 onMaskChanged = { mask ->
                                     touchMaskP1 = mask
                                     pushInputToEngine(0)
+                                }
+                            )
+                        }
+                        if (isReplayMode && !showMenu) {
+                            ReplayHudOverlay(
+                                playerName = replayPlayerName,
+                                targetScore = replayTargetScore,
+                                currentScore = scoreHud.currentScore.toLong(),
+                                replayHud = replayHud,
+                                exportProgressPct = exportProgressPct,
+                                onTogglePause = {
+                                    val nextPaused = !replayHud.paused
+                                    updateEnginePaused(nextPaused)
+                                    replayHud = getReplayHudInfo()
+                                },
+                                onRestart = {
+                                    restartReplay()
+                                    updateEnginePaused(false)
+                                },
+                                onSelectSpeed = { spd ->
+                                    setReplaySpeed(spd.toUByte())
+                                    replayHud = getReplayHudInfo()
+                                },
+                                onCaptureScreenshot = {
+                                    captureAndSaveScreenshot(gameTitle.ifBlank { "arcade" })
+                                },
+                                onExportVideoClip = {
+                                    voiceNoticeMsg = "Exportación MP4 disponible en el siguiente paso"
+                                },
+                                onExit = {
+                                    stopGame()
+                                    finish()
                                 }
                             )
                         }
@@ -959,6 +1019,23 @@ class GameActivity : ComponentActivity() {
                 if (notifyUi) {
                     voiceNoticeMsg = "Récord guardado offline ($score)"
                 }
+            }
+        }
+    }
+
+    private fun captureAndSaveScreenshot(title: String) {
+        val appCtx = applicationContext
+        val tmpPng = File(cacheDir, "screenshots/shot_${System.currentTimeMillis()}.png")
+        CoroutineScope(Dispatchers.IO).launch {
+            val captured = runCatching {
+                captureScreenshotPng(tmpPng.absolutePath)
+                MediaExportHelper.savePngToGallery(appCtx, tmpPng, title).getOrThrow()
+            }
+            tmpPng.delete()
+            voiceNoticeMsg = if (captured.isSuccess) {
+                "Captura guardada: ${captured.getOrNull()}"
+            } else {
+                "Error al capturar pantalla"
             }
         }
     }
