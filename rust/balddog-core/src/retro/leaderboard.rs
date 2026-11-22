@@ -275,6 +275,11 @@ mod tests {
             "STA:0xH8155=1::CAN:0=1::SUB:0xH8155=0::VAL:A:b0x 81B6*10000_M:b0x 81B8",
             "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:0x 03FC*65536_M:0x 03FE",
             "STA:0xH004C=1::CAN:0=1::SUB:0xH004C=0::VAL:A:b0x 0206*10000_M:b0x 0208",
+            "STA:0xH0820=1::CAN:0=1::SUB:0xH0820=0::VAL:A:b0x 2000*10000_M:b0x 2002",
+            "STA:0xH000B=1::CAN:0=1::SUB:0xH000B=0::VAL:A:b0x 62CE*10000_M:b0x 62D0",
+            "STA:0xH2453=1::CAN:0=1::SUB:0xH2453=0::VAL:A:b0x 135B2*10000_M:b0x 135B4",
+            "STA:0xH834A=1::CAN:0=1::SUB:0xH834A=0::VAL:A:b0x 834C*10000_M:b0x 834E",
+            "STA:0xH040D=1::CAN:0=1::SUB:0xH040D=0::VAL:A:b0x 3D02*10000_M:b0x 3D04",
         ];
         for def in defs {
             LeaderboardEngine::new(def).unwrap_or_else(|e| panic!("Falló {def}: {e}"));
