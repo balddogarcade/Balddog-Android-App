@@ -262,4 +262,19 @@ mod tests {
         assert!(!out.active);
         assert_eq!(out.triggered_score, Some(12340));
     }
+
+    #[test]
+    fn parses_all_cps_family_leaderboard_expressions() {
+        let defs = [
+            "STA:0xHB345=1::CAN:0=1::SUB:0xHB345=0::VAL:A:b0x B374*10000_M:b0x B376",
+            "STA:0xH8568=1::CAN:0=1::SUB:0xH8568=0::VAL:A:b0x 85EC*10000_M:b0x 85EE",
+            "STA:0xHAC54=1::CAN:0=1::SUB:0xHAC54=0::VAL:A:b0x AC8C*10000_M:b0x AC8E",
+            "STA:0xH125A=1::CAN:0=1::SUB:0xH125A=0::VAL:A:b0x 12C2*10000_M:b0x 12C4",
+            "STA:0xH5AE1=1::CAN:0=1::SUB:0xH5AE1=0::VAL:A:b0x 5BAA*10000_M:b0x 5BAC",
+            "STA:0xH86C8=1::CAN:0=1::SUB:0xH86C8=0::VAL:A:b0x 8748*10000_M:b0x 874A",
+        ];
+        for def in defs {
+            LeaderboardEngine::new(def).unwrap_or_else(|e| panic!("Falló {def}: {e}"));
+        }
+    }
 }
