@@ -1,15 +1,22 @@
 package dog.bald.arcade.data
 
 import android.content.Context
+import dog.bald.arcade.BuildConfig
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.put
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
 import kotlin.random.Random
 
 class ArcadeRepository(context: Context) {
@@ -194,12 +201,77 @@ class ArcadeRepository(context: Context) {
         client.from("room_messages").insert(payload)
     }
 
+    suspend fun uploadReplay(gameId: String, file: File): Triple<String, Int, String>? {
+        val uid = currentUserId() ?: return null
+        val token = client.auth.currentAccessTokenOrNull() ?: return null
+        if (!file.exists() || file.length() <= 0L) return null
+
+        val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+        val sha256 = MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
+        val objectPath = "$gameId/$uid.bsv.gz"
+        val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/object/replays/$objectPath"
+
+        return withContext(Dispatchers.IO) {
+            val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                setRequestProperty("x-upsert", "true")
+                setRequestProperty("Content-Type", "application/gzip")
+            }
+            try {
+                conn.outputStream.use { it.write(bytes) }
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    Triple(objectPath, bytes.size, sha256)
+                } else {
+                    null
+                }
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
+    suspend fun downloadReplay(replayPath: String, destFile: File): File {
+        val cleanPath = replayPath.trimStart('/')
+        val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/object/public/replays/$cleanPath"
+        return withContext(Dispatchers.IO) {
+            destFile.parentFile?.mkdirs()
+            val conn = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+            }
+            try {
+                val code = conn.responseCode
+                if (code !in 200..299) {
+                    error("No se pudo descargar el replay (HTTP $code)")
+                }
+                conn.inputStream.use { input ->
+                    destFile.outputStream().use { output -> input.copyTo(output) }
+                }
+                destFile
+            } finally {
+                conn.disconnect()
+            }
+        }
+    }
+
     suspend fun submitHighScore(
         gameId: String,
         score: Long,
         romSha256: String,
         creditsUsed: Int = 1,
         isHardcore: Boolean = true,
+        replayPath: String? = null,
+        replaySizeBytes: Int? = null,
+        replaySha256: String? = null,
     ): SubmitScoreResultDto? {
         if (currentUserId() == null || gameId.isBlank() || score <= 0L) return null
         val params = buildJsonObject {
@@ -208,6 +280,11 @@ class ArcadeRepository(context: Context) {
             put("p_rom_sha256", romSha256)
             put("p_credits_used", creditsUsed)
             put("p_is_hardcore", isHardcore)
+            if (!replayPath.isNullOrBlank()) {
+                put("p_replay_path", replayPath)
+                replaySizeBytes?.let { put("p_replay_size_bytes", it) }
+                replaySha256?.let { put("p_replay_sha256", it) }
+            }
         }
         return client.postgrest.rpc("submit_high_score", params).decodeAs<SubmitScoreResultDto>()
     }

@@ -126,7 +126,8 @@ fun MainShellScreen(
     onActiveHostRoomChanged: (String?) -> Unit = {},
     onSignedOut: () -> Unit,
     onLaunchLocalRom: (GameDto) -> Unit,
-    onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int, Int) -> Unit
+    onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int, Int) -> Unit,
+    onLaunchReplay: (GameDto, java.io.File, dog.bald.arcade.data.LeaderboardEntryDto) -> Unit = { _, _, _ -> }
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -551,6 +552,25 @@ fun MainShellScreen(
         GameLeaderboardSheet(
             game = game,
             repo = repo,
+            onWatchReplay = { entry ->
+                val rPath = entry.replayPath ?: return@GameLeaderboardSheet
+                scope.launch {
+                    runCatching {
+                        romManager.ensureGameReady(game, games, biosList) { _, _ -> }
+                        val dest = java.io.File(context.cacheDir, "replays/${game.slug}_${entry.userId}.bsv.gz")
+                        repo.downloadReplay(rPath, dest)
+                    }.onSuccess { replayFile ->
+                        leaderboardGame = null
+                        onLaunchReplay(game, replayFile, entry)
+                    }.onFailure { err ->
+                        android.widget.Toast.makeText(
+                            context,
+                            err.toUserMessage("No se pudo abrir el replay"),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            },
             onDismiss = { leaderboardGame = null }
         )
     }

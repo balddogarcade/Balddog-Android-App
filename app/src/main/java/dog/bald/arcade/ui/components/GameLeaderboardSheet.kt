@@ -2,6 +2,7 @@ package dog.bald.arcade.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,6 +71,7 @@ import java.util.Locale
 fun GameLeaderboardSheet(
     game: GameDto,
     repo: ArcadeRepository,
+    onWatchReplay: (LeaderboardEntryDto) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -223,7 +226,10 @@ fun GameLeaderboardSheet(
                             LeaderboardRow(
                                 entry = entry,
                                 isMe = entry.userId == currentUid,
-                                formattedScore = numberFmt.format(entry.score)
+                                formattedScore = numberFmt.format(entry.score),
+                                onWatchReplay = if (!entry.replayPath.isNullOrBlank()) {
+                                    { onWatchReplay(entry) }
+                                } else null
                             )
                         }
                     }
@@ -274,7 +280,8 @@ fun GameLeaderboardSheet(
 private fun LeaderboardRow(
     entry: LeaderboardEntryDto,
     isMe: Boolean,
-    formattedScore: String
+    formattedScore: String,
+    onWatchReplay: (() -> Unit)? = null
 ) {
     val bgColor = if (isMe) GraphiteSurface else CarbonSurface
     val borderColor = if (isMe || entry.rank <= 3L) SteelBorder else CharcoalBorder
@@ -341,5 +348,29 @@ private fun LeaderboardRow(
             fontWeight = FontWeight.Bold,
             color = PureWhite
         )
+        if (onWatchReplay != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .background(PureWhite)
+                    .clickable(onClick = onWatchReplay)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Ver Replay",
+                    tint = PureBlack,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = "REPLAY",
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PureBlack
+                )
+            }
+        }
     }
 }

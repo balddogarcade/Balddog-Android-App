@@ -80,21 +80,27 @@ import uniffi.balddog_android.NetplayHudInfo
 import uniffi.balddog_android.ScoreHudInfo
 import uniffi.balddog_android.VoiceHudInfo
 import uniffi.balddog_android.acknowledgeScoreSubmit
+import uniffi.balddog_android.captureScreenshotPng
+import uniffi.balddog_android.exportRecordedReplay
 import uniffi.balddog_android.getCurrentFps
 import uniffi.balddog_android.getNetplayHudStats
+import uniffi.balddog_android.getReplayHudInfo
 import uniffi.balddog_android.getScoreHudInfo
 import uniffi.balddog_android.getVoiceHudState
 import uniffi.balddog_android.loadGameState
 import uniffi.balddog_android.logFromAndroid
 import uniffi.balddog_android.pullVoicePlaybackPcm
 import uniffi.balddog_android.pushVoiceCapturePcm
+import uniffi.balddog_android.restartReplay
 import uniffi.balddog_android.saveGameState
 import uniffi.balddog_android.setAudioDucking
 import uniffi.balddog_android.setGamePaused
 import uniffi.balddog_android.setPlayerInput
+import uniffi.balddog_android.setReplaySpeed
 import uniffi.balddog_android.setVoiceControls
 import uniffi.balddog_android.startGameWithScore
 import uniffi.balddog_android.startNetplayGame
+import uniffi.balddog_android.startReplayGame
 import uniffi.balddog_android.startVoiceSession
 import uniffi.balddog_android.stopGame
 import uniffi.balddog_android.stopVoiceSession
@@ -118,6 +124,9 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_INPUT_DELAY = "input_delay"
         const val EXTRA_ROOM_ID = "room_id"
         const val EXTRA_IS_HOST = "is_host"
+        const val EXTRA_REPLAY_PATH = "replay_path"
+        const val EXTRA_REPLAY_PLAYER_NAME = "replay_player_name"
+        const val EXTRA_REPLAY_TARGET_SCORE = "replay_target_score"
         const val EXTRA_VOICE_LOCAL_PORT = "voice_local_port"
         const val EXTRA_VOICE_PEER_HANDLES = "voice_peer_handles"
         const val EXTRA_VOICE_PEER_ADDRS = "voice_peer_addrs"
@@ -897,19 +906,32 @@ class GameActivity : ComponentActivity() {
         val appCtx = applicationContext
         val gid = gameId
         val sha = romSha256
+        val replayFile = File(filesDir, "pending_replays/${gid}.bsv.gz")
+        val exportedReplay = runCatching {
+            exportRecordedReplay(replayFile.absolutePath)
+            replayFile.takeIf { it.exists() && it.length() > 0L }
+        }.getOrNull()
+
         CoroutineScope(Dispatchers.IO).launch {
             val repo = ArcadeRepository(appCtx)
+            val uploadedReplay = exportedReplay?.let { file ->
+                runCatching { repo.uploadReplay(gid, file) }.getOrNull()
+            }
             val result = runCatching {
                 repo.submitHighScore(
                     gameId = gid,
                     score = score,
                     romSha256 = sha,
                     creditsUsed = credits,
-                    isHardcore = true
+                    isHardcore = true,
+                    replayPath = uploadedReplay?.first,
+                    replaySizeBytes = uploadedReplay?.second,
+                    replaySha256 = uploadedReplay?.third
                 )
             }
             val dto = result.getOrNull()
             if (result.isSuccess && dto != null) {
+                exportedReplay?.delete()
                 logFromAndroid(
                     "INFO",
                     "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}"
@@ -930,7 +952,8 @@ class GameActivity : ComponentActivity() {
                         score = score,
                         romSha256 = sha,
                         creditsUsed = credits,
-                        isHardcore = true
+                        isHardcore = true,
+                        replayLocalPath = exportedReplay?.absolutePath
                     )
                 )
                 if (notifyUi) {

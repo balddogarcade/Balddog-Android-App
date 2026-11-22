@@ -12,6 +12,7 @@ data class PendingScoreSubmission(
     val romSha256: String,
     val creditsUsed: Int = 1,
     val isHardcore: Boolean = true,
+    val replayLocalPath: String? = null,
     val queuedAtMs: Long = System.currentTimeMillis()
 )
 
@@ -63,13 +64,20 @@ object PendingScoreQueue {
         var syncedCount = 0
 
         for (item in snapshot) {
+            val uploaded = item.replayLocalPath
+                ?.let { java.io.File(it) }
+                ?.takeIf { it.exists() && it.length() > 0L }
+                ?.let { file -> runCatching { repo.uploadReplay(item.gameId, file) }.getOrNull() }
             val result = runCatching {
                 repo.submitHighScore(
                     gameId = item.gameId,
                     score = item.score,
                     romSha256 = item.romSha256,
                     creditsUsed = item.creditsUsed,
-                    isHardcore = item.isHardcore
+                    isHardcore = item.isHardcore,
+                    replayPath = uploaded?.first,
+                    replaySizeBytes = uploaded?.second,
+                    replaySha256 = uploaded?.third
                 )
             }
             val dto = result.getOrNull()

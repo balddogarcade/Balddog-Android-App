@@ -107,6 +107,24 @@ class MainActivity : ComponentActivity() {
                                 }
                                 startActivity(intent)
                             },
+                            onLaunchReplay = { game, replayFile, entry ->
+                                val romFile = File(romsDir, game.romFilename)
+                                val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
+                                    putExtra(GameActivity.EXTRA_GAME_ID, game.id)
+                                    putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
+                                    putExtra(GameActivity.EXTRA_SYSTEM_DIR, systemDir.absolutePath)
+                                    putExtra(GameActivity.EXTRA_SAVE_DIR, saveDir.absolutePath)
+                                    putExtra(GameActivity.EXTRA_GAME_TITLE, game.title)
+                                    putExtra(GameActivity.EXTRA_ROM_SHA256, game.sha256)
+                                    putExtra(GameActivity.EXTRA_REPLAY_PATH, replayFile.absolutePath)
+                                    putExtra(GameActivity.EXTRA_REPLAY_PLAYER_NAME, entry.username)
+                                    putExtra(GameActivity.EXTRA_REPLAY_TARGET_SCORE, entry.score)
+                                    game.scoreConfig?.lboard?.takeIf { it.isNotBlank() }?.let { lboard ->
+                                        putExtra(GameActivity.EXTRA_SCORE_DEF, lboard)
+                                    }
+                                }
+                                startActivity(intent)
+                            },
                             onLaunchNetplayMatch = { game, room, mySlot, localPort, voiceLocalPort ->
                                 val romFile = File(romsDir, game.romFilename)
                                 val peers = room.slotsJson.entries
