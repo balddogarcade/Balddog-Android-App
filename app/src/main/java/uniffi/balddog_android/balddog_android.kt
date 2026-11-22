@@ -1432,7 +1432,8 @@ data class ScoreHudInfo (
     var `currentScore`: kotlin.ULong, 
     var `bestSessionScore`: kotlin.ULong, 
     var `pendingSubmitScore`: kotlin.ULong, 
-    var `rankingEligible`: kotlin.Boolean
+    var `rankingEligible`: kotlin.Boolean, 
+    var `creditsUsed`: kotlin.UByte
 ) {
     
     companion object
@@ -1448,6 +1449,7 @@ public object FfiConverterTypeScoreHudInfo: FfiConverterRustBuffer<ScoreHudInfo>
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterUByte.read(buf),
         )
     }
 
@@ -1455,7 +1457,8 @@ public object FfiConverterTypeScoreHudInfo: FfiConverterRustBuffer<ScoreHudInfo>
             FfiConverterULong.allocationSize(value.`currentScore`) +
             FfiConverterULong.allocationSize(value.`bestSessionScore`) +
             FfiConverterULong.allocationSize(value.`pendingSubmitScore`) +
-            FfiConverterBoolean.allocationSize(value.`rankingEligible`)
+            FfiConverterBoolean.allocationSize(value.`rankingEligible`) +
+            FfiConverterUByte.allocationSize(value.`creditsUsed`)
     )
 
     override fun write(value: ScoreHudInfo, buf: ByteBuffer) {
@@ -1463,6 +1466,7 @@ public object FfiConverterTypeScoreHudInfo: FfiConverterRustBuffer<ScoreHudInfo>
             FfiConverterULong.write(value.`bestSessionScore`, buf)
             FfiConverterULong.write(value.`pendingSubmitScore`, buf)
             FfiConverterBoolean.write(value.`rankingEligible`, buf)
+            FfiConverterUByte.write(value.`creditsUsed`, buf)
     }
 }
 

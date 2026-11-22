@@ -86,6 +86,7 @@ pub struct ScoreHudInfo {
     pub best_session_score: u64,
     pub pending_submit_score: u64,
     pub ranking_eligible: bool,
+    pub credits_used: u8,
 }
 
 #[uniffi::export]
@@ -383,6 +384,7 @@ pub fn get_score_hud_info() -> ScoreHudInfo {
             best_session_score: st.best_session_score,
             pending_submit_score: st.pending_submit_score,
             ranking_eligible: st.ranking_eligible,
+            credits_used: st.credits_used,
         }
     })
     .unwrap_or(ScoreHudInfo {
@@ -390,6 +392,7 @@ pub fn get_score_hud_info() -> ScoreHudInfo {
         best_session_score: 0,
         pending_submit_score: 0,
         ranking_eligible: false,
+        credits_used: 1,
     })
 }
 

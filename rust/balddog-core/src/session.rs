@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -52,6 +52,7 @@ pub struct ScoreHudStats {
     pub best_session_score: u64,
     pub pending_submit_score: u64,
     pub ranking_eligible: bool,
+    pub credits_used: u8,
 }
 
 #[derive(Default)]
@@ -66,6 +67,7 @@ struct SharedStats {
     current_score: AtomicU64,
     best_session_score: AtomicU64,
     pending_submit_score: AtomicU64,
+    credits_used: AtomicU8,
 }
 
 pub struct EmulationSession {
@@ -92,6 +94,7 @@ impl EmulationSession {
         stats
             .ranking_eligible
             .store(netplay.is_none(), Ordering::Release);
+        stats.credits_used.store(1, Ordering::Release);
         let running_clone = Arc::clone(&running);
         let stats_clone = Arc::clone(&stats);
 
@@ -159,6 +162,7 @@ impl EmulationSession {
                 let frame_duration = Duration::from_secs_f64(1.0 / target_fps);
                 let mut paused = false;
                 let mut inputs = [0u16; 4];
+                let mut prev_p1_coin = false;
                 let mut next_frame_at = Instant::now();
                 let mut fps_window_start = Instant::now();
                 let mut frames_in_window: u32 = 0;
@@ -331,12 +335,21 @@ impl EmulationSession {
                             }
                         }
                     } else {
+                        let coin_pressed = (inputs[0] & (1 << 2)) != 0;
                         core.set_inputs(inputs);
                         core.run_frame();
                         if let Some(ref mut lb) = leaderboard {
                             if stats_clone.ranking_eligible.load(Ordering::Relaxed) {
                                 if let Some(ram) = core.system_ram() {
                                     let out = lb.evaluate_frame(ram);
+                                    if out.active && coin_pressed && !prev_p1_coin {
+                                        let cur = stats_clone.credits_used.load(Ordering::Relaxed);
+                                        if cur < u8::MAX {
+                                            stats_clone
+                                                .credits_used
+                                                .store(cur.saturating_add(1), Ordering::Release);
+                                        }
+                                    }
                                     stats_clone
                                         .current_score
                                         .store(out.current_score, Ordering::Relaxed);
@@ -355,6 +368,7 @@ impl EmulationSession {
                                 }
                             }
                         }
+                        prev_p1_coin = coin_pressed;
                     }
 
                     core.take_video_frame(|w, h, rgba| {
@@ -471,6 +485,7 @@ impl EmulationSession {
             best_session_score: self.stats.best_session_score.load(Ordering::Relaxed),
             pending_submit_score: self.stats.pending_submit_score.load(Ordering::Acquire),
             ranking_eligible: self.stats.ranking_eligible.load(Ordering::Acquire),
+            credits_used: self.stats.credits_used.load(Ordering::Acquire),
         }
     }
 
