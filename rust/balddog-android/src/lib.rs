@@ -2,11 +2,13 @@
 mod jni_surface;
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use balddog_core::audio::engine::set_global_ducking;
-use balddog_core::session::EmulationSession;
+use balddog_core::retro::core::LibretroCore;
+use balddog_core::retro::replay::ReplayPlayer;
+use balddog_core::session::{clear_deterministic_nvram, EmulationSession};
 use balddog_core::{engine_info, recent_logs, record_log, CoreError};
 use balddog_netplay::voice::{VoicePeerEndpoint, VoiceSession, VoiceSessionConfig};
 use balddog_netplay::{
@@ -489,4 +491,133 @@ pub fn capture_screenshot_png(dest_path: String) -> Result<(), EngineBridgeError
             detail: "No hay partida activa".into(),
         }),
     }
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OfflineReplayMeta {
+    pub width: u32,
+    pub height: u32,
+    pub fps: f64,
+    pub sample_rate: u32,
+    pub total_frames: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OfflineVideoFrame {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+    pub frame_index: u64,
+}
+
+struct OfflineRendererInner {
+    core: LibretroCore,
+    player: ReplayPlayer,
+    meta: OfflineReplayMeta,
+    last_w: u32,
+    last_h: u32,
+    last_rgba: Vec<u8>,
+}
+
+#[derive(uniffi::Object)]
+pub struct OfflineReplayRenderer {
+    inner: Mutex<OfflineRendererInner>,
+}
+
+#[uniffi::export]
+impl OfflineReplayRenderer {
+    pub fn metadata(&self) -> OfflineReplayMeta {
+        self.inner
+            .lock()
+            .map(|g| g.meta.clone())
+            .unwrap_or(OfflineReplayMeta {
+                width: 384,
+                height: 224,
+                fps: 60.0,
+                sample_rate: 44100,
+                total_frames: 0,
+            })
+    }
+
+    pub fn step_frame(&self) -> Option<OfflineVideoFrame> {
+        let mut guard = self.inner.lock().ok()?;
+        let frame_inputs = guard.player.next_frame()?;
+        let frame_index = guard.player.current_frame();
+        guard.core.set_inputs(frame_inputs);
+        guard.core.run_frame();
+        let mut out_w = guard.last_w;
+        let mut out_h = guard.last_h;
+        let mut out_rgba = Vec::new();
+        guard.core.take_video_frame(|w, h, rgba| {
+            out_w = w;
+            out_h = h;
+            out_rgba = rgba.to_vec();
+        });
+        guard.core.take_audio_samples(|_| {});
+        if !out_rgba.is_empty() {
+            guard.last_w = out_w;
+            guard.last_h = out_h;
+            guard.last_rgba = out_rgba.clone();
+        } else {
+            out_rgba = guard.last_rgba.clone();
+        }
+        if out_rgba.is_empty() {
+            let w = guard.meta.width.max(2);
+            let h = guard.meta.height.max(2);
+            out_w = w;
+            out_h = h;
+            out_rgba = vec![0u8; (w * h * 4) as usize];
+        }
+        Some(OfflineVideoFrame {
+            width: out_w,
+            height: out_h,
+            rgba: out_rgba,
+            frame_index,
+        })
+    }
+}
+
+#[uniffi::export]
+pub fn open_offline_replay_renderer(
+    native_lib_dir: String,
+    rom_path: String,
+    system_dir: String,
+    save_dir: String,
+    replay_path: String,
+) -> Result<std::sync::Arc<OfflineReplayRenderer>, EngineBridgeError> {
+    stop_game();
+    let rom_pb = PathBuf::from(&rom_path);
+    let save_pb = PathBuf::from(&save_dir);
+    clear_deterministic_nvram(&save_pb, &rom_pb);
+
+    let player = ReplayPlayer::from_gzip_file(Path::new(&replay_path), None).map_err(|e| {
+        EngineBridgeError::Core {
+            detail: format!("Replay inválido: {e}"),
+        }
+    })?;
+    let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
+    let mut core = LibretroCore::load(&core_path, Path::new(&system_dir), &save_pb)?;
+    let av = core.load_game(&rom_pb)?;
+    let fps = if av.timing.fps > 10.0 {
+        av.timing.fps
+    } else {
+        60.0
+    };
+    let meta = OfflineReplayMeta {
+        width: av.geometry.base_width.max(2),
+        height: av.geometry.base_height.max(2),
+        fps,
+        sample_rate: av.timing.sample_rate.max(8000.0) as u32,
+        total_frames: player.total_frames(),
+    };
+    Ok(std::sync::Arc::new(OfflineReplayRenderer {
+        inner: Mutex::new(OfflineRendererInner {
+            core,
+            player,
+            meta,
+            last_w: 0,
+            last_h: 0,
+            last_rgba: Vec::new(),
+        }),
+    }))
 }

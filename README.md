@@ -21,6 +21,10 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
   - Strict **1CC (One Coin Clear)** enforcement: scores are only submitted if completed with 1 credit.
   - In-game live score indicator & 1CC eligibility in `InGameQuickMenu`.
   - Global Top 50 leaderboards and personal rank sheets with offline score queuing (`PendingScoreQueue`).
+- **Deterministic Replays & Media Export (`.bsv.gz` / MP4)**:
+  - Automatic frame-by-frame `BSV1` input recording (gzip-compressed) during ranked 1CC sessions, stored in Supabase Storage.
+  - Watch any Top 50 replay from `GameLeaderboardSheet` with `1x / 2x / 4x` speed controls, play/pause, restart, and progress HUD (`ReplayHudOverlay`).
+  - Export PNG screenshots (`Pictures/balddog ARCADE/`) and H.264 MP4 video clips (`Movies/balddog ARCADE/`) locally via Android `MediaCodec` + `MediaMuxer` + `MediaStore`.
 - **Adaptive Controls**:
   - Physical gamepad support (`ControllerManager`, `RetroJoypad`).
   - Customizable touch overlay (`ArcadeTouchOverlay`, `TouchLayoutPrefs`) and in-game quick menu (`InGameQuickMenu`).
@@ -118,7 +122,8 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 5. `supabase/migrations/005_leaderboards_schema.sql` — High scores table with `UNIQUE(game_id, user_id)` and strict client RLS.
 6. `supabase/migrations/006_leaderboard_rpcs.sql` — Atomic RPCs (`submit_high_score`, `get_game_leaderboard`, `get_my_game_rank`).
 7. `supabase/migrations/007_seed_score_configs.sql` — Initial `score_config` seed with verified `max_valid_score`.
-8. `supabase/migrations/008_seed_captcomm_score_config.sql`..`012_seed_remaining_score_configs.sql` — Empirical RAM expressions for verified games (CPS-1, CPS-2, Neo Geo, Toaplan, Konami, etc.).
+8. `supabase/migrations/008_seed_captcomm_score_config.sql`..`014_seed_mslug3_viostorm_score_configs.sql` — Empirical RAM expressions for 22 verified games (CPS-1, CPS-2, Neo Geo, Toaplan, Konami, Irem, Data East, Technos, etc.).
+9. `supabase/migrations/015_replays_storage_and_schema.sql` — `replays` Storage bucket, `high_scores.replay_path` columns, and updated leaderboard RPCs.
 
 ---
 

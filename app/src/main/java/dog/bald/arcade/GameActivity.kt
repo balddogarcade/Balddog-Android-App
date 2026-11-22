@@ -66,6 +66,7 @@ import dog.bald.arcade.ui.game.ArcadeTouchOverlay
 import dog.bald.arcade.ui.game.InGameQuickMenu
 import dog.bald.arcade.ui.game.MediaExportHelper
 import dog.bald.arcade.ui.game.ReplayHudOverlay
+import dog.bald.arcade.ui.game.ReplayVideoExporter
 import dog.bald.arcade.ui.theme.BaldDogArcadeTheme
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.MutedGray
@@ -471,7 +472,12 @@ class GameActivity : ComponentActivity() {
                                     captureAndSaveScreenshot(gameTitle.ifBlank { "arcade" })
                                 },
                                 onExportVideoClip = {
-                                    voiceNoticeMsg = "Exportación MP4 disponible en el siguiente paso"
+                                    exportReplayVideoClip(
+                                        romPath = romPath,
+                                        systemDir = systemDir,
+                                        saveDir = saveDir,
+                                        title = gameTitle.ifBlank { "arcade" }
+                                    )
                                 },
                                 onExit = {
                                     stopGame()
@@ -1036,6 +1042,49 @@ class GameActivity : ComponentActivity() {
                 "Captura guardada: ${captured.getOrNull()}"
             } else {
                 "Error al capturar pantalla"
+            }
+        }
+    }
+
+    private fun exportReplayVideoClip(
+        romPath: String,
+        systemDir: String,
+        saveDir: String,
+        title: String,
+    ) {
+        if (exportProgressPct != null || replayPath.isBlank()) return
+        exportProgressPct = 0
+        val appCtx = applicationContext
+        val nativeDir = applicationInfo.nativeLibraryDir
+        val rPath = replayPath
+        val sDef = scoreDef
+        CoroutineScope(Dispatchers.IO).launch {
+            stopGame()
+            val res = ReplayVideoExporter.exportToGallery(
+                context = appCtx,
+                nativeLibDir = nativeDir,
+                romPath = romPath,
+                systemDir = systemDir,
+                saveDir = saveDir,
+                replayPath = rPath,
+                gameTitle = title,
+                onProgress = { pct -> exportProgressPct = pct }
+            )
+            exportProgressPct = null
+            runCatching {
+                startReplayGame(
+                    nativeLibDir = nativeDir,
+                    romPath = romPath,
+                    systemDir = systemDir,
+                    saveDir = saveDir,
+                    replayPath = rPath,
+                    scoreDef = sDef
+                )
+            }
+            voiceNoticeMsg = if (res.isSuccess) {
+                "Clip MP4 guardado en Movies/balddog ARCADE"
+            } else {
+                "Error exportando MP4: ${res.exceptionOrNull()?.message ?: "desconocido"}"
             }
         }
     }

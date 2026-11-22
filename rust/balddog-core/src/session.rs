@@ -105,7 +105,7 @@ pub struct EmulationSession {
     thread: Option<JoinHandle<()>>,
 }
 
-fn clear_deterministic_nvram(save_dir: &Path, rom_path: &Path) {
+pub fn clear_deterministic_nvram(save_dir: &Path, rom_path: &Path) {
     let Some(stem) = rom_path.file_stem().and_then(|s| s.to_str()) else {
         return;
     };
