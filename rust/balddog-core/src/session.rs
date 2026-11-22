@@ -1,5 +1,6 @@
 use std::ffi::c_void;
-use std::path::PathBuf;
+use std::io::BufWriter;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -14,6 +15,7 @@ use ggrs::{GgrsEvent, GgrsRequest, InputStatus, SessionState};
 use crate::audio::engine::AudioEngine;
 use crate::retro::core::LibretroCore;
 use crate::retro::leaderboard::LeaderboardEngine;
+use crate::retro::replay::{ReplayPlayer, ReplayRecorder};
 use crate::video::renderer::WgpuRenderer;
 use crate::{record_log, CoreError};
 
@@ -43,6 +45,16 @@ pub enum SessionCommand {
         path: PathBuf,
         ack: Sender<Result<(), CoreError>>,
     },
+    SetReplaySpeed(u8),
+    RestartReplay,
+    ExportReplay {
+        path: PathBuf,
+        ack: Sender<Result<u64, CoreError>>,
+    },
+    CaptureScreenshot {
+        path: PathBuf,
+        ack: Sender<Result<(), CoreError>>,
+    },
     Stop,
 }
 
@@ -53,6 +65,16 @@ pub struct ScoreHudStats {
     pub pending_submit_score: u64,
     pub ranking_eligible: bool,
     pub credits_used: u8,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReplayHudStats {
+    pub is_replay: bool,
+    pub current_frame: u64,
+    pub total_frames: u64,
+    pub speed: u8,
+    pub paused: bool,
+    pub finished: bool,
 }
 
 #[derive(Default)]
@@ -68,6 +90,12 @@ struct SharedStats {
     best_session_score: AtomicU64,
     pending_submit_score: AtomicU64,
     credits_used: AtomicU8,
+    is_replay: AtomicBool,
+    replay_current_frame: AtomicU64,
+    replay_total_frames: AtomicU64,
+    replay_speed: AtomicU8,
+    replay_paused: AtomicBool,
+    replay_finished: AtomicBool,
 }
 
 pub struct EmulationSession {
@@ -75,6 +103,41 @@ pub struct EmulationSession {
     running: Arc<AtomicBool>,
     stats: Arc<SharedStats>,
     thread: Option<JoinHandle<()>>,
+}
+
+fn clear_deterministic_nvram(save_dir: &Path, rom_path: &Path) {
+    let Some(stem) = rom_path.file_stem().and_then(|s| s.to_str()) else {
+        return;
+    };
+    let fbneo_dir = save_dir.join("fbneo");
+    for dir in [save_dir, fbneo_dir.as_path()] {
+        for ext in ["nv", "eeprom", "fs", "hi"] {
+            let p = dir.join(format!("{stem}.{ext}"));
+            if p.exists() {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+    }
+}
+
+fn write_png_rgba(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<(), CoreError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| CoreError::State(format!("No se pudo crear directorio PNG: {e}")))?;
+    }
+    let file = std::fs::File::create(path)
+        .map_err(|e| CoreError::State(format!("No se pudo crear PNG: {e}")))?;
+    let writer = BufWriter::new(file);
+    let mut encoder = png::Encoder::new(writer, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut png_writer = encoder
+        .write_header()
+        .map_err(|e| CoreError::State(format!("Error header PNG: {e}")))?;
+    png_writer
+        .write_image_data(rgba)
+        .map_err(|e| CoreError::State(format!("Error datos PNG: {e}")))?;
+    Ok(())
 }
 
 impl EmulationSession {
@@ -86,21 +149,71 @@ impl EmulationSession {
         netplay: Option<NetplaySessionConfig>,
         score_def: Option<String>,
     ) -> Result<Self, CoreError> {
+        Self::start_internal(core_path, rom_path, system_dir, save_dir, netplay, score_def, None)
+    }
+
+    pub fn start_replay(
+        core_path: PathBuf,
+        rom_path: PathBuf,
+        system_dir: PathBuf,
+        save_dir: PathBuf,
+        replay_path: PathBuf,
+        score_def: Option<String>,
+    ) -> Result<Self, CoreError> {
+        Self::start_internal(
+            core_path,
+            rom_path,
+            system_dir,
+            save_dir,
+            None,
+            score_def,
+            Some(replay_path),
+        )
+    }
+
+    fn start_internal(
+        core_path: PathBuf,
+        rom_path: PathBuf,
+        system_dir: PathBuf,
+        save_dir: PathBuf,
+        netplay: Option<NetplaySessionConfig>,
+        score_def: Option<String>,
+        replay_path: Option<PathBuf>,
+    ) -> Result<Self, CoreError> {
         let (cmd_tx, cmd_rx) = unbounded::<SessionCommand>();
         let (init_tx, init_rx) = bounded::<Result<(), CoreError>>(1);
+
+        let is_replay_mode = replay_path.is_some();
+        let initial_replay_player = match replay_path {
+            Some(ref rp) => Some(
+                ReplayPlayer::from_gzip_file(rp, None)
+                    .map_err(|e| CoreError::Init(format!("Replay inválido: {e}")))?,
+            ),
+            None => None,
+        };
 
         let running = Arc::new(AtomicBool::new(true));
         let stats = Arc::new(SharedStats::default());
         stats
             .ranking_eligible
-            .store(netplay.is_none(), Ordering::Release);
+            .store(netplay.is_none() && !is_replay_mode, Ordering::Release);
         stats.credits_used.store(1, Ordering::Release);
+        stats.is_replay.store(is_replay_mode, Ordering::Release);
+        stats.replay_speed.store(1, Ordering::Release);
+        if let Some(ref p) = initial_replay_player {
+            stats
+                .replay_total_frames
+                .store(p.total_frames(), Ordering::Release);
+        }
         let running_clone = Arc::clone(&running);
         let stats_clone = Arc::clone(&stats);
 
         let thread = std::thread::Builder::new()
             .name("balddog-emu".to_string())
             .spawn(move || {
+                if is_replay_mode || (netplay.is_none() && score_def.is_some()) {
+                    clear_deterministic_nvram(&save_dir, &rom_path);
+                }
                 let mut core = match LibretroCore::load(&core_path, &system_dir, &save_dir) {
                     Ok(c) => c,
                     Err(e) => {
@@ -152,6 +265,14 @@ impl EmulationSession {
                 } else {
                     None
                 };
+                let mut replay_player = initial_replay_player;
+                let mut recorder = if netplay.is_none() && replay_player.is_none() {
+                    Some(ReplayRecorder::new(0))
+                } else {
+                    None
+                };
+                let mut replay_speed: u8 = 1;
+                let mut last_frame_rgba: Option<(u32, u32, Vec<u8>)> = None;
                 let _ = init_tx.send(Ok(()));
 
                 let target_fps = if av_info.timing.fps > 10.0 {
@@ -194,11 +315,48 @@ impl EmulationSession {
                                 // En netplay no pausamos la simulación para no desincronizar el reloj
                                 if ggrs_session.is_none() {
                                     paused = p;
+                                    stats_clone.replay_paused.store(p, Ordering::Release);
                                 }
                                 if let Some(a) = &audio {
                                     a.set_paused(p);
                                 }
                                 next_frame_at = Instant::now();
+                            }
+                            SessionCommand::SetReplaySpeed(spd) => {
+                                replay_speed = match spd {
+                                    4 => 4,
+                                    2 => 2,
+                                    _ => 1,
+                                };
+                                stats_clone.replay_speed.store(replay_speed, Ordering::Release);
+                            }
+                            SessionCommand::RestartReplay => {
+                                if let Some(ref mut p) = replay_player {
+                                    clear_deterministic_nvram(&save_dir, &rom_path);
+                                    if core.load_game(&rom_path).is_ok() {
+                                        p.restart();
+                                        stats_clone.replay_current_frame.store(0, Ordering::Release);
+                                        stats_clone.replay_finished.store(false, Ordering::Release);
+                                        stats_clone.current_score.store(0, Ordering::Release);
+                                    }
+                                }
+                            }
+                            SessionCommand::ExportReplay { path, ack } => {
+                                let res = match recorder.as_ref() {
+                                    Some(rec) => rec
+                                        .write_gzip_file(&path)
+                                        .map(|bytes| bytes as u64)
+                                        .map_err(|e| CoreError::State(format!("Error exportando replay: {e}"))),
+                                    None => Err(CoreError::State("No hay grabación de replay activa".into())),
+                                };
+                                let _ = ack.send(res);
+                            }
+                            SessionCommand::CaptureScreenshot { path, ack } => {
+                                let res = match last_frame_rgba.as_ref() {
+                                    Some((w, h, rgba)) => write_png_rgba(&path, *w, *h, rgba),
+                                    None => Err(CoreError::State("Aún no hay frame renderizado".into())),
+                                };
+                                let _ = ack.send(res);
                             }
                             SessionCommand::SetInput { port, mask } => {
                                 if port < 4 {
@@ -334,8 +492,43 @@ impl EmulationSession {
                                 }
                             }
                         }
+                    } else if let Some(ref mut player) = replay_player {
+                        let steps = if player.is_finished() { 0 } else { replay_speed.max(1) };
+                        for step_idx in 0..steps {
+                            let Some(frame_inputs) = player.next_frame() else {
+                                stats_clone.replay_finished.store(true, Ordering::Release);
+                                break;
+                            };
+                            core.set_inputs(frame_inputs);
+                            core.run_frame();
+                            if let Some(ref mut lb) = leaderboard {
+                                if let Some(ram) = core.system_ram() {
+                                    let out = lb.evaluate_frame(ram);
+                                    stats_clone.current_score.store(out.current_score, Ordering::Relaxed);
+                                    if out.current_score > 0 {
+                                        stats_clone.best_session_score.fetch_max(out.current_score, Ordering::Relaxed);
+                                    }
+                                }
+                            }
+                            if let Some(a) = &mut audio {
+                                core.take_audio_samples(|samples| {
+                                    if replay_speed == 1 && step_idx == 0 {
+                                        a.push_samples(samples);
+                                    }
+                                });
+                            }
+                        }
+                        stats_clone
+                            .replay_current_frame
+                            .store(player.current_frame(), Ordering::Relaxed);
+                        if player.is_finished() {
+                            stats_clone.replay_finished.store(true, Ordering::Release);
+                        }
                     } else {
                         let coin_pressed = (inputs[0] & (1 << 2)) != 0;
+                        if let Some(ref mut rec) = recorder {
+                            rec.push_frame(inputs);
+                        }
                         core.set_inputs(inputs);
                         core.run_frame();
                         if let Some(ref mut lb) = leaderboard {
@@ -372,13 +565,16 @@ impl EmulationSession {
                     }
 
                     core.take_video_frame(|w, h, rgba| {
+                        last_frame_rgba = Some((w, h, rgba.to_vec()));
                         renderer.render_frame(w, h, rgba);
                     });
 
-                    if let Some(a) = &mut audio {
-                        core.take_audio_samples(|samples| {
-                            a.push_samples(samples);
-                        });
+                    if !is_replay_mode {
+                        if let Some(a) = &mut audio {
+                            core.take_audio_samples(|samples| {
+                                a.push_samples(samples);
+                            });
+                        }
                     }
 
                     frames_in_window += 1;
@@ -491,6 +687,45 @@ impl EmulationSession {
 
     pub fn acknowledge_score_submit(&self) {
         self.stats.pending_submit_score.store(0, Ordering::Release);
+    }
+
+    pub fn set_replay_speed(&self, speed: u8) {
+        let _ = self.cmd_tx.send(SessionCommand::SetReplaySpeed(speed));
+    }
+
+    pub fn restart_replay(&self) {
+        let _ = self.cmd_tx.send(SessionCommand::RestartReplay);
+    }
+
+    pub fn replay_hud_stats(&self) -> ReplayHudStats {
+        ReplayHudStats {
+            is_replay: self.stats.is_replay.load(Ordering::Acquire),
+            current_frame: self.stats.replay_current_frame.load(Ordering::Relaxed),
+            total_frames: self.stats.replay_total_frames.load(Ordering::Relaxed),
+            speed: self.stats.replay_speed.load(Ordering::Relaxed),
+            paused: self.stats.replay_paused.load(Ordering::Relaxed),
+            finished: self.stats.replay_finished.load(Ordering::Acquire),
+        }
+    }
+
+    pub fn export_recorded_replay(&self, path: PathBuf) -> Result<u64, CoreError> {
+        let (ack_tx, ack_rx) = bounded(1);
+        self.cmd_tx
+            .send(SessionCommand::ExportReplay { path, ack: ack_tx })
+            .map_err(|_| CoreError::State("Sesión detenida".into()))?;
+        ack_rx
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| CoreError::State("Timeout exportando replay".into()))?
+    }
+
+    pub fn capture_screenshot_png(&self, path: PathBuf) -> Result<(), CoreError> {
+        let (ack_tx, ack_rx) = bounded(1);
+        self.cmd_tx
+            .send(SessionCommand::CaptureScreenshot { path, ack: ack_tx })
+            .map_err(|_| CoreError::State("Sesión detenida".into()))?;
+        ack_rx
+            .recv_timeout(Duration::from_secs(3))
+            .map_err(|_| CoreError::State("Timeout capturando pantalla".into()))?
     }
 
     pub fn current_fps(&self) -> f32 {

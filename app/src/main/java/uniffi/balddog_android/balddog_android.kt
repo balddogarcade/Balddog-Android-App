@@ -757,6 +757,18 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -774,13 +786,19 @@ internal interface UniffiLib : Library {
 
     fun uniffi_balddog_android_fn_func_acknowledge_score_submit(uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_balddog_android_fn_func_capture_screenshot_png(`destPath`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_balddog_android_fn_func_discover_public_udp_endpoint(`localPort`: Short,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_balddog_android_fn_func_export_recorded_replay(`destPath`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     fun uniffi_balddog_android_fn_func_get_current_fps(uniffi_out_err: UniffiRustCallStatus, 
     ): Float
     fun uniffi_balddog_android_fn_func_get_netplay_hud_stats(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_balddog_android_fn_func_get_recent_logs(uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    fun uniffi_balddog_android_fn_func_get_replay_hud_info(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     fun uniffi_balddog_android_fn_func_get_score_hud_info(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -796,6 +814,8 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_balddog_android_fn_func_push_voice_capture_pcm(`samples`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_balddog_android_fn_func_restart_replay(uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_balddog_android_fn_func_save_game_state(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_set_audio_ducking(`enabled`: Byte,uniffi_out_err: UniffiRustCallStatus, 
@@ -804,6 +824,8 @@ internal interface UniffiLib : Library {
     ): Unit
     fun uniffi_balddog_android_fn_func_set_player_input(`port`: Byte,`mask`: Short,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    fun uniffi_balddog_android_fn_func_set_replay_speed(`speed`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_balddog_android_fn_func_set_voice_controls(`micEnabled`: Byte,`listenEnabled`: Byte,`volume`: Float,`paused`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_start_game(`nativeLibDir`: RustBuffer.ByValue,`romPath`: RustBuffer.ByValue,`systemDir`: RustBuffer.ByValue,`saveDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -811,6 +833,8 @@ internal interface UniffiLib : Library {
     fun uniffi_balddog_android_fn_func_start_game_with_score(`nativeLibDir`: RustBuffer.ByValue,`romPath`: RustBuffer.ByValue,`systemDir`: RustBuffer.ByValue,`saveDir`: RustBuffer.ByValue,`scoreDef`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_start_netplay_game(`nativeLibDir`: RustBuffer.ByValue,`romPath`: RustBuffer.ByValue,`systemDir`: RustBuffer.ByValue,`saveDir`: RustBuffer.ByValue,`localPort`: Short,`localPlayerHandle`: Byte,`numPlayers`: Byte,`peerHandles`: RustBuffer.ByValue,`peerAddrs`: RustBuffer.ByValue,`inputDelay`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_balddog_android_fn_func_start_replay_game(`nativeLibDir`: RustBuffer.ByValue,`romPath`: RustBuffer.ByValue,`systemDir`: RustBuffer.ByValue,`saveDir`: RustBuffer.ByValue,`replayPath`: RustBuffer.ByValue,`scoreDef`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_start_voice_session(`localPort`: Short,`roomId`: RustBuffer.ByValue,`localPlayerHandle`: Byte,`peerHandles`: RustBuffer.ByValue,`peerAddrs`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -932,13 +956,19 @@ internal interface UniffiLib : Library {
     ): Unit
     fun uniffi_balddog_android_checksum_func_acknowledge_score_submit(
     ): Short
+    fun uniffi_balddog_android_checksum_func_capture_screenshot_png(
+    ): Short
     fun uniffi_balddog_android_checksum_func_discover_public_udp_endpoint(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_export_recorded_replay(
     ): Short
     fun uniffi_balddog_android_checksum_func_get_current_fps(
     ): Short
     fun uniffi_balddog_android_checksum_func_get_netplay_hud_stats(
     ): Short
     fun uniffi_balddog_android_checksum_func_get_recent_logs(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_get_replay_hud_info(
     ): Short
     fun uniffi_balddog_android_checksum_func_get_score_hud_info(
     ): Short
@@ -954,6 +984,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_balddog_android_checksum_func_push_voice_capture_pcm(
     ): Short
+    fun uniffi_balddog_android_checksum_func_restart_replay(
+    ): Short
     fun uniffi_balddog_android_checksum_func_save_game_state(
     ): Short
     fun uniffi_balddog_android_checksum_func_set_audio_ducking(
@@ -962,6 +994,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_balddog_android_checksum_func_set_player_input(
     ): Short
+    fun uniffi_balddog_android_checksum_func_set_replay_speed(
+    ): Short
     fun uniffi_balddog_android_checksum_func_set_voice_controls(
     ): Short
     fun uniffi_balddog_android_checksum_func_start_game(
@@ -969,6 +1003,8 @@ internal interface UniffiLib : Library {
     fun uniffi_balddog_android_checksum_func_start_game_with_score(
     ): Short
     fun uniffi_balddog_android_checksum_func_start_netplay_game(
+    ): Short
+    fun uniffi_balddog_android_checksum_func_start_replay_game(
     ): Short
     fun uniffi_balddog_android_checksum_func_start_voice_session(
     ): Short
@@ -996,7 +1032,13 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_balddog_android_checksum_func_acknowledge_score_submit() != 64277.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_balddog_android_checksum_func_capture_screenshot_png() != 24041.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_balddog_android_checksum_func_discover_public_udp_endpoint() != 28096.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_export_recorded_replay() != 64937.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_get_current_fps() != 62321.toShort()) {
@@ -1006,6 +1048,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_get_recent_logs() != 19578.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_get_replay_hud_info() != 20639.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_get_score_hud_info() != 14663.toShort()) {
@@ -1029,6 +1074,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_balddog_android_checksum_func_push_voice_capture_pcm() != 17803.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_balddog_android_checksum_func_restart_replay() != 65088.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_balddog_android_checksum_func_save_game_state() != 60917.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1041,6 +1089,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
     if (lib.uniffi_balddog_android_checksum_func_set_player_input() != 1666.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_balddog_android_checksum_func_set_replay_speed() != 60691.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_balddog_android_checksum_func_set_voice_controls() != 32594.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1051,6 +1102,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_start_netplay_game() != 27986.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_start_replay_game() != 14665.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_start_voice_session() != 32372.toShort()) {
@@ -1428,6 +1482,54 @@ public object FfiConverterTypeNetplayHudInfo: FfiConverterRustBuffer<NetplayHudI
 
 
 
+data class ReplayHudInfo (
+    var `isReplay`: kotlin.Boolean, 
+    var `currentFrame`: kotlin.ULong, 
+    var `totalFrames`: kotlin.ULong, 
+    var `speed`: kotlin.UByte, 
+    var `paused`: kotlin.Boolean, 
+    var `finished`: kotlin.Boolean
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeReplayHudInfo: FfiConverterRustBuffer<ReplayHudInfo> {
+    override fun read(buf: ByteBuffer): ReplayHudInfo {
+        return ReplayHudInfo(
+            FfiConverterBoolean.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterUByte.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ReplayHudInfo) = (
+            FfiConverterBoolean.allocationSize(value.`isReplay`) +
+            FfiConverterULong.allocationSize(value.`currentFrame`) +
+            FfiConverterULong.allocationSize(value.`totalFrames`) +
+            FfiConverterUByte.allocationSize(value.`speed`) +
+            FfiConverterBoolean.allocationSize(value.`paused`) +
+            FfiConverterBoolean.allocationSize(value.`finished`)
+    )
+
+    override fun write(value: ReplayHudInfo, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`isReplay`, buf)
+            FfiConverterULong.write(value.`currentFrame`, buf)
+            FfiConverterULong.write(value.`totalFrames`, buf)
+            FfiConverterUByte.write(value.`speed`, buf)
+            FfiConverterBoolean.write(value.`paused`, buf)
+            FfiConverterBoolean.write(value.`finished`, buf)
+    }
+}
+
+
+
 data class ScoreHudInfo (
     var `currentScore`: kotlin.ULong, 
     var `bestSessionScore`: kotlin.ULong, 
@@ -1660,11 +1762,30 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
     
     
 
+    @Throws(EngineBridgeException::class) fun `captureScreenshotPng`(`destPath`: kotlin.String)
+        = 
+    uniffiRustCallWithError(EngineBridgeException) { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_capture_screenshot_png(
+        FfiConverterString.lower(`destPath`),_status)
+}
+    
+    
+
     @Throws(EngineBridgeException::class) fun `discoverPublicUdpEndpoint`(`localPort`: kotlin.UShort): kotlin.String {
             return FfiConverterString.lift(
     uniffiRustCallWithError(EngineBridgeException) { _status ->
     UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_discover_public_udp_endpoint(
         FfiConverterUShort.lower(`localPort`),_status)
+}
+    )
+    }
+    
+
+    @Throws(EngineBridgeException::class) fun `exportRecordedReplay`(`destPath`: kotlin.String): kotlin.ULong {
+            return FfiConverterULong.lift(
+    uniffiRustCallWithError(EngineBridgeException) { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_export_recorded_replay(
+        FfiConverterString.lower(`destPath`),_status)
 }
     )
     }
@@ -1691,6 +1812,15 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
             return FfiConverterSequenceString.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_get_recent_logs(
+        _status)
+}
+    )
+    }
+    
+ fun `getReplayHudInfo`(): ReplayHudInfo {
+            return FfiConverterTypeReplayHudInfo.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_get_replay_hud_info(
         _status)
 }
     )
@@ -1758,6 +1888,14 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
 }
     
     
+ fun `restartReplay`()
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_restart_replay(
+        _status)
+}
+    
+    
 
     @Throws(EngineBridgeException::class) fun `saveGameState`(`path`: kotlin.String)
         = 
@@ -1788,6 +1926,14 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_set_player_input(
         FfiConverterUByte.lower(`port`),FfiConverterUShort.lower(`mask`),_status)
+}
+    
+    
+ fun `setReplaySpeed`(`speed`: kotlin.UByte)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_set_replay_speed(
+        FfiConverterUByte.lower(`speed`),_status)
 }
     
     
@@ -1823,6 +1969,15 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
     uniffiRustCallWithError(EngineBridgeException) { _status ->
     UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_start_netplay_game(
         FfiConverterString.lower(`nativeLibDir`),FfiConverterString.lower(`romPath`),FfiConverterString.lower(`systemDir`),FfiConverterString.lower(`saveDir`),FfiConverterUShort.lower(`localPort`),FfiConverterUByte.lower(`localPlayerHandle`),FfiConverterUByte.lower(`numPlayers`),FfiConverterByteArray.lower(`peerHandles`),FfiConverterSequenceString.lower(`peerAddrs`),FfiConverterUByte.lower(`inputDelay`),_status)
+}
+    
+    
+
+    @Throws(EngineBridgeException::class) fun `startReplayGame`(`nativeLibDir`: kotlin.String, `romPath`: kotlin.String, `systemDir`: kotlin.String, `saveDir`: kotlin.String, `replayPath`: kotlin.String, `scoreDef`: kotlin.String?)
+        = 
+    uniffiRustCallWithError(EngineBridgeException) { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_start_replay_game(
+        FfiConverterString.lower(`nativeLibDir`),FfiConverterString.lower(`romPath`),FfiConverterString.lower(`systemDir`),FfiConverterString.lower(`saveDir`),FfiConverterString.lower(`replayPath`),FfiConverterOptionalString.lower(`scoreDef`),_status)
 }
     
     

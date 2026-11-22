@@ -89,6 +89,16 @@ pub struct ScoreHudInfo {
     pub credits_used: u8,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ReplayHudInfo {
+    pub is_replay: bool,
+    pub current_frame: u64,
+    pub total_frames: u64,
+    pub speed: u8,
+    pub paused: bool,
+    pub finished: bool,
+}
+
 #[uniffi::export]
 pub fn ping_engine(native_lib_dir: String) -> Result<EngineStatus, EngineBridgeError> {
     let info = engine_info(&native_lib_dir)?;
@@ -399,4 +409,84 @@ pub fn get_score_hud_info() -> ScoreHudInfo {
 #[uniffi::export]
 pub fn acknowledge_score_submit() {
     with_active_session(|s| s.acknowledge_score_submit());
+}
+
+#[uniffi::export]
+pub fn start_replay_game(
+    native_lib_dir: String,
+    rom_path: String,
+    system_dir: String,
+    save_dir: String,
+    replay_path: String,
+    score_def: Option<String>,
+) -> Result<(), EngineBridgeError> {
+    stop_game();
+    let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
+    let session = EmulationSession::start_replay(
+        core_path,
+        PathBuf::from(rom_path),
+        PathBuf::from(system_dir),
+        PathBuf::from(save_dir),
+        PathBuf::from(replay_path),
+        score_def,
+    )?;
+    if let Ok(mut guard) = session_slot().lock() {
+        *guard = Some(session);
+    }
+    Ok(())
+}
+
+#[uniffi::export]
+pub fn set_replay_speed(speed: u8) {
+    with_active_session(|s| s.set_replay_speed(speed));
+}
+
+#[uniffi::export]
+pub fn restart_replay() {
+    with_active_session(|s| s.restart_replay());
+}
+
+#[uniffi::export]
+pub fn get_replay_hud_info() -> ReplayHudInfo {
+    with_active_session(|s| {
+        let st = s.replay_hud_stats();
+        ReplayHudInfo {
+            is_replay: st.is_replay,
+            current_frame: st.current_frame,
+            total_frames: st.total_frames,
+            speed: st.speed,
+            paused: st.paused,
+            finished: st.finished,
+        }
+    })
+    .unwrap_or(ReplayHudInfo {
+        is_replay: false,
+        current_frame: 0,
+        total_frames: 0,
+        speed: 1,
+        paused: false,
+        finished: false,
+    })
+}
+
+#[uniffi::export]
+pub fn export_recorded_replay(dest_path: String) -> Result<u64, EngineBridgeError> {
+    let res = with_active_session(|s| s.export_recorded_replay(PathBuf::from(dest_path)));
+    match res {
+        Some(r) => Ok(r?),
+        None => Err(EngineBridgeError::Core {
+            detail: "No hay partida activa".into(),
+        }),
+    }
+}
+
+#[uniffi::export]
+pub fn capture_screenshot_png(dest_path: String) -> Result<(), EngineBridgeError> {
+    let res = with_active_session(|s| s.capture_screenshot_png(PathBuf::from(dest_path)));
+    match res {
+        Some(r) => Ok(r?),
+        None => Err(EngineBridgeError::Core {
+            detail: "No hay partida activa".into(),
+        }),
+    }
 }
