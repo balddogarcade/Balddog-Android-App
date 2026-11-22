@@ -1,0 +1,223 @@
+//! Grabador y reproductor de replays deterministas en formato estándar
+//! Libretro `.bsv` v1 (`BSV1`) comprimido con `gzip`.
+
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
+
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use thiserror::Error;
+
+const BSV_MAGIC: [u8; 4] = *b"BSV1";
+const BSV_HEADER_LEN: usize = 16;
+const BYTES_PER_FRAME: usize = 8; // [u16; 4] little-endian
+
+#[derive(Debug, Error)]
+pub enum ReplayError {
+    #[error("Error de E/S en replay: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Cabecera BSV1 inválida o archivo corrupto")]
+    InvalidHeader,
+    #[error("CRC32 de ROM no coincide: esperado 0x{expected:08x}, archivo 0x{actual:08x}")]
+    RomCrcMismatch { expected: u32, actual: u32 },
+    #[error("Datos de frames truncados en archivo .bsv")]
+    TruncatedFrames,
+}
+
+/// Graba los inputs `[u16; 4]` frame a frame para exportarlos en `.bsv.gz`.
+#[derive(Debug, Clone)]
+pub struct ReplayRecorder {
+    rom_crc32: u32,
+    frames: Vec<[u16; 4]>,
+}
+
+impl ReplayRecorder {
+    pub fn new(rom_crc32: u32) -> Self {
+        Self {
+            rom_crc32,
+            frames: Vec::with_capacity(60 * 60 * 5),
+        }
+    }
+
+    pub fn push_frame(&mut self, inputs: [u16; 4]) {
+        self.frames.push(inputs);
+    }
+
+    pub fn frame_count(&self) -> u64 {
+        self.frames.len() as u64
+    }
+
+    pub fn rom_crc32(&self) -> u32 {
+        self.rom_crc32
+    }
+
+    pub fn to_bsv_bytes(&self) -> Vec<u8> {
+        let mut raw = Vec::with_capacity(BSV_HEADER_LEN + self.frames.len() * BYTES_PER_FRAME);
+        raw.extend_from_slice(&BSV_MAGIC);
+        raw.extend_from_slice(&self.rom_crc32.to_le_bytes());
+        raw.extend_from_slice(&0u32.to_le_bytes()); // state_size = 0 (arranque limpio)
+        raw.extend_from_slice(&0u32.to_le_bytes()); // reserved / flags = 0
+        for frame in &self.frames {
+            for port in frame {
+                raw.extend_from_slice(&port.to_le_bytes());
+            }
+        }
+        raw
+    }
+
+    pub fn to_gzip_bytes(&self) -> Result<Vec<u8>, ReplayError> {
+        let raw = self.to_bsv_bytes();
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&raw)?;
+        Ok(encoder.finish()?)
+    }
+
+    pub fn write_gzip_file(&self, path: &Path) -> Result<usize, ReplayError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let gz = self.to_gzip_bytes()?;
+        let mut file = File::create(path)?;
+        file.write_all(&gz)?;
+        Ok(gz.len())
+    }
+}
+
+/// Reproduce un stream `.bsv` v1 (`BSV1`) descomprimido desde `.bsv.gz`.
+#[derive(Debug, Clone)]
+pub struct ReplayPlayer {
+    rom_crc32: u32,
+    initial_state: Vec<u8>,
+    frames: Vec<[u16; 4]>,
+    cursor: usize,
+}
+
+impl ReplayPlayer {
+    pub fn from_bsv_bytes(raw: &[u8], expected_rom_crc32: Option<u32>) -> Result<Self, ReplayError> {
+        if raw.len() < BSV_HEADER_LEN || raw[0..4] != BSV_MAGIC {
+            return Err(ReplayError::InvalidHeader);
+        }
+        let rom_crc32 = u32::from_le_bytes([raw[4], raw[5], raw[6], raw[7]]);
+        if let Some(expected) = expected_rom_crc32 {
+            if expected != 0 && rom_crc32 != 0 && rom_crc32 != expected {
+                return Err(ReplayError::RomCrcMismatch {
+                    expected,
+                    actual: rom_crc32,
+                });
+            }
+        }
+        let state_size = u32::from_le_bytes([raw[8], raw[9], raw[10], raw[11]]) as usize;
+        let payload_start = BSV_HEADER_LEN
+            .checked_add(state_size)
+            .ok_or(ReplayError::InvalidHeader)?;
+        if raw.len() < payload_start {
+            return Err(ReplayError::TruncatedFrames);
+        }
+        let initial_state = raw[BSV_HEADER_LEN..payload_start].to_vec();
+        let frame_bytes = &raw[payload_start..];
+        if frame_bytes.len() % BYTES_PER_FRAME != 0 {
+            return Err(ReplayError::TruncatedFrames);
+        }
+        let mut frames = Vec::with_capacity(frame_bytes.len() / BYTES_PER_FRAME);
+        for chunk in frame_bytes.chunks_exact(BYTES_PER_FRAME) {
+            frames.push([
+                u16::from_le_bytes([chunk[0], chunk[1]]),
+                u16::from_le_bytes([chunk[2], chunk[3]]),
+                u16::from_le_bytes([chunk[4], chunk[5]]),
+                u16::from_le_bytes([chunk[6], chunk[7]]),
+            ]);
+        }
+        Ok(Self {
+            rom_crc32,
+            initial_state,
+            frames,
+            cursor: 0,
+        })
+    }
+
+    pub fn from_gzip_bytes(gz: &[u8], expected_rom_crc32: Option<u32>) -> Result<Self, ReplayError> {
+        let mut decoder = GzDecoder::new(gz);
+        let mut raw = Vec::new();
+        decoder.read_to_end(&mut raw)?;
+        Self::from_bsv_bytes(&raw, expected_rom_crc32)
+    }
+
+    pub fn from_gzip_file(path: &Path, expected_rom_crc32: Option<u32>) -> Result<Self, ReplayError> {
+        let gz = std::fs::read(path)?;
+        Self::from_gzip_bytes(&gz, expected_rom_crc32)
+    }
+
+    pub fn next_frame(&mut self) -> Option<[u16; 4]> {
+        if self.cursor >= self.frames.len() {
+            return None;
+        }
+        let f = self.frames[self.cursor];
+        self.cursor += 1;
+        Some(f)
+    }
+
+    pub fn restart(&mut self) {
+        self.cursor = 0;
+    }
+
+    pub fn current_frame(&self) -> u64 {
+        self.cursor as u64
+    }
+
+    pub fn total_frames(&self) -> u64 {
+        self.frames.len() as u64
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.cursor >= self.frames.len()
+    }
+
+    pub fn rom_crc32(&self) -> u32 {
+        self.rom_crc32
+    }
+
+    pub fn initial_state(&self) -> &[u8] {
+        &self.initial_state
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roundtrip_bsv_gzip_compression_and_playback() {
+        let mut rec = ReplayRecorder::new(0xDEAD_BEEF);
+        for i in 0..3600u16 {
+            let mask = if i % 60 < 10 { 0x0081 } else { 0x0000 };
+            rec.push_frame([mask, 0, 0, 0]);
+        }
+        let gz = rec.to_gzip_bytes().expect("gzip encode");
+        assert!(gz.len() < 1500, "gzip debe comprimir fuertemente (len={})", gz.len());
+
+        let mut player = ReplayPlayer::from_gzip_bytes(&gz, Some(0xDEAD_BEEF)).expect("gzip decode");
+        assert_eq!(player.total_frames(), 3600);
+        assert_eq!(player.rom_crc32(), 0xDEAD_BEEF);
+        assert_eq!(player.next_frame(), Some([0x0081, 0, 0, 0]));
+        assert_eq!(player.current_frame(), 1);
+        player.restart();
+        assert_eq!(player.current_frame(), 0);
+        while player.next_frame().is_some() {}
+        assert!(player.is_finished());
+        assert_eq!(player.next_frame(), None);
+    }
+
+    #[test]
+    fn rejects_crc_mismatch_and_corrupt_header() {
+        let mut rec = ReplayRecorder::new(0x1122_3344);
+        rec.push_frame([1, 2, 3, 4]);
+        let gz = rec.to_gzip_bytes().unwrap();
+        let err = ReplayPlayer::from_gzip_bytes(&gz, Some(0x9999_9999)).unwrap_err();
+        assert!(matches!(err, ReplayError::RomCrcMismatch { .. }));
+
+        let bad = ReplayPlayer::from_bsv_bytes(b"NOPE1234", None).unwrap_err();
+        assert!(matches!(bad, ReplayError::InvalidHeader));
+    }
+}

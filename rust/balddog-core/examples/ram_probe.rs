@@ -40,8 +40,6 @@ fn decode_bcd_be(bytes: &[u8]) -> Option<u64> {
     Some(val)
 }
 
-fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>) {
-    press_simple(core, 0, 0, 1400);
 fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>, boot_frames: u32, combat_steps: u32) {
     press_simple(core, 0, 0, boot_frames);
     let ram_boot = core.system_ram().unwrap_or(&[]).to_vec();
@@ -74,7 +72,6 @@ fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>, boot_frames: u32, 
     println!();
 
     let start_off = if ram_s0.len() == 65536 { 0x8000 } else { 0 };
-    for step in 0..70 {
     for step in 0..combat_steps {
         press_simple(core, BTN_RIGHT, 8, 0);
         press_simple(core, BTN_A, 4, 3);
@@ -85,7 +82,6 @@ fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>, boot_frames: u32, 
         }
     }
     let ram_s1 = core.system_ram().unwrap_or(&[]).to_vec();
-    for step in 0..70 {
     for step in 0..combat_steps {
         let dir = if step % 12 < 8 { BTN_RIGHT } else { BTN_LEFT };
         let v = if step % 8 == 0 { BTN_UP } else if step % 8 == 4 { BTN_DOWN } else { 0 };
@@ -240,7 +236,6 @@ fn main() {
         return;
     }
     if args.get(5).map(String::as_str) == Some("--scan") {
-        run_scan(&mut core, args.get(6).map(String::as_str));
         run_scan(&mut core, args.get(6).map(String::as_str), 1400, 70);
         return;
     }
