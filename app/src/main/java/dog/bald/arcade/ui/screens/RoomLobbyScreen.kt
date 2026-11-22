@@ -2,14 +2,20 @@ package dog.bald.arcade.ui.screens
 
 import dog.bald.arcade.data.toUserMessage
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,15 +30,25 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,7 +60,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.ArcadeRepository
@@ -55,9 +75,13 @@ import dog.bald.arcade.data.RoomSlotInfo
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.net.LobbyLatencyMonitor
 import dog.bald.arcade.net.LobbyPeerTarget
+import dog.bald.arcade.ui.components.ArcadeBadge
+import dog.bald.arcade.ui.components.ArcadeBadgeStyle
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.DangerRed
+import dog.bald.arcade.ui.theme.DangerRedBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
@@ -89,6 +113,7 @@ fun RoomLobbyScreen(
     onStartMatch: (room: RoomDto, mySlot: Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val myUid = repo.currentUserId().orEmpty()
 
     var room by remember { mutableStateOf(initialRoom) }
@@ -97,6 +122,8 @@ fun RoomLobbyScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var matchLaunched by remember { mutableStateOf(false) }
     var leftRoom by remember { mutableStateOf(false) }
+    var showHostExitConfirm by remember { mutableStateOf(false) }
+    var copiedRoomCode by remember { mutableStateOf(false) }
 
     val isOnlineRoom = room.mode != "lan"
     val latencyMonitor = remember(room.id, myUdpPort, myUid, isOnlineRoom) {
@@ -184,8 +211,17 @@ fun RoomLobbyScreen(
         }
     }
 
+    val requestExit: () -> Unit = {
+        val hasOtherPlayers = room.slotsJson.values.any { it.userId != myUid }
+        if (isHost && hasOtherPlayers) {
+            showHostExitConfirm = true
+        } else {
+            leaveCleanly()
+        }
+    }
+
     BackHandler(enabled = !leftRoom && !matchLaunched) {
-        leaveCleanly()
+        requestExit()
     }
 
     // Si el anfitrión sale de la pantalla sin usar el botón (o se destruye el composable), eliminar la sala
@@ -293,6 +329,60 @@ fun RoomLobbyScreen(
         }
     }
 
+    LaunchedEffect(copiedRoomCode) {
+        if (copiedRoomCode) {
+            delay(2000)
+            copiedRoomCode = false
+        }
+    }
+
+    if (showHostExitConfirm) {
+        AlertDialog(
+            onDismissRequest = { showHostExitConfirm = false },
+            containerColor = CarbonSurface,
+            shape = RectangleShape,
+            title = {
+                Text(
+                    text = "CERRAR SALA",
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "Eres el anfitrión. Si sales ahora, la sala se cerrará y los demás jugadores serán desconectados.",
+                    color = SilverGray,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showHostExitConfirm = false
+                        leaveCleanly()
+                    },
+                    shape = RectangleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DangerRed,
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("CERRAR SALA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showHostExitConfirm = false },
+                    shape = RectangleShape
+                ) {
+                    Text("CANCELAR", color = SilverGray, fontSize = 12.sp)
+                }
+            }
+        )
+    }
+
     val quickStickers = listOf("Ready!", "Insert Coin!", "GG!", "Wait...")
 
     Column(
@@ -305,43 +395,187 @@ fun RoomLobbyScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Header Card: Poster 3:4 grande + Metadatos de Sala + Compartir ID + Botón Salir Rojo
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CarbonSurface)
+                .border(1.dp, CharcoalBorder)
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f)
+            GameCoverImage(
+                slug = game?.slug,
+                contentDescription = game?.title,
+                contentScale = ContentScale.Fit,
+                shape = RectangleShape,
+                backgroundColor = ObsidianBlack,
+                modifier = Modifier
+                    .width(72.dp)
+                    .height(96.dp)
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                GameCoverImage(
-                    slug = game?.slug,
-                    contentDescription = game?.title,
-                    modifier = Modifier.size(48.dp)
-                )
-                Column {
-                    val privacyLabel = if (room.isPrivate) " · PRIVADA" else ""
-                    Text(
-                        text = "SALA #${room.code} · ${room.mode.uppercase()}$privacyLabel",
-                        color = PureWhite,
-                        fontFamily = JetBrainsMonoFamily,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = game?.title ?: "Arcade Match",
-                        color = MutedGray,
-                        fontSize = 13.sp,
-                        maxLines = 1
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .background(GraphiteSurface)
+                                .border(1.dp, SteelBorder)
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isOnlineRoom) Icons.Default.Public else Icons.Default.Wifi,
+                                contentDescription = null,
+                                tint = PureWhite,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = room.mode.uppercase(),
+                                color = PureWhite,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 10.sp
+                            )
+                        }
+                        if (room.isPrivate) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier
+                                    .background(GraphiteSurface)
+                                    .border(1.dp, CharcoalBorder)
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Sala privada",
+                                    tint = SilverGray,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = "PRIVADA",
+                                    color = SilverGray,
+                                    fontFamily = JetBrainsMonoFamily,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = requestExit,
+                        shape = RectangleShape,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = DangerRed,
+                            contentColor = PureWhite
+                        ),
+                        border = BorderStroke(1.dp, DangerRedBorder),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                            contentDescription = "Salir de la sala",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "SALIR",
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
-            }
-            OutlinedButton(
-                onClick = { leaveCleanly() },
-                border = BorderStroke(1.dp, SteelBorder)
-            ) {
-                Text("SALIR", color = SilverGray, fontSize = 12.sp)
+
+                Text(
+                    text = game?.title ?: "Arcade Match",
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ArcadeBadge(
+                        text = "#${room.code}",
+                        style = ArcadeBadgeStyle.Solid
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            cm?.setPrimaryClip(ClipData.newPlainText("Código de sala", room.code))
+                            copiedRoomCode = true
+                        },
+                        shape = RectangleShape,
+                        border = BorderStroke(1.dp, if (copiedRoomCode) PureWhite else CharcoalBorder),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (copiedRoomCode) Icons.Default.Check else Icons.Default.ContentCopy,
+                            contentDescription = "Copiar ID de sala",
+                            tint = if (copiedRoomCode) PureWhite else SilverGray,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (copiedRoomCode) "COPIADO" else "COPIAR",
+                            color = if (copiedRoomCode) PureWhite else SilverGray,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 10.sp
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val gameTitle = game?.title ?: "Arcade Match"
+                            val shareBody = "¡Únete a mi sala en bald.dog ARCADE!\nJuego: $gameTitle\nCódigo de sala: #${room.code} (${room.mode.uppercase()})"
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Sala #${room.code} · $gameTitle")
+                                putExtra(Intent.EXTRA_TEXT, shareBody)
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Compartir ID de sala"))
+                        },
+                        shape = RectangleShape,
+                        border = BorderStroke(1.dp, SteelBorder),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartir ID de sala",
+                            tint = PureWhite,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "COMPARTIR",
+                            color = PureWhite,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
             }
         }
 
@@ -444,7 +678,7 @@ fun RoomLobbyScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(CarbonSurface, RoundedCornerShape(10.dp))
+                .background(CarbonSurface, RectangleShape)
                 .padding(10.dp)
         ) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
