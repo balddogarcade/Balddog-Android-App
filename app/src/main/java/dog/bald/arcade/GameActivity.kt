@@ -90,6 +90,9 @@ class GameActivity : ComponentActivity() {
         const val EXTRA_INPUT_DELAY = "input_delay"
         const val EXTRA_ROOM_ID = "room_id"
         const val EXTRA_IS_HOST = "is_host"
+        const val EXTRA_VOICE_LOCAL_PORT = "voice_local_port"
+        const val EXTRA_VOICE_PEER_HANDLES = "voice_peer_handles"
+        const val EXTRA_VOICE_PEER_ADDRS = "voice_peer_addrs"
     }
 
     private var audioManager: AudioManager? = null

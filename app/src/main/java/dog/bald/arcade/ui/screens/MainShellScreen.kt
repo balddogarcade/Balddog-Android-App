@@ -121,7 +121,7 @@ fun MainShellScreen(
     onActiveHostRoomChanged: (String?) -> Unit = {},
     onSignedOut: () -> Unit,
     onLaunchLocalRom: (GameDto) -> Unit,
-    onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int) -> Unit
+    onLaunchNetplayMatch: (GameDto, RoomDto, Int, Int, Int) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var selectedTab by remember { mutableIntStateOf(MainTab.CATALOG.ordinal) }
@@ -147,6 +147,19 @@ fun MainShellScreen(
     var roomNoticeMsg by remember { mutableStateOf<String?>(null) }
     var myUdpPort by remember { mutableIntStateOf(7000) }
     var myEndpoint by remember { mutableStateOf("") }
+    var myVoiceUdpPort by remember { mutableIntStateOf(8000) }
+    var myVoiceEndpoint by remember { mutableStateOf("") }
+
+    suspend fun resolveUdpEndpoint(mode: String, port: Int, localIp: String?): String {
+        return if (mode == "lan") {
+            "${localIp ?: "127.0.0.1"}:$port"
+        } else {
+            withContext(Dispatchers.IO) {
+                runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
+                    .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
+            }
+        }
+    }
 
     var downloadingGameId by remember { mutableStateOf<String?>(null) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
@@ -254,6 +267,7 @@ fun MainShellScreen(
             myUsername = profile?.username ?: "Jugador",
             myEndpoint = myEndpoint,
             myUdpPort = myUdpPort,
+            myVoiceEndpoint = myVoiceEndpoint,
             onLeave = { reason ->
                 activeRoom = null
                 selectedTab = MainTab.ROOMS.ordinal
@@ -277,7 +291,7 @@ fun MainShellScreen(
                                 }
                             }
                             activeRoom = null
-                            onLaunchNetplayMatch(roomGame, startedRoom, mySlot, myUdpPort)
+                            onLaunchNetplayMatch(roomGame, startedRoom, mySlot, myUdpPort, myVoiceUdpPort)
                         }.onFailure { syncError = it.toUserMessage("Error preparando partida") }
                     }
                 }
@@ -430,17 +444,14 @@ fun MainShellScreen(
                             syncError = null
                             try {
                                 val port = (7000..7099).random()
+                                val voicePort = port + 1000
                                 myUdpPort = port
+                                myVoiceUdpPort = voicePort
                                 val localIp = lanNsd.getLocalIpv4Address()
-                                val endpoint = if (mode == "lan") {
-                                    "${localIp ?: "127.0.0.1"}:$port"
-                                } else {
-                                    withContext(Dispatchers.IO) {
-                                        runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
-                                            .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
-                                    }
-                                }
+                                val endpoint = resolveUdpEndpoint(mode, port, localIp)
+                                val voiceEndpoint = resolveUdpEndpoint(mode, voicePort, localIp)
                                 myEndpoint = endpoint
+                                myVoiceEndpoint = voiceEndpoint
                                 val created = repo.createRoom(
                                     gameId = game.id,
                                     mode = mode,
@@ -449,7 +460,8 @@ fun MainShellScreen(
                                     endpoint = endpoint,
                                     localIp = localIp,
                                     localPort = port,
-                                    isPrivate = isPrivate
+                                    isPrivate = isPrivate,
+                                    voiceEndpoint = voiceEndpoint
                                 )
                                 activeRoom = created
                             } catch (t: Throwable) {
@@ -461,16 +473,12 @@ fun MainShellScreen(
                         roomNoticeMsg = null
                         scope.launch {
                             val port = (7100..7199).random()
+                            val voicePort = port + 1000
                             myUdpPort = port
+                            myVoiceUdpPort = voicePort
                             val localIp = lanNsd.getLocalIpv4Address()
-                            myEndpoint = if (room.mode == "lan") {
-                                "${localIp ?: "127.0.0.1"}:$port"
-                            } else {
-                                withContext(Dispatchers.IO) {
-                                    runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
-                                        .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
-                                }
-                            }
+                            myEndpoint = resolveUdpEndpoint(room.mode, port, localIp)
+                            myVoiceEndpoint = resolveUdpEndpoint(room.mode, voicePort, localIp)
                             activeRoom = room
                         }
                     }

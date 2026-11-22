@@ -112,7 +112,8 @@ class ArcadeRepository(context: Context) {
         endpoint: String,
         localIp: String?,
         localPort: Int?,
-        isPrivate: Boolean = false
+        isPrivate: Boolean = false,
+        voiceEndpoint: String? = null
     ): RoomDto {
         val uid = currentUserId() ?: throw IllegalStateException("Usuario no autenticado")
         val code = (1000..9999).random(Random).toString() + ('A'..'Z').random(Random)
@@ -121,6 +122,7 @@ class ArcadeRepository(context: Context) {
                 userId = uid,
                 username = username,
                 endpoint = endpoint,
+                voiceEndpoint = voiceEndpoint?.ifBlank { null },
                 ready = true
             )
         )

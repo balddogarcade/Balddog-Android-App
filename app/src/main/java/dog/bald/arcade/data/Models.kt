@@ -58,6 +58,7 @@ data class RoomSlotInfo(
     @SerialName("user_id") val userId: String,
     val username: String,
     val endpoint: String,
+    @SerialName("voice_endpoint") val voiceEndpoint: String? = null,
     val ready: Boolean = false
 )
 

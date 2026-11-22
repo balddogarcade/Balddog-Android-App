@@ -84,6 +84,7 @@ fun RoomLobbyScreen(
     myUsername: String,
     myEndpoint: String,
     myUdpPort: Int,
+    myVoiceEndpoint: String = "",
     onLeave: (String?) -> Unit,
     onStartMatch: (room: RoomDto, mySlot: Int) -> Unit
 ) {
@@ -149,6 +150,7 @@ fun RoomLobbyScreen(
                         userId = myUid,
                         username = myUsername,
                         endpoint = myEndpoint,
+                        voiceEndpoint = myVoiceEndpoint.ifBlank { null },
                         ready = isHost
                     )
                     runCatching {
@@ -265,6 +267,7 @@ fun RoomLobbyScreen(
                     userId = myUid,
                     username = myUsername,
                     endpoint = myEndpoint,
+                    voiceEndpoint = myVoiceEndpoint.ifBlank { null },
                     ready = isHost
                 )
                 repo.updateRoomSlots(room.id, next)

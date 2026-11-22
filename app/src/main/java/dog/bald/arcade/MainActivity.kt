@@ -96,13 +96,16 @@ class MainActivity : ComponentActivity() {
                                 }
                                 startActivity(intent)
                             },
-                            onLaunchNetplayMatch = { game, room, mySlot, localPort ->
+                            onLaunchNetplayMatch = { game, room, mySlot, localPort, voiceLocalPort ->
                                 val romFile = File(romsDir, game.romFilename)
                                 val peers = room.slotsJson.entries
                                     .filter { it.key.toIntOrNull() != mySlot }
                                     .sortedBy { it.key.toIntOrNull() ?: 0 }
                                 val peerHandles = peers.mapNotNull { it.key.toIntOrNull() }.toIntArray()
                                 val peerAddrs = ArrayList(peers.map { it.value.endpoint })
+                                val voicePeers = peers.filter { !it.value.voiceEndpoint.isNullOrBlank() }
+                                val voicePeerHandles = voicePeers.mapNotNull { it.key.toIntOrNull() }.toIntArray()
+                                val voicePeerAddrs = ArrayList(voicePeers.mapNotNull { it.value.voiceEndpoint })
                                 val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
                                     putExtra(GameActivity.EXTRA_GAME_ID, game.id)
                                     putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
@@ -118,6 +121,9 @@ class MainActivity : ComponentActivity() {
                                     putExtra(GameActivity.EXTRA_INPUT_DELAY, if (room.mode == "lan") 1 else 2)
                                     putExtra(GameActivity.EXTRA_ROOM_ID, room.id)
                                     putExtra(GameActivity.EXTRA_IS_HOST, room.hostId == repo.currentUserId())
+                                    putExtra(GameActivity.EXTRA_VOICE_LOCAL_PORT, voiceLocalPort)
+                                    putExtra(GameActivity.EXTRA_VOICE_PEER_HANDLES, voicePeerHandles)
+                                    putStringArrayListExtra(GameActivity.EXTRA_VOICE_PEER_ADDRS, voicePeerAddrs)
                                 }
                                 startActivity(intent)
                             }
