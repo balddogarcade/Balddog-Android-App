@@ -129,6 +129,7 @@ fun RoomLobbyScreen(
     myEndpoint: String,
     myUdpPort: Int,
     myVoiceEndpoint: String = "",
+    onOpenUserProfile: (String) -> Unit = {},
     onLeave: (String?) -> Unit,
     onStartMatch: (room: RoomDto, mySlot: Int) -> Unit
 ) {
@@ -660,6 +661,7 @@ fun RoomLobbyScreen(
                     isOnlineRoom = isOnlineRoom,
                     pingMs = pingMs,
                     onClaim = { claimSlot(slot) },
+                    onInspectOccupant = occupant?.let { occ -> { onOpenUserProfile(occ.userId) } },
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -733,7 +735,8 @@ fun RoomLobbyScreen(
                                     append(msg.message)
                                 }
                             },
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            modifier = Modifier.clickable { onOpenUserProfile(msg.userId) }
                         )
                     }
                 }
@@ -877,6 +880,7 @@ private fun PlayerSlotCard(
     isOnlineRoom: Boolean,
     pingMs: Int?,
     onClaim: () -> Unit,
+    onInspectOccupant: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val borderColor = when {
@@ -892,7 +896,9 @@ private fun PlayerSlotCard(
         border = BorderStroke(1.dp, borderColor),
         modifier = modifier
             .height(132.dp)
-            .clickable(enabled = occupant == null, onClick = onClaim)
+            .clickable {
+                if (occupant == null) onClaim() else onInspectOccupant?.invoke()
+            }
     ) {
         Column(
             modifier = Modifier
