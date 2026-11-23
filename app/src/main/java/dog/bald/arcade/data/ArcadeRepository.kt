@@ -35,10 +35,6 @@ class ArcadeRepository(context: Context) {
         }.getOrDefault(false)
     }
 
-    suspend fun signInAnonymously() {
-        client.auth.signInAnonymously()
-    }
-
     suspend fun signInWithEmail(email: String, password: String) {
         client.auth.signInWith(Email) {
             this.email = email.trim()
@@ -47,11 +43,15 @@ class ArcadeRepository(context: Context) {
     }
 
     suspend fun signUpWithEmail(email: String, password: String, username: String) {
+        val cleanUsername = username.trim()
+        require(cleanUsername.matches(Regex("^[a-zA-Z0-9_]{3,20}$"))) {
+            "El username debe tener entre 3 y 20 caracteres (letras, números y _)"
+        }
         client.auth.signUpWith(Email) {
             this.email = email.trim()
             this.password = password
             data = buildJsonObject {
-                put("username", username.trim())
+                put("username", cleanUsername)
             }
         }
         if (client.auth.currentSessionOrNull() == null) {

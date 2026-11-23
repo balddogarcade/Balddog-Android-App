@@ -162,15 +162,27 @@ fun AuthScreen(
                     )
                 }
 
+                val trimmedUsername = username.trim()
+                val usernameValid = !isRegister || trimmedUsername.matches(Regex("^[a-zA-Z0-9_]{3,20}$"))
+
+                if (isRegister && username.isNotEmpty() && !usernameValid) {
+                    Text(
+                        text = "Username: 3 a 20 caracteres (letras, números y _)",
+                        color = SilverGray,
+                        fontSize = 11.sp
+                    )
+                }
+
                 Button(
-                    enabled = !loading && email.isNotBlank() && password.length >= 6 && (!isRegister || username.isNotBlank()),
+                    enabled = !loading && email.isNotBlank() && password.length >= 6 && usernameValid,
+                    shape = RectangleShape,
                     onClick = {
                         scope.launch {
                             loading = true
                             errorMsg = null
                             try {
                                 if (isRegister) {
-                                    repo.signUpWithEmail(email, password, username)
+                                    repo.signUpWithEmail(email, password, trimmedUsername)
                                 } else {
                                     repo.signInWithEmail(email, password)
                                 }
@@ -213,35 +225,6 @@ fun AuthScreen(
                     )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedButton(
-            enabled = !loading,
-            onClick = {
-                scope.launch {
-                    loading = true
-                    errorMsg = null
-                    try {
-                        repo.signInAnonymously()
-                        onAuthenticated()
-                    } catch (t: Throwable) {
-                        errorMsg = t.toUserMessage("No se pudo iniciar como invitado")
-                    } finally {
-                        loading = false
-                    }
-                }
-            },
-            border = BorderStroke(1.dp, SteelBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = "ENTRAR COMO INVITADO",
-                color = PureWhite,
-                fontFamily = SpaceGroteskFamily,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }
