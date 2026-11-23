@@ -54,7 +54,7 @@ import dog.bald.arcade.data.UserGameStatDto
 import dog.bald.arcade.data.toUserMessage
 import dog.bald.arcade.ui.components.ConfirmClearCacheDialog
 import dog.bald.arcade.ui.components.ConfirmSignOutDialog
-import dog.bald.arcade.ui.components.EditUsernameDialog
+import dog.bald.arcade.ui.components.EditProfileDialog
 import dog.bald.arcade.ui.components.PendingScoresBanner
 import dog.bald.arcade.ui.components.ProfileActivityRow
 import dog.bald.arcade.ui.components.ProfileHeroCard
@@ -106,6 +106,7 @@ fun ProfileScreen(
     publicProfile: dog.bald.arcade.data.PublicProfileDto? = null,
     onOpenFollowers: () -> Unit = {},
     onOpenFollowing: () -> Unit = {},
+    onUpdateProfile: (suspend (String, String?, String?, String, Boolean, dog.bald.arcade.data.SocialLinksDto) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -512,26 +513,34 @@ fun ProfileScreen(
         }
     }
 
-    if (showEditNameDialog) {
-        EditUsernameDialog(
-            currentUsername = profile?.username ?: "",
+    if (showEditNameDialog && profile != null) {
+        EditProfileDialog(
+            profile = profile,
+            fallbackAvatarSeed = avatarSeed,
             saving = savingUsername,
             errorMsg = usernameError,
             onDismiss = { showEditNameDialog = false },
-            onConfirm = { newName ->
+            onConfirm = { newName, bio, countryCode, newSeed, isPrivate, socialLinks ->
                 scope.launch {
                     savingUsername = true
                     usernameError = null
-                    runCatching { onUpdateUsername(newName) }
+                    runCatching {
+                        if (onUpdateProfile != null) {
+                            onUpdateProfile(newName, bio, countryCode, newSeed, isPrivate, socialLinks)
+                        } else {
+                            onUpdateUsername(newName)
+                        }
+                    }
                         .onSuccess {
                             savingUsername = false
                             showEditNameDialog = false
                         }
                         .onFailure { err ->
                             savingUsername = false
-                            val msg = err.toUserMessage("No se pudo actualizar el nombre")
+                            val msg = err.toUserMessage("No se pudo actualizar el perfil")
                             usernameError = if (msg.contains("unique", ignoreCase = true) ||
-                                msg.contains("duplicate", ignoreCase = true)
+                                msg.contains("duplicate", ignoreCase = true) ||
+                                msg.contains("en uso", ignoreCase = true)
                             ) {
                                 "Ese nombre ya está en uso por otro jugador."
                             } else {
