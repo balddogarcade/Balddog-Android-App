@@ -5,6 +5,7 @@ import dog.bald.arcade.data.toUserMessage
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,8 +25,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -66,6 +69,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +83,7 @@ import dog.bald.arcade.R
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.GameRankingSummaryDto
 import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.LeaderboardEntryDto
 import dog.bald.arcade.data.MatchHistoryDto
@@ -86,6 +91,7 @@ import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.ProfileDto
+import dog.bald.arcade.data.PublicProfileDto
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.UserGameStatDto
 import dog.bald.arcade.net.DiscoveredLanRoom
@@ -97,6 +103,8 @@ import dog.bald.arcade.ui.components.DiagnosticsSheet
 import dog.bald.arcade.ui.components.DiceBearPixelArtAvatar
 import dog.bald.arcade.ui.components.GameLeaderboardSheet
 import dog.bald.arcade.ui.components.GameCoverImage
+import dog.bald.arcade.ui.components.NewRecordDialog
+import dog.bald.arcade.ui.components.PostMatchRecordBannerData
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
@@ -119,8 +127,16 @@ import uniffi.balddog_android.pingEngine
 
 private enum class MainTab(val label: String, val icon: ImageVector) {
     CATALOG("Catálogo", Icons.Default.SportsEsports),
+    RANKINGS("Rankings", Icons.Default.EmojiEvents),
     ROOMS("Salas", Icons.Default.Groups),
     PROFILE("Perfil", Icons.Default.Person),
+}
+
+private sealed interface AppOverlay {
+    data class PublicProfile(val userId: String) : AppOverlay
+    data class FollowList(val userId: String, val direction: String, val username: String) : AppOverlay
+    data class GameRanking(val game: GameDto) : AppOverlay
+    data object WikiHelp : AppOverlay
 }
 
 @Composable
@@ -146,12 +162,18 @@ fun MainShellScreen(
     var myHighScores by remember { mutableStateOf<List<MyHighScoreDto>>(emptyList()) }
     var myMatchHistory by remember { mutableStateOf<List<MatchHistoryDto>>(emptyList()) }
     var myGameStats by remember { mutableStateOf<List<UserGameStatDto>>(emptyList()) }
+    var myPublicProfile by remember { mutableStateOf<PublicProfileDto?>(null) }
+    var rankingSummaries by remember { mutableStateOf<Map<String, GameRankingSummaryDto>>(emptyMap()) }
+    var myFollowingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var overlayStack by remember { mutableStateOf<List<AppOverlay>>(emptyList()) }
+    var postMatchRecordBanner by remember { mutableStateOf<PostMatchRecordBannerData?>(null) }
     var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context)) }
     var showDiagnosticsSheet by remember { mutableStateOf(false) }
     var userMenuExpanded by remember { mutableStateOf(false) }
     val userEmail = remember(profile) { repo.currentUserEmail() }
     val avatarSeed = remember(userEmail, profile) {
-        userEmail?.takeIf { it.isNotBlank() }
+        profile?.avatarSeed?.takeIf { it.isNotBlank() }
+            ?: userEmail?.takeIf { it.isNotBlank() }
             ?: profile?.username?.takeIf { it.isNotBlank() }
             ?: repo.currentUserId()
             ?: "guest"
@@ -208,6 +230,13 @@ fun MainShellScreen(
                     myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(emptyList())
                     myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(emptyList())
                     myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
+                    myPublicProfile = repo.currentUserId()?.let { uid ->
+                        runCatching { repo.fetchPublicProfile(uid) }.getOrNull()
+                    }
+                    rankingSummaries = runCatching {
+                        repo.fetchGamesRankingSummary().associateBy { it.gameId }
+                    }.getOrDefault(emptyMap())
+                    myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(emptySet())
                     pendingScoreCount = PendingScoreQueue.pendingCount(context)
                     refreshLocalState()
                 } catch (t: Throwable) {
@@ -220,7 +249,7 @@ fun MainShellScreen(
         }
     }
 
-    fun downloadOnly(game: GameDto) {
+    fun downloadOnly(game: GameDto, launchAfter: Boolean = false) {
         if (downloadingGameId != null) return
         scope.launch {
             downloadingGameId = game.id
@@ -242,6 +271,9 @@ fun MainShellScreen(
                     }
                 }
                 refreshLocalState()
+                if (launchAfter) {
+                    onLaunchLocalRom(game)
+                }
             } catch (t: Throwable) {
                 syncError = t.toUserMessage("Error descargando ROM")
             } finally {
@@ -264,14 +296,39 @@ fun MainShellScreen(
                     hasResumedOnce = true
                 } else {
                     scope.launch {
+                        val prevScores = myHighScores.associateBy { it.gameId }
                         runCatching { PendingScoreQueue.flushAll(context, repo) }
                         runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
                         pendingScoreCount = PendingScoreQueue.pendingCount(context)
                         runCatching { games = repo.fetchGames() }
                         runCatching { profile = repo.fetchMyProfile() }
-                        runCatching { myHighScores = repo.fetchMyHighScores() }
+                        val updatedScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
+                        myHighScores = updatedScores
                         runCatching { myMatchHistory = repo.fetchMyMatchHistory() }
                         runCatching { myGameStats = repo.fetchMyGameStats() }
+                        repo.currentUserId()?.let { uid ->
+                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                        }
+                        runCatching {
+                            rankingSummaries = repo.fetchGamesRankingSummary().associateBy { it.gameId }
+                        }
+
+                        val improved = updatedScores.firstOrNull { curr ->
+                            val prev = prevScores[curr.gameId]
+                            (prev != null && (curr.score > prev.score || curr.rank < prev.rank)) ||
+                                (prev == null && curr.rank <= 10L)
+                        }
+                        if (improved != null) {
+                            val gameObj = games.firstOrNull { it.id == improved.gameId }
+                            if (gameObj != null) {
+                                postMatchRecordBanner = PostMatchRecordBannerData(
+                                    game = gameObj,
+                                    score = improved.score,
+                                    previousRank = prevScores[improved.gameId]?.rank,
+                                    newRank = improved.rank
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -309,6 +366,100 @@ fun MainShellScreen(
         onActiveHostRoomChanged(hostRoomId)
     }
 
+    val topOverlay = overlayStack.lastOrNull()
+    if (topOverlay != null) {
+        when (topOverlay) {
+            is AppOverlay.PublicProfile -> PublicProfileScreen(
+                userId = topOverlay.userId,
+                repo = repo,
+                games = games,
+                onBack = { overlayStack = overlayStack.dropLast(1) },
+                onOpenGameRanking = { game ->
+                    overlayStack = overlayStack + AppOverlay.GameRanking(game)
+                },
+                onOpenFollowList = { uid, dir, uname ->
+                    overlayStack = overlayStack + AppOverlay.FollowList(uid, dir, uname)
+                },
+                onFollowChanged = {
+                    scope.launch {
+                        myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
+                        repo.currentUserId()?.let { uid ->
+                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                        }
+                    }
+                }
+            )
+            is AppOverlay.FollowList -> FollowListScreen(
+                targetUserId = topOverlay.userId,
+                direction = topOverlay.direction,
+                targetUsername = topOverlay.username,
+                repo = repo,
+                onBack = { overlayStack = overlayStack.dropLast(1) },
+                onOpenUserProfile = { uid ->
+                    overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+                },
+                onFollowChanged = {
+                    scope.launch {
+                        myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
+                        repo.currentUserId()?.let { uid ->
+                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                        }
+                    }
+                }
+            )
+            is AppOverlay.GameRanking -> GameRankingScreen(
+                game = topOverlay.game,
+                repo = repo,
+                isDownloaded = downloadedFiles.contains(topOverlay.game.romFilename),
+                isDownloading = downloadingGameId == topOverlay.game.id,
+                downloadProgress = if (downloadingGameId == topOverlay.game.id) downloadProgress else 0f,
+                onBack = { overlayStack = overlayStack.dropLast(1) },
+                onPlayOrDownload = {
+                    if (downloadedFiles.contains(topOverlay.game.romFilename)) {
+                        onLaunchLocalRom(topOverlay.game)
+                    } else {
+                        downloadOnly(topOverlay.game, launchAfter = true)
+                    }
+                },
+                onOpenUserProfile = { uid ->
+                    overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+                },
+                onWatchReplay = { entry ->
+                    val rPath = entry.replayPath ?: return@GameRankingScreen
+                    val g = topOverlay.game
+                    scope.launch {
+                        runCatching {
+                            romManager.ensureGameReady(g, games, biosList) { _, _ -> }
+                            val dest = java.io.File(context.cacheDir, "replays/${g.slug}_${entry.userId}.bsv.gz")
+                            repo.downloadReplay(rPath, dest)
+                        }.onSuccess { replayFile ->
+                            val lbEntry = LeaderboardEntryDto(
+                                rank = entry.rank,
+                                userId = entry.userId,
+                                username = entry.username,
+                                score = entry.score,
+                                achievedAt = entry.achievedAt,
+                                replayPath = rPath,
+                                verificationStatus = entry.verificationStatus
+                            )
+                            onLaunchReplay(g, replayFile, lbEntry)
+                        }.onFailure { err ->
+                            android.widget.Toast.makeText(
+                                context,
+                                err.toUserMessage("No se pudo abrir el replay"),
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            )
+            AppOverlay.WikiHelp -> WikiHelpScreen(
+                onBack = { overlayStack = overlayStack.dropLast(1) }
+            )
+        }
+        return
+    }
+
     if (currentRoom != null) {
         val roomGame = games.firstOrNull { it.id == currentRoom.gameId }
         RoomLobbyScreen(
@@ -320,6 +471,9 @@ fun MainShellScreen(
             myEndpoint = myEndpoint,
             myUdpPort = myUdpPort,
             myVoiceEndpoint = myVoiceEndpoint,
+            onOpenUserProfile = { uid ->
+                overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+            },
             onLeave = { reason ->
                 activeRoom = null
                 selectedTab = MainTab.ROOMS.ordinal
@@ -396,11 +550,41 @@ fun MainShellScreen(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.height(34.dp)
                 )
-                Box {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { userMenuExpanded = true }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(CarbonSurface, RectangleShape)
+                            .border(1.dp, SteelBorder, RectangleShape)
+                            .clickable { overlayStack = overlayStack + AppOverlay.WikiHelp }
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
                     ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.HelpOutline,
+                                contentDescription = "Wiki / Ayuda",
+                                tint = PureWhite,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "AYUDA",
+                                color = PureWhite,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                    Box {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { userMenuExpanded = true }
+                        ) {
                         DiceBearPixelArtAvatar(
                             seed = avatarSeed,
                             modifier = Modifier.size(32.dp)
@@ -468,6 +652,7 @@ fun MainShellScreen(
                         )
                     }
                 }
+                }
             }
 
             if (syncError != null) {
@@ -484,10 +669,22 @@ fun MainShellScreen(
                     downloadingGameId = downloadingGameId,
                     downloadProgress = downloadProgress,
                     busy = downloadingGameId != null,
+                    rankingSummaries = rankingSummaries,
                     onRefresh = { refreshAll() },
                     onDownload = { downloadOnly(it) },
                     onPlay = { onLaunchLocalRom(it) },
                     onLeaderboard = { leaderboardGame = it }
+                )
+
+                MainTab.RANKINGS -> RankingsScreen(
+                    repo = repo,
+                    games = games,
+                    onOpenPublicProfile = { uid ->
+                        overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+                    },
+                    onOpenGameRanking = { game ->
+                        overlayStack = overlayStack + AppOverlay.GameRanking(game)
+                    }
                 )
 
                 MainTab.ROOMS -> RoomsTab(
@@ -495,6 +692,7 @@ fun MainShellScreen(
                     allGames = games,
                     libraryGames = games.filter { downloadedFiles.contains(it.romFilename) },
                     lanNsd = lanNsd,
+                    followingIds = myFollowingIds,
                     roomNoticeMsg = roomNoticeMsg,
                     onDismissRoomNotice = { roomNoticeMsg = null },
                     onGoToCatalog = { selectedTab = MainTab.CATALOG.ordinal },
@@ -561,6 +759,25 @@ fun MainShellScreen(
                     onUpdateUsername = { newName ->
                         profile = repo.updateUsername(newName)
                     },
+                    publicProfile = myPublicProfile,
+                    onOpenFollowers = {
+                        val uid = repo.currentUserId()
+                        if (uid != null) {
+                            overlayStack = overlayStack + AppOverlay.FollowList(uid, "followers", profile?.username ?: "Tú")
+                        }
+                    },
+                    onOpenFollowing = {
+                        val uid = repo.currentUserId()
+                        if (uid != null) {
+                            overlayStack = overlayStack + AppOverlay.FollowList(uid, "following", profile?.username ?: "Tú")
+                        }
+                    },
+                    onUpdateProfile = { newName, bio, countryCode, newSeed, isPrivate, socialLinks ->
+                        profile = repo.updateMyProfile(newName, bio, countryCode, newSeed, isPrivate, socialLinks)
+                        repo.currentUserId()?.let { uid ->
+                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                        }
+                    },
                     onFlushPendingScores = {
                         PendingScoreQueue.flushAll(context, repo)
                         PendingMatchHistoryQueue.flushAll(context, repo)
@@ -620,6 +837,10 @@ fun MainShellScreen(
         GameLeaderboardSheet(
             game = game,
             repo = repo,
+            onOpenUserProfile = { uid ->
+                leaderboardGame = null
+                overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+            },
             onWatchReplay = { entry ->
                 val rPath = entry.replayPath ?: return@GameLeaderboardSheet
                 scope.launch {
@@ -640,6 +861,17 @@ fun MainShellScreen(
                 }
             },
             onDismiss = { leaderboardGame = null }
+        )
+    }
+
+    postMatchRecordBanner?.let { banner ->
+        NewRecordDialog(
+            data = banner,
+            onDismiss = { postMatchRecordBanner = null },
+            onViewRanking = { game ->
+                postMatchRecordBanner = null
+                overlayStack = overlayStack + AppOverlay.GameRanking(game)
+            }
         )
     }
 
@@ -671,6 +903,7 @@ private fun CatalogTab(
     downloadingGameId: String?,
     downloadProgress: Float,
     busy: Boolean,
+    rankingSummaries: Map<String, GameRankingSummaryDto> = emptyMap(),
     onRefresh: () -> Unit,
     onDownload: (GameDto) -> Unit,
     onPlay: (GameDto) -> Unit,
@@ -751,6 +984,7 @@ private fun CatalogTab(
                         isDownloading = downloadingGameId == game.id,
                         downloadProgress = if (downloadingGameId == game.id) downloadProgress else 0f,
                         busy = busy,
+                        rankingSummary = rankingSummaries[game.id],
                         onPrimaryAction = {
                             if (isDownloaded) onPlay(game) else onDownload(game)
                         },
@@ -772,6 +1006,7 @@ private fun RoomsTab(
     allGames: List<GameDto>,
     libraryGames: List<GameDto>,
     lanNsd: LanNsdManager,
+    followingIds: Set<String> = emptySet(),
     roomNoticeMsg: String?,
     onDismissRoomNotice: () -> Unit,
     onGoToCatalog: () -> Unit,
@@ -1065,8 +1300,38 @@ private fun RoomsTab(
         val lanCodes = remember(discoveredLan) {
             discoveredLan.map { it.roomCode.uppercase() }.toSet()
         }
-        val otherRooms = remember(rooms, lanCodes) {
+        var onlyFollowingRooms by remember { mutableStateOf(false) }
+        val otherRooms = remember(rooms, lanCodes, onlyFollowingRooms, followingIds) {
             rooms.filterNot { lanCodes.contains(it.code.uppercase()) }
+                .filter { !onlyFollowingRooms || followingIds.contains(it.hostId) }
+        }
+        if (followingIds.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+            ) {
+                listOf(false to "TODAS LAS SALAS", true to "SOLO SEGUIDOS").forEach { (flagVal, label) ->
+                    val active = onlyFollowingRooms == flagVal
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(if (active) PureWhite else CarbonSurface)
+                            .clickable { onlyFollowingRooms = flagVal }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (active) PureBlack else SilverGray,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
         }
 
         if (discoveredLan.isNotEmpty()) {
@@ -1153,7 +1418,24 @@ private fun RoomsTab(
                                 modifier = Modifier.size(48.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("$roomGameTitle · #${room.code}", color = PureWhite, fontWeight = FontWeight.Bold)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("$roomGameTitle · #${room.code}", color = PureWhite, fontWeight = FontWeight.Bold)
+                                    if (followingIds.contains(room.hostId)) {
+                                        Text(
+                                            text = "[SIGUIENDO]",
+                                            color = PureBlack,
+                                            fontFamily = JetBrainsMonoFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            modifier = Modifier
+                                                .background(PureWhite, RectangleShape)
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
                                 Text(
                                     "${room.mode.uppercase()} · Jugadores: ${room.slotsJson.size}/${room.maxPlayers}",
                                     color = MutedGray,
