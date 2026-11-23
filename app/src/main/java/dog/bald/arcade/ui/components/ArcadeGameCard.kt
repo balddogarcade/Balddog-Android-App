@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.GameRankingSummaryDto
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
@@ -70,6 +71,7 @@ fun ArcadeGameCard(
     onPrimaryAction: () -> Unit,
     onLeaderboardClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
+    rankingSummary: GameRankingSummaryDto? = null,
     modifier: Modifier = Modifier
 ) {
     val cardShape = RectangleShape
@@ -164,6 +166,52 @@ fun ArcadeGameCard(
                                     contentDescription = "Eliminar ROM",
                                     tint = SilverGray,
                                     modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val top1 = rankingSummary?.top3?.firstOrNull()
+                val myRank = rankingSummary?.myRank
+                if (top1 != null || myRank != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                    ) {
+                        if (top1 != null) {
+                            Box(
+                                modifier = Modifier
+                                    .background(ObsidianBlack.copy(alpha = 0.88f), RectangleShape)
+                                    .border(1.dp, SteelBorder, RectangleShape)
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "#1 ${top1.username}",
+                                    color = PureWhite,
+                                    fontFamily = JetBrainsMonoFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        if (myRank != null) {
+                            Box(
+                                modifier = Modifier
+                                    .background(PureWhite, RectangleShape)
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "TÚ #$myRank",
+                                    color = PureBlack,
+                                    fontFamily = JetBrainsMonoFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
                                 )
                             }
                         }
