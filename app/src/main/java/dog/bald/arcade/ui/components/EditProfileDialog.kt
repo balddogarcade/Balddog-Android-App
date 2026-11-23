@@ -60,10 +60,21 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
+import java.security.SecureRandom
 
-private fun randomAvatarSeed(): String {
-    val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-    return (1..12).map { chars.random() }.joinToString("")
+private val avatarSeedRandom = SecureRandom()
+
+private fun randomAvatarSeed(currentSeed: String? = null): String {
+    val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    var next: String
+    do {
+        next = buildString(24) {
+            repeat(24) {
+                append(chars[avatarSeedRandom.nextInt(chars.length)])
+            }
+        }
+    } while (next == currentSeed)
+    return next
 }
 
 @Composable
@@ -183,7 +194,7 @@ fun EditProfileDialog(
                     }
                     OutlinedButton(
                         enabled = !saving,
-                        onClick = { avatarSeed = randomAvatarSeed() },
+                        onClick = { avatarSeed = randomAvatarSeed(avatarSeed) },
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder)
                     ) {
