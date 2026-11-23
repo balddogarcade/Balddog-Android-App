@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,7 +21,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.platform.LocalContext
+import dog.bald.arcade.data.ArcadeBadge
+import dog.bald.arcade.data.ArcadeRank
+import dog.bald.arcade.data.CountryCatalog
+import dog.bald.arcade.data.PublicProfileDto
+import dog.bald.arcade.data.SocialLinksDto
+import dog.bald.arcade.data.SocialValidation
+import dog.bald.arcade.data.computeArcadeBadges
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -75,15 +86,33 @@ fun ProfileHeroCard(
     recordsCount: Int,
     gamesPlayedCount: Int,
     onEditUsername: () -> Unit,
+    publicProfile: PublicProfileDto? = null,
+    onOpenFollowers: () -> Unit = {},
+    onOpenFollowing: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val effectiveSeed = profile?.avatarSeed?.takeIf { it.isNotBlank() } ?: avatarSeed
+    val globalPoints = publicProfile?.globalPoints ?: 0L
+    val rank = ArcadeRank.fromPoints(globalPoints)
+    val flag = CountryCatalog.flagEmoji(profile?.countryCode)
+    val badges = remember(publicProfile, profile, recordsCount) {
+        computeArcadeBadges(
+            firstPlaces = publicProfile?.firstPlaces ?: 0L,
+            podiums = publicProfile?.podiums ?: 0L,
+            total1cc = publicProfile?.total1cc ?: recordsCount.toLong(),
+            verifiedReplays = publicProfile?.verifiedReplays ?: 0L,
+            totalPlaySeconds = profile?.totalPlaySeconds,
+            netplayMatches = publicProfile?.netplayMatches ?: 0L
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(CarbonSurface, RectangleShape)
             .border(1.dp, CharcoalBorder, RectangleShape)
             .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -92,15 +121,15 @@ fun ProfileHeroCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(60.dp)
                     .background(ObsidianBlack, RectangleShape)
                     .border(1.dp, SteelBorder, RectangleShape)
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 DiceBearPixelArtAvatar(
-                    seed = avatarSeed,
-                    modifier = Modifier.size(48.dp)
+                    seed = effectiveSeed,
+                    modifier = Modifier.size(52.dp)
                 )
             }
 
@@ -110,10 +139,13 @@ fun ProfileHeroCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    if (flag.isNotEmpty()) {
+                        Text(text = flag, fontSize = 16.sp)
+                    }
                     Text(
-                        text = profile?.username ?: "Invitado",
+                        text = profile?.username ?: "Jugador",
                         color = PureWhite,
                         fontFamily = SpaceGroteskFamily,
                         fontWeight = FontWeight.Bold,
@@ -122,36 +154,124 @@ fun ProfileHeroCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (profile != null) {
-                        IconButton(
-                            onClick = onEditUsername,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "Editar nombre",
-                                tint = SilverGray,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ArcadeBadge(
+                        text = rank.title,
+                        style = ArcadeBadgeStyle.Solid
+                    )
+                    Text(
+                        text = buildString {
+                            append("$globalPoints PTS")
+                            publicProfile?.globalRank?.let { append(" · #$it") }
+                        },
+                        color = SilverGray,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                    if (profile?.isPrivate == true) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Perfil privado",
+                            tint = MutedGray,
+                            modifier = Modifier.size(13.dp)
+                        )
                     }
                 }
 
-                if (profile?.isAnonymous == true || userEmail.isNullOrBlank()) {
-                    ArcadeBadge(
-                        text = "CUENTA INVITADO",
-                        style = ArcadeBadgeStyle.Outline
-                    )
-                } else {
+                if (!userEmail.isNullOrBlank()) {
                     Text(
                         text = userEmail,
                         color = MutedGray,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontFamily = JetBrainsMonoFamily,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+        }
+
+        if (!profile?.bio.isNullOrBlank()) {
+            Text(
+                text = profile?.bio.orEmpty(),
+                color = SilverGray,
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+                    .clickable(onClick = onOpenFollowers)
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "SEGUIDORES (${publicProfile?.followersCount ?: 0})",
+                    color = PureWhite,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+                    .clickable(onClick = onOpenFollowing)
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "SIGUIENDO (${publicProfile?.followingCount ?: 0})",
+                    color = PureWhite,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        if (profile != null) {
+            SocialLinksBar(links = profile.socialLinks)
+            if (badges.isNotEmpty()) {
+                ArcadeBadgesStrip(badges = badges)
+            }
+            OutlinedButton(
+                onClick = onEditUsername,
+                shape = RectangleShape,
+                border = BorderStroke(1.dp, SteelBorder),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = PureWhite,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "EDITAR PERFIL",
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
             }
         }
 
@@ -196,6 +316,88 @@ fun ProfileHeroCard(
                 value = "$gamesPlayedCount",
                 modifier = Modifier.weight(1f)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SocialLinksBar(
+    links: SocialLinksDto,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val items = remember(links) {
+        listOfNotNull(
+            links.x?.takeIf { it.isNotBlank() }?.let { Triple("x", "X", it) },
+            links.instagram?.takeIf { it.isNotBlank() }?.let { Triple("instagram", "IG", it) },
+            links.youtube?.takeIf { it.isNotBlank() }?.let { Triple("youtube", "YT", it) },
+            links.twitch?.takeIf { it.isNotBlank() }?.let { Triple("twitch", "TWITCH", it) },
+            links.discord?.takeIf { it.isNotBlank() }?.let { Triple("discord", "DISCORD", it) },
+            links.github?.takeIf { it.isNotBlank() }?.let { Triple("github", "GITHUB", it) },
+            links.website?.takeIf { it.isNotBlank() }?.let { Triple("website", "WEB", it) }
+        )
+    }
+    if (items.isEmpty()) return
+
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        items.forEach { (key, label, value) ->
+            Box(
+                modifier = Modifier
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, SteelBorder, RectangleShape)
+                    .clickable { SocialValidation.openSocialLinkOrCopy(context, key, value) }
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = label,
+                    color = PureWhite,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ArcadeBadgesStrip(
+    badges: List<ArcadeBadge>,
+    modifier: Modifier = Modifier
+) {
+    if (badges.isEmpty()) return
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        badges.forEach { badge ->
+            Column(
+                modifier = Modifier
+                    .background(GraphiteSurface, RectangleShape)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+                    .padding(horizontal = 8.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = if (badge.tier != null) "${badge.title} · ${badge.tier}" else badge.title,
+                    color = PureWhite,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp
+                )
+                Text(
+                    text = badge.subtitle,
+                    color = MutedGray,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 9.sp
+                )
+            }
         }
     }
 }

@@ -103,6 +103,9 @@ fun ProfileScreen(
     onOpenDiagnostics: () -> Unit,
     onClearCache: () -> Unit,
     onSignOut: () -> Unit,
+    publicProfile: dog.bald.arcade.data.PublicProfileDto? = null,
+    onOpenFollowers: () -> Unit = {},
+    onOpenFollowing: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -152,7 +155,10 @@ fun ProfileScreen(
                 onEditUsername = {
                     usernameError = null
                     showEditNameDialog = true
-                }
+                },
+                publicProfile = publicProfile,
+                onOpenFollowers = onOpenFollowers,
+                onOpenFollowing = onOpenFollowing
             )
         }
 
