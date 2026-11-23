@@ -448,4 +448,120 @@ class ArcadeRepository(context: Context) {
         }
         return client.postgrest.rpc("get_my_match_history", params).decodeList<MatchHistoryDto>()
     }
+
+    suspend fun updateMyProfile(
+        username: String,
+        bio: String?,
+        countryCode: String?,
+        avatarSeed: String?,
+        isPrivate: Boolean,
+        socialLinks: SocialLinksDto
+    ): ProfileDto {
+        val linksJson = buildJsonObject {
+            socialLinks.x?.trim()?.takeIf { it.isNotEmpty() }?.let { put("x", it) }
+            socialLinks.instagram?.trim()?.takeIf { it.isNotEmpty() }?.let { put("instagram", it) }
+            socialLinks.youtube?.trim()?.takeIf { it.isNotEmpty() }?.let { put("youtube", it) }
+            socialLinks.twitch?.trim()?.takeIf { it.isNotEmpty() }?.let { put("twitch", it) }
+            socialLinks.discord?.trim()?.takeIf { it.isNotEmpty() }?.let { put("discord", it) }
+            socialLinks.github?.trim()?.takeIf { it.isNotEmpty() }?.let { put("github", it) }
+            socialLinks.website?.trim()?.takeIf { it.isNotEmpty() }?.let { put("website", it) }
+        }
+        val params = buildJsonObject {
+            put("p_username", username.trim())
+            if (!bio.isNullOrBlank()) put("p_bio", bio.trim()) else put("p_bio", kotlinx.serialization.json.JsonNull)
+            if (!countryCode.isNullOrBlank()) put("p_country_code", countryCode.trim().uppercase()) else put("p_country_code", kotlinx.serialization.json.JsonNull)
+            if (!avatarSeed.isNullOrBlank()) put("p_avatar_seed", avatarSeed.trim()) else put("p_avatar_seed", kotlinx.serialization.json.JsonNull)
+            put("p_is_private", isPrivate)
+            put("p_social_links", linksJson)
+        }
+        return client.postgrest.rpc("update_my_profile", params).decodeAs<ProfileDto>()
+    }
+
+    suspend fun fetchPublicProfile(userId: String): PublicProfileDto? {
+        if (currentUserId() == null || userId.isBlank()) return null
+        val params = buildJsonObject {
+            put("p_user_id", userId)
+        }
+        return client.postgrest.rpc("get_public_profile", params).decodeAsOrNull<PublicProfileDto>()
+    }
+
+    suspend fun followUser(targetUserId: String) {
+        if (currentUserId() == null || targetUserId.isBlank()) return
+        val params = buildJsonObject {
+            put("p_target_user_id", targetUserId)
+        }
+        client.postgrest.rpc("follow_user", params)
+    }
+
+    suspend fun unfollowUser(targetUserId: String) {
+        if (currentUserId() == null || targetUserId.isBlank()) return
+        val params = buildJsonObject {
+            put("p_target_user_id", targetUserId)
+        }
+        client.postgrest.rpc("unfollow_user", params)
+    }
+
+    suspend fun fetchFollowList(
+        userId: String,
+        direction: String,
+        limit: Int = 50,
+        offset: Int = 0
+    ): List<FollowUserDto> {
+        if (currentUserId() == null || userId.isBlank()) return emptyList()
+        val params = buildJsonObject {
+            put("p_user_id", userId)
+            put("p_direction", direction)
+            put("p_limit", limit)
+            put("p_offset", offset)
+        }
+        return client.postgrest.rpc("get_follow_list", params).decodeList<FollowUserDto>()
+    }
+
+    suspend fun fetchMyFollowingIds(): Set<String> {
+        val uid = currentUserId() ?: return emptySet()
+        return runCatching {
+            fetchFollowList(userId = uid, direction = "following", limit = 100, offset = 0)
+                .map { it.userId }
+                .toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    suspend fun fetchGlobalLeaderboard(
+        onlyFollowing: Boolean = false,
+        search: String? = null,
+        limit: Int = 50,
+        offset: Int = 0
+    ): List<GlobalLeaderboardEntryDto> {
+        if (currentUserId() == null) return emptyList()
+        val params = buildJsonObject {
+            put("p_only_following", onlyFollowing)
+            if (!search.isNullOrBlank()) put("p_search", search.trim())
+            put("p_limit", limit)
+            put("p_offset", offset)
+        }
+        return client.postgrest.rpc("get_global_leaderboard", params).decodeList<GlobalLeaderboardEntryDto>()
+    }
+
+    suspend fun fetchGameLeaderboardV2(
+        gameId: String,
+        mode: String = "1cc",
+        onlyFollowing: Boolean = false,
+        limit: Int = 50,
+        offset: Int = 0
+    ): List<GameLeaderboardV2EntryDto> {
+        if (currentUserId() == null || gameId.isBlank()) return emptyList()
+        val params = buildJsonObject {
+            put("p_game_id", gameId)
+            put("p_mode", mode)
+            put("p_only_following", onlyFollowing)
+            put("p_limit", limit)
+            put("p_offset", offset)
+        }
+        return client.postgrest.rpc("get_game_leaderboard_v2", params).decodeList<GameLeaderboardV2EntryDto>()
+    }
+
+    suspend fun fetchGamesRankingSummary(): List<GameRankingSummaryDto> {
+        if (currentUserId() == null) return emptyList()
+        return client.postgrest.rpc("get_games_ranking_summary").decodeList<GameRankingSummaryDto>()
+    }
 }
