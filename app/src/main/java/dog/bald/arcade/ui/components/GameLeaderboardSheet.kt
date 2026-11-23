@@ -72,6 +72,7 @@ fun GameLeaderboardSheet(
     game: GameDto,
     repo: ArcadeRepository,
     onWatchReplay: (LeaderboardEntryDto) -> Unit = {},
+    onOpenUserProfile: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -252,6 +253,7 @@ fun GameLeaderboardSheet(
                                 entry = entry,
                                 isMe = entry.userId == currentUid,
                                 formattedScore = numberFmt.format(entry.score),
+                                onClick = { onOpenUserProfile(entry.userId) },
                                 onWatchReplay = if (!entry.replayPath.isNullOrBlank()) {
                                     { onWatchReplay(entry) }
                                 } else null
@@ -279,7 +281,8 @@ fun GameLeaderboardSheet(
                     LeaderboardRow(
                         entry = myEntry,
                         isMe = true,
-                        formattedScore = numberFmt.format(myEntry.score)
+                        formattedScore = numberFmt.format(myEntry.score),
+                        onClick = { onOpenUserProfile(myEntry.userId) }
                     )
                     if (myEntry.isAnonymous) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -306,6 +309,7 @@ private fun LeaderboardRow(
     entry: LeaderboardEntryDto,
     isMe: Boolean,
     formattedScore: String,
+    onClick: () -> Unit = {},
     onWatchReplay: (() -> Unit)? = null
 ) {
     val bgColor = if (isMe) GraphiteSurface else CarbonSurface
@@ -323,6 +327,7 @@ private fun LeaderboardRow(
             .fillMaxWidth()
             .background(bgColor)
             .border(1.dp, borderColor, RectangleShape)
+            .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Text(
