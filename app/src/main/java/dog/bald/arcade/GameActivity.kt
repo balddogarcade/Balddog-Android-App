@@ -60,6 +60,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import dog.bald.arcade.audio.VoiceAudioManager
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.ExitSyncCoordinator
 import dog.bald.arcade.data.MatchHistoryPlayerDto
 import dog.bald.arcade.data.PendingMatchHistoryEntry
 import dog.bald.arcade.data.PendingMatchHistoryQueue
@@ -873,6 +874,14 @@ class GameActivity : ComponentActivity() {
             voiceAudioManager?.setPaused(true)
             setVoiceControls(voiceMicEnabled, voiceListenEnabled, voiceVolume, paused = true)
         }
+        if (isFinishing) {
+            if (!isReplayMode) {
+                pausePlayTimer()
+                flushPlayTime(force = true)
+            }
+            flushBestScoreOnExit()
+            recordMatchHistoryOnExit()
+        }
     }
 
     override fun onResume() {
@@ -1112,7 +1121,7 @@ class GameActivity : ComponentActivity() {
         )
         PendingMatchHistoryQueue.enqueue(appCtx, pendingEntry)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        val syncJob = CoroutineScope(Dispatchers.IO).launch {
             val players = if (isNetplay) {
                 initialPlayers
             } else {
@@ -1137,6 +1146,7 @@ class GameActivity : ComponentActivity() {
                 PendingMatchHistoryQueue.removeBySessionId(appCtx, sessionId, uid)
             }
         }
+        ExitSyncCoordinator.register(syncJob)
     }
 
     private fun submitOrQueueScore(score: Long, credits: Int, notifyUi: Boolean) {
@@ -1157,7 +1167,7 @@ class GameActivity : ComponentActivity() {
             pendingReplayExports.add(exportDone)
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        val scoreJob = CoroutineScope(Dispatchers.IO).launch {
             val exportedReplay = try {
                 runCatching {
                     pendingDir.mkdirs()
@@ -1274,6 +1284,7 @@ class GameActivity : ComponentActivity() {
                 }
             }
         }
+        ExitSyncCoordinator.register(scoreJob)
     }
 
     private fun hasLegacyWriteStoragePermission(): Boolean {

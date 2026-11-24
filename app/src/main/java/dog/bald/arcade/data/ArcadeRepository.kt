@@ -95,21 +95,12 @@ class ArcadeRepository(context: Context) {
     suspend fun fetchRoomByCodeOrId(codeOrId: String): RoomDto? {
         val clean = codeOrId.trim().removePrefix("#")
         if (clean.isEmpty()) return null
-        val byCode = client.from("rooms").select {
-            filter {
-                ilike("code", clean)
-                eq("status", "waiting")
-            }
-        }.decodeList<RoomDto>().firstOrNull()
-        if (byCode != null) return byCode
-        return runCatching {
-            client.from("rooms").select {
-                filter {
-                    eq("id", clean)
-                    eq("status", "waiting")
-                }
-            }.decodeSingleOrNull<RoomDto>()
-        }.getOrNull()
+        val params = buildJsonObject {
+            put("p_code", clean)
+        }
+        return client.postgrest.rpc("find_room_by_code", params)
+            .decodeList<RoomDto>()
+            .firstOrNull()
     }
 
     suspend fun createRoom(
@@ -152,21 +143,25 @@ class ArcadeRepository(context: Context) {
         }.decodeSingle<RoomDto>()
     }
 
-    suspend fun updateRoomSlots(roomId: String, slots: Map<String, RoomSlotInfo>, status: String? = null) {
-        val payload = buildJsonObject {
-            put("slots_json", Json.encodeToJsonElement(slots))
-            if (status != null) put("status", status)
+    suspend fun updateRoomSlot(
+        roomId: String,
+        action: String,
+        slotIndex: Int? = null,
+        ready: Boolean? = null,
+        status: String? = null,
+        endpoint: String? = null,
+        voiceEndpoint: String? = null
+    ): RoomDto {
+        val params = buildJsonObject {
+            put("p_room_id", roomId)
+            put("p_action", action)
+            slotIndex?.let { put("p_slot_index", it) }
+            ready?.let { put("p_ready", it) }
+            status?.let { put("p_status", it) }
+            endpoint?.let { put("p_endpoint", it) }
+            voiceEndpoint?.let { put("p_voice_endpoint", it) }
         }
-        client.from("rooms").update(payload) {
-            filter { eq("id", roomId) }
-        }
-    }
-
-    suspend fun closeRoom(roomId: String) {
-        val payload = buildJsonObject { put("status", "closed") }
-        client.from("rooms").update(payload) {
-            filter { eq("id", roomId) }
-        }
+        return client.postgrest.rpc("update_room_slot", params).decodeAs<RoomDto>()
     }
 
     suspend fun deleteRoom(roomId: String) {
@@ -176,12 +171,7 @@ class ArcadeRepository(context: Context) {
     }
 
     suspend fun touchRoomHeartbeat(roomId: String) {
-        val payload = buildJsonObject {
-            put("updated_at", java.time.Instant.now().toString())
-        }
-        client.from("rooms").update(payload) {
-            filter { eq("id", roomId) }
-        }
+        updateRoomSlot(roomId = roomId, action = "status")
     }
 
     suspend fun fetchRoomMessages(roomId: String): List<RoomMessageDto> {
@@ -191,15 +181,14 @@ class ArcadeRepository(context: Context) {
         }.decodeList<RoomMessageDto>()
     }
 
-    suspend fun sendRoomMessage(roomId: String, username: String, message: String) {
-        val uid = currentUserId() ?: return
-        val payload = buildJsonObject {
-            put("room_id", roomId)
-            put("user_id", uid)
-            put("username", username)
-            put("message", message.take(240))
+    suspend fun sendRoomMessage(roomId: String, message: String): RoomMessageDto {
+        val clean = message.trim().take(240)
+        require(clean.isNotEmpty()) { "El mensaje no puede estar vacío" }
+        val params = buildJsonObject {
+            put("p_room_id", roomId)
+            put("p_content", clean)
         }
-        client.from("room_messages").insert(payload)
+        return client.postgrest.rpc("send_room_message", params).decodeAs<RoomMessageDto>()
     }
 
     suspend fun uploadReplay(gameId: String, file: File): Triple<String, Int, String>? {

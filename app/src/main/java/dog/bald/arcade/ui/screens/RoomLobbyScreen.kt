@@ -153,6 +153,11 @@ fun RoomLobbyScreen(
     var failedPlayingLaunch by remember(initialRoom.id) { mutableStateOf(false) }
     var launchJob by remember { mutableStateOf<Job?>(null) }
     var leftRoom by remember { mutableStateOf(false) }
+    var initialJoinDone by remember(initialRoom.id) {
+        mutableStateOf(
+            myUid.isBlank() || initialRoom.slotsJson.values.any { it.userId == myUid }
+        )
+    }
     var showHostExitConfirm by remember { mutableStateOf(false) }
     var copiedRoomCode by remember { mutableStateOf(false) }
 
@@ -196,27 +201,25 @@ fun RoomLobbyScreen(
 
     // Auto-asignar el primer slot libre al entrar si aún no tiene slot
     LaunchedEffect(room.id, myUid) {
-        if (myUid.isNotBlank() && mySlot == null) {
-            val latest = runCatching { repo.fetchRoomById(room.id) }.getOrNull() ?: room
-            room = latest
-            val alreadySeated = latest.slotsJson.values.any { it.userId == myUid }
-            if (!alreadySeated) {
-                val freeSlot = (0 until latest.maxPlayers).firstOrNull { !latest.slotsJson.containsKey(it.toString()) }
-                if (freeSlot != null) {
-                    val next = latest.slotsJson.toMutableMap()
-                    next[freeSlot.toString()] = RoomSlotInfo(
-                        userId = myUid,
-                        username = myUsername,
-                        endpoint = myEndpoint,
-                        voiceEndpoint = myVoiceEndpoint.ifBlank { null },
-                        ready = isHost
-                    )
-                    runCatching {
-                        repo.updateRoomSlots(latest.id, next)
-                        room = latest.copy(slotsJson = next)
-                    }
-                }
+        if (myUid.isNotBlank() && room.slotsJson.values.none { it.userId == myUid }) {
+            runCatching {
+                repo.updateRoomSlot(
+                    roomId = room.id,
+                    action = "join",
+                    endpoint = myEndpoint,
+                    voiceEndpoint = myVoiceEndpoint.ifBlank { null }
+                )
+            }.onSuccess { joined ->
+                room = joined
+                initialJoinDone = true
+            }.onFailure { err ->
+                if (err is CancellationException) throw err
+                leftRoom = true
+                latencyMonitor.close()
+                onLeave(err.toUserMessage("No se pudo unir a la sala"))
             }
+        } else {
+            initialJoinDone = true
         }
     }
 
@@ -262,13 +265,7 @@ fun RoomLobbyScreen(
                 if (isHost) {
                     runCatching { repo.deleteRoom(room.id) }
                 } else if (reason == null && myUid.isNotBlank()) {
-                    runCatching {
-                        val latest = repo.fetchRoomById(room.id) ?: room
-                        val next = latest.slotsJson.filterValues { it.userId != myUid }
-                        if (next.size != latest.slotsJson.size) {
-                            repo.updateRoomSlots(room.id, next)
-                        }
-                    }
+                    runCatching { repo.updateRoomSlot(roomId = room.id, action = "leave") }
                 }
             }
             onLeave(reason)
@@ -315,7 +312,11 @@ fun RoomLobbyScreen(
 
     // Polling ligero de sala y chat (con guardia de disparo único para iniciar partida)
     LaunchedEffect(room.id) {
-        var lastUpdatedAt = initialRoom.updatedAt
+        while (!initialJoinDone && !leftRoom) {
+            delay(100)
+        }
+        if (leftRoom) return@LaunchedEffect
+        var lastUpdatedAt = room.updatedAt
         var lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
         while (!leftRoom) {
             if (matchLaunched || preparingMatch) {
@@ -341,10 +342,10 @@ fun RoomLobbyScreen(
                     if (updated.updatedAt != lastUpdatedAt) {
                         lastUpdatedAt = updated.updatedAt
                         lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
-                    } else if (SystemClock.elapsedRealtime() - lastHeartbeatChangeMs > 15_000L) {
+                    } else if (SystemClock.elapsedRealtime() - lastHeartbeatChangeMs > 12_500L) {
                         if (!leftRoom && (!matchLaunched || preparingMatch)) {
                             leftRoom = true
-                            runCatching { repo.closeRoom(room.id) }
+                            runCatching { repo.updateRoomSlot(room.id, "close_stale") }
                             latencyMonitor.close()
                             onLeave("El anfitrión se fue de la sala.")
                         }
@@ -372,21 +373,16 @@ fun RoomLobbyScreen(
         if (leftRoom || matchLaunched || preparingMatch || startingMatch) return
         scope.launch {
             try {
-                val next = room.slotsJson.toMutableMap()
-                if (next.containsKey(slotIdx.toString())) return@launch
-                // Quitar slot anterior del usuario si tenía uno
-                val oldKey = next.entries.firstOrNull { it.value.userId == myUid }?.key
-                if (oldKey != null) next.remove(oldKey)
-                next[slotIdx.toString()] = RoomSlotInfo(
-                    userId = myUid,
-                    username = myUsername,
+                errorMsg = null
+                room = repo.updateRoomSlot(
+                    roomId = room.id,
+                    action = "claim",
+                    slotIndex = slotIdx,
                     endpoint = myEndpoint,
-                    voiceEndpoint = myVoiceEndpoint.ifBlank { null },
-                    ready = isHost
+                    voiceEndpoint = myVoiceEndpoint.ifBlank { null }
                 )
-                repo.updateRoomSlots(room.id, next)
-                room = room.copy(slotsJson = next)
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 errorMsg = t.toUserMessage("Error actualizando sala")
             }
         }
@@ -395,14 +391,17 @@ fun RoomLobbyScreen(
     fun toggleReady() {
         if (leftRoom || matchLaunched || preparingMatch || startingMatch) return
         val slot = mySlot ?: return
+        val myCurrentReady = room.slotsJson[slot.toString()]?.ready == true
         scope.launch {
             try {
-                val next = room.slotsJson.toMutableMap()
-                val cur = next[slot.toString()] ?: return@launch
-                next[slot.toString()] = cur.copy(ready = !cur.ready)
-                repo.updateRoomSlots(room.id, next)
-                room = room.copy(slotsJson = next)
+                errorMsg = null
+                room = repo.updateRoomSlot(
+                    roomId = room.id,
+                    action = "ready",
+                    ready = !myCurrentReady
+                )
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 errorMsg = t.toUserMessage("Error cambiando estado")
             }
         }
@@ -481,7 +480,16 @@ fun RoomLobbyScreen(
         if (txt.isBlank()) return
         chatInput = ""
         scope.launch {
-            runCatching { repo.sendRoomMessage(room.id, myUsername, txt) }
+            runCatching { repo.sendRoomMessage(room.id, txt) }
+                .onSuccess { sent ->
+                    if (messages.none { it.id == sent.id }) {
+                        messages = messages + sent
+                    }
+                }
+                .onFailure { err ->
+                    if (err is CancellationException) throw err
+                    errorMsg = err.toUserMessage("No se pudo enviar el mensaje")
+                }
         }
     }
 
@@ -791,7 +799,16 @@ fun RoomLobbyScreen(
                 OutlinedButton(
                     onClick = {
                         scope.launch {
-                            runCatching { repo.sendRoomMessage(room.id, myUsername, label) }
+                            runCatching { repo.sendRoomMessage(room.id, label) }
+                                .onSuccess { sent ->
+                                    if (messages.none { it.id == sent.id }) {
+                                        messages = messages + sent
+                                    }
+                                }
+                                .onFailure { err ->
+                                    if (err is CancellationException) throw err
+                                    errorMsg = err.toUserMessage("No se pudo enviar el mensaje")
+                                }
                         }
                     },
                     shape = RectangleShape,
@@ -1001,14 +1018,19 @@ fun RoomLobbyScreen(
                         startingMatch = true
                         errorMsg = null
                         scope.launch {
-                            val startedRoom = room.copy(status = "playing")
                             runCatching {
-                                repo.updateRoomSlots(room.id, room.slotsJson, status = "playing")
-                            }.onSuccess {
+                                repo.updateRoomSlot(roomId = room.id, action = "start")
+                            }.onSuccess { startedRoom ->
                                 room = startedRoom
                                 startingMatch = false
-                                triggerMatchLaunch(startedRoom, mySlot)
+                                val resolvedSlot = startedRoom.slotsJson.entries
+                                    .firstOrNull { it.value.userId == myUid }
+                                    ?.key
+                                    ?.toIntOrNull()
+                                    ?: mySlot
+                                triggerMatchLaunch(startedRoom, resolvedSlot)
                             }.onFailure { err ->
+                                if (err is CancellationException) throw err
                                 startingMatch = false
                                 errorMsg = err.toUserMessage("No se pudo iniciar la partida")
                             }

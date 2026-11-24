@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.R
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.ExitSyncCoordinator
 import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.GameRankingSummaryDto
@@ -106,8 +107,10 @@ import dog.bald.arcade.ui.components.GameLeaderboardSheet
 import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.components.NewRecordDialog
 import dog.bald.arcade.ui.components.PostMatchRecordBannerData
+import dog.bald.arcade.ui.components.detectImprovedHighScore
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
+import dog.bald.arcade.ui.theme.DangerRed
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
@@ -207,6 +210,7 @@ fun MainShellScreen(
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var downloadedFiles by remember { mutableStateOf(romManager.listDownloadedFilenames()) }
     var cacheBytes by remember { mutableLongStateOf(romManager.totalCacheBytes()) }
+    var gamePendingDelete by remember { mutableStateOf<GameDto?>(null) }
 
     fun refreshLocalState() {
         downloadedFiles = romManager.listDownloadedFilenames()
@@ -310,6 +314,7 @@ fun MainShellScreen(
                 } else {
                     scope.launch {
                         val prevScores = myHighScores.associateBy { it.gameId }
+                        ExitSyncCoordinator.awaitInFlight(timeoutMs = 8_000L)
                         runCatching { PendingScoreQueue.flushAll(context, repo) }
                         runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
                         pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
@@ -326,11 +331,7 @@ fun MainShellScreen(
                             rankingSummaries = repo.fetchGamesRankingSummary().associateBy { it.gameId }
                         }
 
-                        val improved = updatedScores.firstOrNull { curr ->
-                            val prev = prevScores[curr.gameId]
-                            (prev != null && (curr.score > prev.score || curr.rank < prev.rank)) ||
-                                (prev == null && curr.rank <= 10L)
-                        }
+                        val improved = detectImprovedHighScore(prevScores, updatedScores)
                         if (improved != null) {
                             val gameObj = games.firstOrNull { it.id == improved.gameId }
                             if (gameObj != null) {
@@ -359,11 +360,15 @@ fun MainShellScreen(
             }
         } else if (MainTab.entries[selectedTab] == MainTab.PROFILE) {
             runCatching {
+                PendingScoreQueue.flushAll(context, repo)
                 PendingMatchHistoryQueue.flushAll(context, repo)
                 profile = repo.fetchMyProfile()
                 myHighScores = repo.fetchMyHighScores()
                 myMatchHistory = repo.fetchMyMatchHistory()
                 myGameStats = repo.fetchMyGameStats()
+                repo.currentUserId()?.let { uid ->
+                    myPublicProfile = repo.fetchPublicProfile(uid)
+                }
                 pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
             }
         }
@@ -594,7 +599,8 @@ fun MainShellScreen(
                     onRefresh = { refreshAll() },
                     onDownload = { downloadOnly(it) },
                     onPlay = { onLaunchLocalRom(it) },
-                    onLeaderboard = { leaderboardGame = it }
+                    onLeaderboard = { leaderboardGame = it },
+                    onDeleteClick = { gamePendingDelete = it }
                 )
 
                 MainTab.RANKINGS -> RankingsScreen(
@@ -653,14 +659,28 @@ fun MainShellScreen(
                     onJoinRoom = { room ->
                         roomNoticeMsg = null
                         scope.launch {
-                            val port = (7100..7199).random()
-                            val voicePort = port + 1000
-                            myUdpPort = port
-                            myVoiceUdpPort = voicePort
-                            val localIp = lanNsd.getLocalIpv4Address()
-                            myEndpoint = resolveUdpEndpoint(room.mode, port, localIp)
-                            myVoiceEndpoint = resolveUdpEndpoint(room.mode, voicePort, localIp)
-                            activeRoom = room
+                            try {
+                                val port = (7100..7199).random()
+                                val voicePort = port + 1000
+                                myUdpPort = port
+                                myVoiceUdpPort = voicePort
+                                val localIp = lanNsd.getLocalIpv4Address()
+                                val endpoint = resolveUdpEndpoint(room.mode, port, localIp)
+                                val voiceEndpoint = resolveUdpEndpoint(room.mode, voicePort, localIp)
+                                myEndpoint = endpoint
+                                myVoiceEndpoint = voiceEndpoint
+                                val joinedRoom = repo.updateRoomSlot(
+                                    roomId = room.id,
+                                    action = "join",
+                                    endpoint = endpoint,
+                                    voiceEndpoint = voiceEndpoint.ifBlank { null }
+                                )
+                                activeRoom = joinedRoom
+                            } catch (ce: CancellationException) {
+                                throw ce
+                            } catch (t: Throwable) {
+                                roomNoticeMsg = t.toUserMessage("No se pudo unir a la sala")
+                            }
                         }
                     }
                 )
@@ -892,6 +912,51 @@ fun MainShellScreen(
         )
     }
 
+    gamePendingDelete?.let { gameToDelete ->
+        AlertDialog(
+            onDismissRequest = { gamePendingDelete = null },
+            containerColor = CarbonSurface,
+            shape = RectangleShape,
+            title = {
+                Text(
+                    text = "ELIMINAR ROM",
+                    color = PureWhite,
+                    fontFamily = SpaceGroteskFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "¿Eliminar la ROM local de \"${gameToDelete.title}\" (${gameToDelete.romFilename}) para liberar espacio? Podrás volver a descargarla cuando quieras.",
+                    color = SilverGray,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        romManager.deleteRom(gameToDelete.romFilename)
+                        refreshLocalState()
+                        gamePendingDelete = null
+                    },
+                    shape = RectangleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DangerRed,
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("ELIMINAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { gamePendingDelete = null }) {
+                    Text("CANCELAR", color = SilverGray, fontSize = 12.sp)
+                }
+            }
+        )
+    }
+
     if (showDiagnosticsSheet) {
         DiagnosticsSheet(
             engineStatus = engineStatus,
@@ -924,7 +989,8 @@ private fun CatalogTab(
     onRefresh: () -> Unit,
     onDownload: (GameDto) -> Unit,
     onPlay: (GameDto) -> Unit,
-    onLeaderboard: (GameDto) -> Unit
+    onLeaderboard: (GameDto) -> Unit,
+    onDeleteClick: (GameDto) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -1007,6 +1073,11 @@ private fun CatalogTab(
                         },
                         onLeaderboardClick = if (hasLeaderboard) {
                             { onLeaderboard(game) }
+                        } else {
+                            null
+                        },
+                        onDeleteClick = if (isDownloaded && !busy) {
+                            { onDeleteClick(game) }
                         } else {
                             null
                         }

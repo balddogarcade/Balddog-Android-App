@@ -65,8 +65,7 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -86,11 +85,14 @@ fun RankingsScreen(
     var selectedSubTab by remember { mutableIntStateOf(RankingsSubTab.GLOBAL.ordinal) }
     var onlyFollowing by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var debouncedSearch by remember { mutableStateOf("") }
     var showMechanicsDialog by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
-    var loading by remember { mutableStateOf(true) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var loadingGlobal by remember { mutableStateOf(true) }
+    var globalErrorMsg by remember { mutableStateOf<String?>(null) }
+    var loadingGames by remember { mutableStateOf(true) }
+    var gamesErrorMsg by remember { mutableStateOf<String?>(null) }
     var globalEntries by remember { mutableStateOf<List<GlobalLeaderboardEntryDto>>(emptyList()) }
     var gameSummaries by remember { mutableStateOf<Map<String, GameRankingSummaryDto>>(emptyMap()) }
 
@@ -99,31 +101,44 @@ fun RankingsScreen(
         games.filter { !it.scoreConfig?.lboard.isNullOrBlank() }
     }
 
-    LaunchedEffect(refreshKey, onlyFollowing, searchQuery) {
-        loading = true
-        errorMsg = null
+    LaunchedEffect(searchQuery) {
+        delay(300L)
+        debouncedSearch = searchQuery.trim()
+    }
+
+    LaunchedEffect(refreshKey) {
+        loadingGames = true
+        gamesErrorMsg = null
         runCatching {
-            coroutineScope {
-                val globalDef = async {
-                    repo.fetchGlobalLeaderboard(
-                        onlyFollowing = onlyFollowing,
-                        search = searchQuery.takeIf { it.isNotBlank() },
-                        limit = 100,
-                        offset = 0
-                    )
-                }
-                val gamesDef = async { repo.fetchGamesRankingSummary() }
-                Pair(globalDef.await(), gamesDef.await().associateBy { it.gameId })
-            }
+            repo.fetchGamesRankingSummary().associateBy { it.gameId }
         }
-            .onSuccess { (gList, summaries) ->
-                globalEntries = gList
+            .onSuccess { summaries ->
                 gameSummaries = summaries
             }
             .onFailure {
-                errorMsg = it.toUserMessage("No se pudieron cargar los rankings")
+                gamesErrorMsg = it.toUserMessage("No se pudieron cargar los rankings")
             }
-        loading = false
+        loadingGames = false
+    }
+
+    LaunchedEffect(refreshKey, onlyFollowing, debouncedSearch) {
+        loadingGlobal = true
+        globalErrorMsg = null
+        runCatching {
+            repo.fetchGlobalLeaderboard(
+                onlyFollowing = onlyFollowing,
+                search = debouncedSearch.takeIf { it.isNotBlank() },
+                limit = 100,
+                offset = 0
+            )
+        }
+            .onSuccess { gList ->
+                globalEntries = gList
+            }
+            .onFailure {
+                globalErrorMsg = it.toUserMessage("No se pudieron cargar los rankings")
+            }
+        loadingGlobal = false
     }
 
     Column(
@@ -268,19 +283,19 @@ fun RankingsScreen(
             }
         }
 
-        when {
-            loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = PureWhite)
+        if (selectedSubTab == RankingsSubTab.GLOBAL.ordinal) {
+            when {
+                loadingGlobal -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PureWhite)
+                    }
                 }
-            }
-            errorMsg != null -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = errorMsg!!, color = SilverGray, fontSize = 12.sp)
+                globalErrorMsg != null -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = globalErrorMsg!!, color = SilverGray, fontSize = 12.sp)
+                    }
                 }
-            }
-            selectedSubTab == RankingsSubTab.GLOBAL.ordinal -> {
-                if (globalEntries.isEmpty()) {
+                globalEntries.isEmpty() -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             text = if (onlyFollowing) "Sin jugadores seguidos con récords 1CC." else "No se encontraron jugadores.",
@@ -289,7 +304,8 @@ fun RankingsScreen(
                             fontSize = 12.sp
                         )
                     }
-                } else {
+                }
+                else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -305,27 +321,33 @@ fun RankingsScreen(
                     }
                 }
             }
-            else -> {
-                val filteredGames = remember(gamesWithLeaderboard, searchQuery) {
-                    val q = searchQuery.trim()
-                    if (q.isEmpty()) gamesWithLeaderboard
-                    else gamesWithLeaderboard.filter {
-                        it.title.contains(q, ignoreCase = true) || it.system.contains(q, ignoreCase = true)
+        } else {
+            when {
+                loadingGames -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = PureWhite)
                     }
                 }
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(filteredGames, key = { it.id }) { game ->
-                        GameRankingSummaryCard(
-                            game = game,
-                            summary = gameSummaries[game.id],
-                            numberFmt = numberFmt,
-                            onOpenGameRanking = { onOpenGameRanking(game) },
-                            onOpenUserProfile = onOpenPublicProfile
-                        )
+                gamesErrorMsg != null -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = gamesErrorMsg!!, color = SilverGray, fontSize = 12.sp)
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(gamesWithLeaderboard, key = { it.id }) { game ->
+                            GameRankingSummaryCard(
+                                game = game,
+                                summary = gameSummaries[game.id],
+                                numberFmt = numberFmt,
+                                onOpenGameRanking = { onOpenGameRanking(game) },
+                                onOpenUserProfile = onOpenPublicProfile
+                            )
+                        }
                     }
                 }
             }

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
@@ -43,6 +44,16 @@ data class PostMatchRecordBannerData(
     val previousRank: Long?,
     val newRank: Long?
 )
+
+internal fun detectImprovedHighScore(
+    prevScoresByGameId: Map<String, MyHighScoreDto>,
+    updatedScores: List<MyHighScoreDto>
+): MyHighScoreDto? {
+    return updatedScores.firstOrNull { curr ->
+        val prev = prevScoresByGameId[curr.gameId]
+        prev == null || curr.score > prev.score || curr.rank < prev.rank
+    }
+}
 
 @Composable
 fun NewRecordDialog(
