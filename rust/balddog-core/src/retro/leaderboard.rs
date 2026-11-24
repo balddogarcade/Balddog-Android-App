@@ -288,6 +288,60 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_uccops_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xH14E3B>0_0xH1117E>0::CAN:0=1::SUB:0xH14E3B=0_0xH1117E=0::VAL:A:b0xH14E37*1000000_A:b0xH14E36*10000_A:b0xH14E35*100_M:b0xH14E34",
+        )
+        .expect("uccops lboard válido");
+
+        let mut ram = vec![0u8; 155688];
+        // 1. Boot / Idle: Vidas=0, Energía=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 2 vidas, 100 de energía, 4040 puntos (0x40, 0x40 en LE BCD)
+        ram[0x14E3B] = 2; // P1 Lives (MAME 0xE3E3B)
+        ram[0x1117E] = 100; // P1 Energy (MAME 0xE017E)
+        ram[0x14E34] = 0x40;
+        ram[0x14E35] = 0x40;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 4040);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Combate: sube puntaje a 12,340, energía baja a 50
+        ram[0x14E34] = 0x40;
+        ram[0x14E35] = 0x23;
+        ram[0x14E36] = 0x01;
+        ram[0x1117E] = 50;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 12340);
+        assert_eq!(out.triggered_score, None);
+
+        // 4. Muerte de vida 1: energía llega a 0 brevemente, pero todavía tiene 1 vida en reserva
+        ram[0x1117E] = 0;
+        ram[0x14E3B] = 1;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active, "No debe disparar SUB mientras queden vidas");
+        assert_eq!(out.triggered_score, None);
+
+        // 5. Reaparece en vida 2: energía recargada a 100
+        ram[0x1117E] = 100;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 12340);
+
+        // 6. Game Over: pierde última vida (vidas=0, energía=0)
+        ram[0x14E3B] = 0;
+        ram[0x1117E] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(12340));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
             "STA:0xHB345=1::CAN:0=1::SUB:0xHB345=0::VAL:A:b0x B374*10000_M:b0x B376",
@@ -305,7 +359,7 @@ mod tests {
             "STA:0xH834A=1::CAN:0=1::SUB:0xH834A=0::VAL:A:b0x 834C*10000_M:b0x 834E",
             "STA:0xH040D=1::CAN:0=1::SUB:0xH040D=0::VAL:A:b0x 3D02*10000_M:b0x 3D04",
             "STA:0xH02D4=1::CAN:0=1::SUB:0xH02D4=0::VAL:A:b0x 07F2*10000_M:b0x 07F4",
-            "STA:0xH2137=1::CAN:0=1::SUB:0xH2137=0::VAL:A:b0xH14E37*1000000_A:b0xH14E36*10000_A:b0xH14E35*100_M:b0xH14E34",
+            "STA:0xH14E3B>0_0xH1117E>0::CAN:0=1::SUB:0xH14E3B=0_0xH1117E=0::VAL:A:b0xH14E37*1000000_A:b0xH14E36*10000_A:b0xH14E35*100_M:b0xH14E34",
             "STA:0xH000F=1::CAN:0=1::SUB:0xH000F=0::VAL:A:b0xH03EE*1000000_A:b0xH03ED*10000_A:b0xH03EC*100_M:b0xH03EB",
             "STA:0xH1050=1::CAN:0=1::SUB:0xH1050=0::VAL:0xX1B04",
             "STA:0xH04A1=1::CAN:0=1::SUB:0xH04A1=0::VAL:A:b0x 3214*10000_M:b0x 3216",
