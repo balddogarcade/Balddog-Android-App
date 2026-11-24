@@ -35,6 +35,9 @@ class LobbyLatencyMonitor(
     private val _latenciesMs = MutableStateFlow<Map<String, Int>>(emptyMap())
     val latenciesMs: StateFlow<Map<String, Int>> = _latenciesMs.asStateFlow()
 
+    private val _publicEndpoint = MutableStateFlow<String?>(null)
+    val publicEndpoint: StateFlow<String?> = _publicEndpoint.asStateFlow()
+
     @Volatile
     private var peers: List<LobbyPeerTarget> = emptyList()
 
@@ -188,6 +191,10 @@ class LobbyLatencyMonitor(
             data[6] == 0xA4.toByte() &&
             data[7] == 0x42.toByte()
         ) {
+            val mappedEp = parseXorMappedAddress(data, length)
+            if (mappedEp != null && _publicEndpoint.value != mappedEp) {
+                _publicEndpoint.value = mappedEp
+            }
             val txKey = data.sliceArray(8 until 20).joinToString("") { "%02x".format(it) }
             val sentNanos = pendingStunPings.remove(txKey) ?: return
             val now = System.nanoTime()
@@ -229,6 +236,52 @@ class LobbyLatencyMonitor(
         for ((host, port) in servers) {
             val addr = runCatching { InetSocketAddress(InetAddress.getByName(host), port) }.getOrNull()
             if (addr != null && !addr.isUnresolved) return addr
+        }
+        return null
+    }
+
+    internal fun parseXorMappedAddress(data: ByteArray, length: Int): String? {
+        if (length < 20) return null
+        val magic0 = 0x21.toByte()
+        val magic1 = 0x12.toByte()
+        val magic2 = 0xA4.toByte()
+        val magic3 = 0x42.toByte()
+        if (data[4] != magic0 || data[5] != magic1 || data[6] != magic2 || data[7] != magic3) return null
+
+        val msgLen = ((data[2].toInt() and 0xFF) shl 8) or (data[3].toInt() and 0xFF)
+        val end = minOf(20 + msgLen, length)
+        var pos = 20
+        while (pos + 4 <= end) {
+            val attrType = ((data[pos].toInt() and 0xFF) shl 8) or (data[pos + 1].toInt() and 0xFF)
+            val attrLen = ((data[pos + 2].toInt() and 0xFF) shl 8) or (data[pos + 3].toInt() and 0xFF)
+            val valStart = pos + 4
+            val valEnd = valStart + attrLen
+            if (valEnd > end) break
+
+            // 0x0020 = XOR-MAPPED-ADDRESS
+            if (attrType == 0x0020 && attrLen >= 8) {
+                val family = data[valStart + 1].toInt() and 0xFF
+                val xport = (((data[valStart + 2].toInt() and 0xFF) shl 8) or (data[valStart + 3].toInt() and 0xFF)) xor 0x2112
+                if (family == 0x01) { // IPv4
+                    val b0 = (data[valStart + 4].toInt() and 0xFF) xor (magic0.toInt() and 0xFF)
+                    val b1 = (data[valStart + 5].toInt() and 0xFF) xor (magic1.toInt() and 0xFF)
+                    val b2 = (data[valStart + 6].toInt() and 0xFF) xor (magic2.toInt() and 0xFF)
+                    val b3 = (data[valStart + 7].toInt() and 0xFF) xor (magic3.toInt() and 0xFF)
+                    return "$b0.$b1.$b2.$b3:$xport"
+                }
+            } else if (attrType == 0x0001 && attrLen >= 8) { // MAPPED-ADDRESS (fallback clásico)
+                val family = data[valStart + 1].toInt() and 0xFF
+                val port = ((data[valStart + 2].toInt() and 0xFF) shl 8) or (data[valStart + 3].toInt() and 0xFF)
+                if (family == 0x01) {
+                    val b0 = data[valStart + 4].toInt() and 0xFF
+                    val b1 = data[valStart + 5].toInt() and 0xFF
+                    val b2 = data[valStart + 6].toInt() and 0xFF
+                    val b3 = data[valStart + 7].toInt() and 0xFF
+                    return "$b0.$b1.$b2.$b3:$port"
+                }
+            }
+            val padded = (attrLen + 3) and 3.inv()
+            pos = valStart + padded
         }
         return null
     }

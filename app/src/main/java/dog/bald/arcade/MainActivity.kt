@@ -131,14 +131,31 @@ class MainActivity : ComponentActivity() {
                             },
                             onLaunchNetplayMatch = { game, room, mySlot, localPort, voiceLocalPort ->
                                 val romFile = File(romsDir, game.romFilename)
-                                val peers = room.slotsJson.entries
-                                    .filter { it.key.toIntOrNull() != mySlot }
-                                    .sortedBy { it.key.toIntOrNull() ?: 0 }
-                                val peerHandles = peers.mapNotNull { it.key.toIntOrNull() }.toIntArray()
-                                val peerAddrs = ArrayList(peers.map { it.value.endpoint })
-                                val voicePeers = peers.filter { !it.value.voiceEndpoint.isNullOrBlank() }
-                                val voicePeerHandles = voicePeers.mapNotNull { it.key.toIntOrNull() }.toIntArray()
-                                val voicePeerAddrs = ArrayList(voicePeers.mapNotNull { it.value.voiceEndpoint })
+                                // Mapear slots ocupados en orden ascendente a handles contiguos (0..N-1) para GGRS y Libretro
+                                val seatedEntries = room.slotsJson.entries
+                                    .mapNotNull { entry -> entry.key.toIntOrNull()?.let { slotIdx -> slotIdx to entry.value } }
+                                    .sortedBy { it.first }
+                                val totalPlayers = seatedEntries.size.coerceAtLeast(2)
+                                val myPlayerIndex = seatedEntries.indexOfFirst { it.first == mySlot }.takeIf { it >= 0 } ?: 0
+
+                                val peerHandles = mutableListOf<Int>()
+                                val peerAddrs = arrayListOf<String>()
+                                seatedEntries.forEachIndexed { handle, (_, slotInfo) ->
+                                    if (handle != myPlayerIndex) {
+                                        peerHandles.add(handle)
+                                        peerAddrs.add(slotInfo.endpoint)
+                                    }
+                                }
+
+                                val voicePeerHandles = mutableListOf<Int>()
+                                val voicePeerAddrs = arrayListOf<String>()
+                                seatedEntries.forEachIndexed { handle, (_, slotInfo) ->
+                                    if (handle != myPlayerIndex && !slotInfo.voiceEndpoint.isNullOrBlank()) {
+                                        voicePeerHandles.add(handle)
+                                        voicePeerAddrs.add(slotInfo.voiceEndpoint!!)
+                                    }
+                                }
+
                                 val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
                                     putExtra(GameActivity.EXTRA_GAME_ID, game.id)
                                     putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
@@ -147,9 +164,9 @@ class MainActivity : ComponentActivity() {
                                     putExtra(GameActivity.EXTRA_GAME_TITLE, game.title)
                                     putExtra(GameActivity.EXTRA_NETPLAY_ENABLED, true)
                                     putExtra(GameActivity.EXTRA_LOCAL_PORT, localPort)
-                                    putExtra(GameActivity.EXTRA_LOCAL_HANDLE, mySlot)
-                                    putExtra(GameActivity.EXTRA_NUM_PLAYERS, room.slotsJson.size.coerceAtLeast(2))
-                                    putExtra(GameActivity.EXTRA_PEER_HANDLES, peerHandles)
+                                    putExtra(GameActivity.EXTRA_LOCAL_HANDLE, myPlayerIndex)
+                                    putExtra(GameActivity.EXTRA_NUM_PLAYERS, totalPlayers)
+                                    putExtra(GameActivity.EXTRA_PEER_HANDLES, peerHandles.toIntArray())
                                     putStringArrayListExtra(GameActivity.EXTRA_PEER_ADDRS, peerAddrs)
                                     putExtra(GameActivity.EXTRA_INPUT_DELAY, if (room.mode == "lan") 1 else 2)
                                     putExtra(GameActivity.EXTRA_ROOM_ID, room.id)
@@ -171,7 +188,7 @@ class MainActivity : ComponentActivity() {
                                     putExtra(GameActivity.EXTRA_ROOM_PLAYERS_JSON, playersJson)
                                     putExtra(GameActivity.EXTRA_IS_HOST, room.hostId == repo.currentUserId())
                                     putExtra(GameActivity.EXTRA_VOICE_LOCAL_PORT, voiceLocalPort)
-                                    putExtra(GameActivity.EXTRA_VOICE_PEER_HANDLES, voicePeerHandles)
+                                    putExtra(GameActivity.EXTRA_VOICE_PEER_HANDLES, voicePeerHandles.toIntArray())
                                     putStringArrayListExtra(GameActivity.EXTRA_VOICE_PEER_ADDRS, voicePeerAddrs)
                                 }
                                 startActivity(intent)

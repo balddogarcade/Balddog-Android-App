@@ -144,10 +144,15 @@ pub fn discover_stun_endpoint(local_port: u16) -> Result<String, NetplayError> {
     let socket = UdpSocket::bind(("0.0.0.0", local_port))
         .map_err(|e| NetplayError::Transport(format!("Bind UDP STUN falló: {e}")))?;
     socket
-        .set_read_timeout(Some(Duration::from_secs(3)))
+        .set_read_timeout(Some(Duration::from_millis(2000)))
         .map_err(|e| NetplayError::Transport(format!("Timeout UDP falló: {e}")))?;
 
-    let stun_servers = ["stun.cloudflare.com:3478", "stun.l.google.com:19302"];
+    let stun_servers = [
+        "stun.cloudflare.com:3478",
+        "stun.l.google.com:19302",
+        "stun1.l.google.com:19302",
+        "stun2.l.google.com:19302",
+    ];
 
     let mut buf = [0u8; 256];
     for server in stun_servers {
@@ -221,6 +226,22 @@ fn parse_stun_xor_mapped(pkt: &[u8], expected_tid: &[u8; 12]) -> Option<SocketAd
             if family == 0x02 {
                 return None;
             }
+        } else if attr_type == 0x0001 && attr_len >= 4 {
+            // 0x0001 = MAPPED-ADDRESS (RFC 3489 clásico)
+            let family = pkt[val_start + 1];
+            let port = u16::from_be_bytes([pkt[val_start + 2], pkt[val_start + 3]]);
+            if family == 0x01 && attr_len >= 8 {
+                let ip = std::net::Ipv4Addr::new(
+                    pkt[val_start + 4],
+                    pkt[val_start + 5],
+                    pkt[val_start + 6],
+                    pkt[val_start + 7],
+                );
+                return Some(SocketAddr::new(std::net::IpAddr::V4(ip), port));
+            }
+            if family == 0x02 {
+                return None;
+            }
         }
         let padded = (attr_len + 3) & !3;
         pos = val_start.checked_add(padded)?;
@@ -268,6 +289,25 @@ mod tests {
             oct[1] ^ STUN_MAGIC_COOKIE[1],
             oct[2] ^ STUN_MAGIC_COOKIE[2],
             oct[3] ^ STUN_MAGIC_COOKIE[3],
+        ];
+        let pkt = make_stun_response(&tid, &attr);
+        assert_eq!(
+            parse_stun_xor_mapped(&pkt, &tid),
+            Some(SocketAddr::new(IpAddr::V4(ip), port))
+        );
+    }
+
+    #[test]
+    fn parse_stun_parses_classic_mapped_address() {
+        let tid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let port: u16 = 54321;
+        let ip = Ipv4Addr::new(198, 51, 100, 77);
+        let port_bytes = port.to_be_bytes();
+        let oct = ip.octets();
+        let attr = [
+            0x00, 0x01, 0x00, 0x08, // MAPPED-ADDRESS, len 8
+            0x00, 0x01, port_bytes[0], port_bytes[1], // family IPv4
+            oct[0], oct[1], oct[2], oct[3],
         ];
         let pkt = make_stun_response(&tid, &attr);
         assert_eq!(

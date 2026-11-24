@@ -175,6 +175,28 @@ fun RoomLobbyScreen(
     val isHost = room.hostId == myUid
     val mySlot = room.slotsJson.entries.firstOrNull { it.value.userId == myUid }?.key?.toIntOrNull()
 
+    val discoveredEndpoint by latencyMonitor.publicEndpoint.collectAsState()
+    LaunchedEffect(discoveredEndpoint, mySlot) {
+        val ep = discoveredEndpoint ?: return@LaunchedEffect
+        val slot = mySlot ?: return@LaunchedEffect
+        val currentSlotEp = room.slotsJson[slot.toString()]?.endpoint
+        if (room.mode != "lan" && ep.isNotBlank() && currentSlotEp != ep) {
+            val isCurrentPrivate = currentSlotEp == null || isPrivateIp(currentSlotEp)
+            if (isCurrentPrivate || currentSlotEp != ep) {
+                runCatching {
+                    val updated = repo.updateRoomSlot(
+                        roomId = room.id,
+                        action = "claim",
+                        slotIndex = slot,
+                        endpoint = ep,
+                        voiceEndpoint = myVoiceEndpoint.ifBlank { null }
+                    )
+                    room = updated
+                }
+            }
+        }
+    }
+
     DisposableEffect(latencyMonitor) {
         latencyMonitor.start(scope)
         onDispose {
@@ -226,6 +248,13 @@ fun RoomLobbyScreen(
 
     fun triggerMatchLaunch(targetRoom: RoomDto, slot: Int) {
         if (leftRoom || matchLaunched || preparingMatch) return
+        if (targetRoom.mode != "lan") {
+            val hasPrivateEp = targetRoom.slotsJson.values.any { isPrivateIp(it.endpoint) }
+            if (hasPrivateEp) {
+                errorMsg = "Esperando resolución de dirección pública STUN para jugar por internet..."
+                return
+            }
+        }
         preparingMatch = true
         matchLaunched = true
         errorMsg = null
@@ -1235,4 +1264,16 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+private fun isPrivateIp(endpoint: String): Boolean {
+    val host = endpoint.substringBefore(':').trim().removeSurrounding("[", "]")
+    if (host == "127.0.0.1" || host == "localhost" || host == "::1") return true
+    if (host.startsWith("192.168.")) return true
+    if (host.startsWith("10.")) return true
+    if (host.startsWith("172.")) {
+        val second = host.substringAfter('.').substringBefore('.').toIntOrNull()
+        if (second != null && second in 16..31) return true
+    }
+    return false
 }

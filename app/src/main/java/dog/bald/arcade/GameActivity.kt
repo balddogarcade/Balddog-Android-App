@@ -173,6 +173,7 @@ class GameActivity : ComponentActivity() {
     private var menuStatusMsg by mutableStateOf<String?>(null)
     private var currentFps by mutableFloatStateOf(0f)
     private var isNetplay by mutableStateOf(false)
+    private var netplayPeerAddrs by mutableStateOf<List<String>>(emptyList())
     private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u, false))
     private var netplayEndReason by mutableStateOf<String?>(null)
     private var netplayRoomId: String = ""
@@ -331,6 +332,7 @@ class GameActivity : ComponentActivity() {
                 val rawHandles = intent.getIntArrayExtra(EXTRA_PEER_HANDLES) ?: intArrayOf()
                 val peerHandles = ByteArray(rawHandles.size) { rawHandles[it].toByte() }
                 val peerAddrs = intent.getStringArrayListExtra(EXTRA_PEER_ADDRS) ?: arrayListOf()
+                netplayPeerAddrs = peerAddrs
                 val inputDelay = intent.getIntExtra(EXTRA_INPUT_DELAY, 2)
                 startNetplayGame(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
@@ -791,14 +793,35 @@ class GameActivity : ComponentActivity() {
                             )
                         }
                     } else {
-                        Text(
-                            text = engineError ?: "",
-                            color = SilverGray,
-                            fontSize = 15.sp,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .padding(24.dp)
-                        )
+                        ) {
+                            Text(
+                                text = "ERROR INICIANDO EMULADOR",
+                                color = PureWhite,
+                                fontFamily = SpaceGroteskFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = engineError ?: "Error desconocido",
+                                color = SilverGray,
+                                fontSize = 12.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            OutlinedButton(
+                                onClick = { finish() },
+                                shape = RectangleShape,
+                                border = BorderStroke(1.dp, SteelBorder),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                            ) {
+                                Text("VOLVER", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
 
                     if (isNetplay && !netplaySynchronized && !showMenu && netplayEndReason == null && engineError == null) {
@@ -825,8 +848,13 @@ class GameActivity : ComponentActivity() {
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
+                                val targetDetail = if (netplayPeerAddrs.isNotEmpty()) {
+                                    "Conectando a: ${netplayPeerAddrs.joinToString(", ")}"
+                                } else {
+                                    "Estableciendo conexión P2P entre jugadores..."
+                                }
                                 Text(
-                                    text = "Estableciendo conexión P2P entre jugadores...",
+                                    text = targetDetail,
                                     color = SilverGray,
                                     fontSize = 11.sp
                                 )
