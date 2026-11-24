@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -57,7 +58,8 @@ fun ReplayHudOverlay(
     onSelectSpeed: (Int) -> Unit,
     onCaptureScreenshot: () -> Unit,
     onExportVideoClip: () -> Unit,
-    onExit: () -> Unit
+    onExit: () -> Unit,
+    onOpenMenu: (() -> Unit)? = null
 ) {
     val numFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
     val totalFrames = replayHud.totalFrames.toLong().coerceAtLeast(1L)
@@ -110,26 +112,57 @@ fun ReplayHudOverlay(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .background(CarbonSurface)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
-                    .clickable(onClick = onExit)
-                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Salir del replay",
-                    tint = PureWhite,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "SALIR",
-                    fontFamily = JetBrainsMonoFamily,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PureWhite
-                )
+                if (onOpenMenu != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .background(CarbonSurface)
+                            .border(1.dp, CharcoalBorder, RectangleShape)
+                            .clickable(onClick = onOpenMenu)
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Abrir menú del replay",
+                            tint = PureWhite,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "MENÚ",
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .background(CarbonSurface)
+                        .border(1.dp, CharcoalBorder, RectangleShape)
+                        .clickable(onClick = onExit)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Salir del replay",
+                        tint = PureWhite,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "SALIR",
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PureWhite
+                    )
+                }
             }
         }
 

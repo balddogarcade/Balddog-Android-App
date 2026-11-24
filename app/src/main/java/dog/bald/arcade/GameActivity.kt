@@ -182,6 +182,9 @@ class GameActivity : ComponentActivity() {
     private var rankingNoticeShown: Boolean = false
     private var lastSubmittedSessionScore: Long = 0L
     private var isReplayMode by mutableStateOf(false)
+    private var replayManuallyPaused by mutableStateOf(false)
+    @Volatile
+    private var audioFocusDucked: Boolean = false
     private var replayPath: String = ""
     private var replayPlayerName by mutableStateOf("")
     private var replayTargetScore by mutableStateOf(0L)
@@ -229,11 +232,23 @@ class GameActivity : ComponentActivity() {
     private val physicalMasks = IntArray(4)
 
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        when (change) {
-            AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> updateEnginePaused(true)
-            AudioManager.AUDIOFOCUS_GAIN -> if (!showMenu) updateEnginePaused(false)
+        val action = GameSessionPolicy.resolveAudioFocusChange(
+            focusChange = change,
+            isNetplay = isNetplay,
+            showMenu = showMenu,
+            isReplayMode = isReplayMode,
+            replayManuallyPaused = replayManuallyPaused,
+            voiceListenEnabled = voiceListenEnabled,
+            remoteSpeakingMask = voiceHud.remoteSpeakingMask.toInt()
+        )
+        action.audioFocusDucked?.let { ducked ->
+            audioFocusDucked = ducked
+        }
+        action.setDucking?.let { ducking ->
+            setAudioDucking(ducking)
+        }
+        action.setPaused?.let { paused ->
+            updateEnginePaused(paused)
         }
     }
 
@@ -373,7 +388,7 @@ class GameActivity : ComponentActivity() {
                                 netplayEndReason = "El otro jugador se desconectó de la partida."
                             }
                         }
-                        if (!showMenu) {
+                        if (!showMenu && !isReplayMode) {
                             flushPlayTime(force = false)
                         }
                         if (!isNetplay && !isReplayMode && scoreDef != null) {
@@ -397,7 +412,7 @@ class GameActivity : ComponentActivity() {
                         while (true) {
                             voiceHud = getVoiceHudState()
                             val someoneSpeaking = voiceListenEnabled && voiceHud.remoteSpeakingMask.toInt() != 0
-                            setAudioDucking(someoneSpeaking)
+                            setAudioDucking(audioFocusDucked || someoneSpeaking)
                             delay(150)
                         }
                     }
@@ -432,7 +447,7 @@ class GameActivity : ComponentActivity() {
                         TouchLayoutPrefs.save(this@GameActivity, touchConfig)
                     } else {
                         showMenu = !showMenu
-                        updateEnginePaused(showMenu)
+                        updateEnginePaused(showMenu || (isReplayMode && replayManuallyPaused))
                     }
                 }
 
@@ -504,12 +519,15 @@ class GameActivity : ComponentActivity() {
                                 exportProgressPct = exportProgressPct,
                                 onTogglePause = {
                                     val nextPaused = !replayHud.paused
+                                    replayManuallyPaused = nextPaused
                                     updateEnginePaused(nextPaused)
                                     replayHud = getReplayHudInfo()
                                 },
                                 onRestart = {
+                                    replayManuallyPaused = false
                                     restartReplay()
                                     updateEnginePaused(false)
+                                    replayHud = getReplayHudInfo()
                                 },
                                 onSelectSpeed = { spd ->
                                     setReplaySpeed(spd.toUByte())
@@ -529,18 +547,24 @@ class GameActivity : ComponentActivity() {
                                 onExit = {
                                     stopGame()
                                     finish()
+                                },
+                                onOpenMenu = {
+                                    menuStatusMsg = null
+                                    showMenu = true
+                                    updateEnginePaused(true)
                                 }
                             )
                         }
 
                         if (!showMenu) {
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 16.dp, end = 20.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                            if (!isReplayMode) {
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 16.dp, end = 20.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                 if (isNetplay) {
                                     val speakerMask = voiceHud.remoteSpeakingMask.toInt()
                                     if (voiceListenEnabled && speakerMask != 0) {
@@ -646,13 +670,14 @@ class GameActivity : ComponentActivity() {
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
+                                }
                             }
                             val notice = voiceNoticeMsg
                             if (notice != null) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.TopEnd)
-                                        .padding(top = 52.dp, end = 20.dp)
+                                        .padding(top = if (isReplayMode) 68.dp else 52.dp, end = 20.dp)
                                         .background(CarbonSurface.copy(alpha = 0.92f), RoundedCornerShape(8.dp))
                                         .border(1.dp, SteelBorder, RoundedCornerShape(8.dp))
                                         .padding(horizontal = 10.dp, vertical = 5.dp)
@@ -677,13 +702,15 @@ class GameActivity : ComponentActivity() {
                                 }
                             }
                         } else {
-                            val scoreLabel = when {
-                                isNetplay -> null
-                                scoreDef == null -> "Ranking: Sin configuración para este juego"
-                                !scoreHud.rankingEligible -> "Ranking: Desactivado (Save State)"
-                                scoreHud.creditsUsed.toInt() > 1 -> "Ranking: Desactivado (${scoreHud.creditsUsed} créditos)"
-                                else -> "Ranking: 1 Crédito · Score ${scoreHud.currentScore} (Máx ${scoreHud.bestSessionScore})"
-                            }
+                            val scoreLabel = GameSessionPolicy.scoreStatusLabel(
+                                isNetplay = isNetplay,
+                                isReplayMode = isReplayMode,
+                                scoreDef = scoreDef,
+                                rankingEligible = scoreHud.rankingEligible,
+                                creditsUsed = scoreHud.creditsUsed.toInt(),
+                                currentScore = scoreHud.currentScore.toLong(),
+                                bestSessionScore = scoreHud.bestSessionScore.toLong()
+                            )
                             InGameQuickMenu(
                                 gameTitle = gameTitle,
                                 fps = currentFps,
@@ -692,6 +719,7 @@ class GameActivity : ComponentActivity() {
                                 touchConfig = touchConfig,
                                 editLayoutMode = editLayoutMode,
                                 isNetplay = isNetplay,
+                                isReplayMode = isReplayMode,
                                 scoreStatusLabel = scoreLabel,
                                 voiceVolume = voiceVolume,
                                 onVoiceVolumeChange = { updated ->
@@ -738,6 +766,9 @@ class GameActivity : ComponentActivity() {
                                 },
                                 onResume = {
                                     showMenu = false
+                                    if (isReplayMode) {
+                                        replayManuallyPaused = false
+                                    }
                                     updateEnginePaused(false)
                                 },
                                 onExit = { finish() }
@@ -847,7 +878,9 @@ class GameActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         enableImmersiveMode()
-        if (!showMenu) {
+        val someoneSpeaking = isNetplay && voiceListenEnabled && voiceHud.remoteSpeakingMask.toInt() != 0
+        setAudioDucking(audioFocusDucked || someoneSpeaking)
+        if (GameSessionPolicy.shouldResumeEngine(showMenu, isReplayMode, replayManuallyPaused)) {
             updateEnginePaused(false)
         }
         if (isNetplay) {
@@ -858,14 +891,18 @@ class GameActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        pausePlayTimer()
-        flushPlayTime(force = true)
+        if (!isReplayMode) {
+            pausePlayTimer()
+            flushPlayTime(force = true)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        pausePlayTimer()
-        flushPlayTime(force = true)
+        if (!isReplayMode) {
+            pausePlayTimer()
+            flushPlayTime(force = true)
+        }
         if (isFinishing && isNetplay && isNetplayHost && netplayRoomId.isNotBlank()) {
             val roomIdToClose = netplayRoomId
             val appCtx = applicationContext
@@ -905,7 +942,7 @@ class GameActivity : ComponentActivity() {
         voiceAudioManager?.setCaptureEnabled(voiceMicEnabled)
         voiceAudioManager?.setPlaybackEnabled(voiceListenEnabled)
         if (!voiceListenEnabled) {
-            setAudioDucking(false)
+            setAudioDucking(audioFocusDucked)
         }
     }
 
@@ -934,7 +971,7 @@ class GameActivity : ComponentActivity() {
     }
 
     private fun resumePlayTimer() {
-        if (engineError != null || gameId.isBlank()) return
+        if (!GameSessionPolicy.shouldTrackPlayTime(isReplayMode, engineError, gameId)) return
         synchronized(playTimerLock) {
             if (activePlayStartMs == null) {
                 activePlayStartMs = SystemClock.elapsedRealtime()
@@ -953,7 +990,7 @@ class GameActivity : ComponentActivity() {
 
     private fun flushPlayTime(force: Boolean) {
         val gid = gameId
-        if (gid.isBlank()) return
+        if (!GameSessionPolicy.shouldFlushPlayTime(isReplayMode, gid)) return
 
         var deltaToSend = 0L
         var isNewSession = false
@@ -1319,6 +1356,7 @@ class GameActivity : ComponentActivity() {
                 )
                 if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
                     exportProgressPct = null
+                    replayManuallyPaused = false
                     runCatching {
                         startReplayGame(
                             nativeLibDir = nativeDir,
@@ -1340,6 +1378,96 @@ class GameActivity : ComponentActivity() {
                     exportProgressPct = null
                 }
             }
+        }
+    }
+}
+
+internal data class AudioFocusAction(
+    val audioFocusDucked: Boolean? = null,
+    val setDucking: Boolean? = null,
+    val setPaused: Boolean? = null
+)
+
+internal object GameSessionPolicy {
+    fun resolveAudioFocusChange(
+        focusChange: Int,
+        isNetplay: Boolean,
+        showMenu: Boolean,
+        isReplayMode: Boolean,
+        replayManuallyPaused: Boolean,
+        voiceListenEnabled: Boolean,
+        remoteSpeakingMask: Int
+    ): AudioFocusAction {
+        return when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> AudioFocusAction(
+                audioFocusDucked = true,
+                setDucking = true,
+                setPaused = null
+            )
+
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (isNetplay) {
+                    AudioFocusAction(
+                        audioFocusDucked = true,
+                        setDucking = true,
+                        setPaused = null
+                    )
+                } else {
+                    AudioFocusAction(
+                        audioFocusDucked = false,
+                        setDucking = false,
+                        setPaused = true
+                    )
+                }
+            }
+
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                val someoneSpeaking = isNetplay && voiceListenEnabled && remoteSpeakingMask != 0
+                val resumeEngine = shouldResumeEngine(showMenu, isReplayMode, replayManuallyPaused)
+                AudioFocusAction(
+                    audioFocusDucked = false,
+                    setDucking = someoneSpeaking,
+                    setPaused = if (resumeEngine) false else null
+                )
+            }
+
+            else -> AudioFocusAction()
+        }
+    }
+
+    fun shouldResumeEngine(
+        showMenu: Boolean,
+        isReplayMode: Boolean,
+        replayManuallyPaused: Boolean
+    ): Boolean = !showMenu && !(isReplayMode && replayManuallyPaused)
+
+    fun shouldTrackPlayTime(
+        isReplayMode: Boolean,
+        engineError: String?,
+        gameId: String
+    ): Boolean = !isReplayMode && engineError == null && gameId.isNotBlank()
+
+    fun shouldFlushPlayTime(
+        isReplayMode: Boolean,
+        gameId: String
+    ): Boolean = !isReplayMode && gameId.isNotBlank()
+
+    fun scoreStatusLabel(
+        isNetplay: Boolean,
+        isReplayMode: Boolean,
+        scoreDef: String?,
+        rankingEligible: Boolean,
+        creditsUsed: Int,
+        currentScore: Long,
+        bestSessionScore: Long
+    ): String? {
+        return when {
+            isNetplay || isReplayMode -> null
+            scoreDef == null -> "Ranking: Sin configuración para este juego"
+            !rankingEligible -> "Ranking: Desactivado (Save State)"
+            creditsUsed > 1 -> "Ranking: Desactivado ($creditsUsed créditos)"
+            else -> "Ranking: 1 Crédito · Score $currentScore (Máx $bestSessionScore)"
         }
     }
 }

@@ -48,6 +48,7 @@ fun InGameQuickMenu(
     touchConfig: TouchLayoutConfig,
     editLayoutMode: Boolean,
     isNetplay: Boolean = false,
+    isReplayMode: Boolean = false,
     scoreStatusLabel: String? = null,
     voiceVolume: Float = 1.0f,
     onVoiceVolumeChange: (Float) -> Unit = {},
@@ -80,8 +81,13 @@ fun InGameQuickMenu(
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
+            val inputModeLabel = when {
+                isReplayMode -> "Modo Replay"
+                hasPhysicalController -> "Mando BT conectado"
+                else -> "Modo Táctil"
+            }
             Text(
-                text = "FPS: ${"%.1f".format(fps)} · ${if (hasPhysicalController) "Mando BT conectado" else "Modo Táctil"}",
+                text = "FPS: ${"%.1f".format(fps)} · $inputModeLabel",
                 color = MutedGray,
                 fontSize = 12.sp
             )
@@ -104,42 +110,46 @@ fun InGameQuickMenu(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = onSaveState,
-                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
-                    border = BorderStroke(1.dp, SteelBorder),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("SAVE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-                Button(
-                    onClick = onLoadState,
-                    colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
-                    border = BorderStroke(1.dp, SteelBorder),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("LOAD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            if (!isNetplay && !isReplayMode) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onSaveState,
+                        colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                        border = BorderStroke(1.dp, SteelBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("SAVE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = onLoadState,
+                        colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                        border = BorderStroke(1.dp, SteelBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("LOAD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
                 }
             }
 
-            Text("Opacidad Táctil (${(touchConfig.opacity * 100).toInt()}%)", color = PureWhite, fontSize = 12.sp)
-            Slider(
-                value = touchConfig.opacity,
-                onValueChange = { onTouchConfigChange(touchConfig.copy(opacity = it)) },
-                valueRange = 0.2f..1.0f,
-                colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
-            )
+            if (!isReplayMode) {
+                Text("Opacidad Táctil (${(touchConfig.opacity * 100).toInt()}%)", color = PureWhite, fontSize = 12.sp)
+                Slider(
+                    value = touchConfig.opacity,
+                    onValueChange = { onTouchConfigChange(touchConfig.copy(opacity = it)) },
+                    valueRange = 0.2f..1.0f,
+                    colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
+                )
 
-            Text("Escala Botones (${"%.2f".format(touchConfig.scale)}x)", color = PureWhite, fontSize = 12.sp)
-            Slider(
-                value = touchConfig.scale,
-                onValueChange = { onTouchConfigChange(touchConfig.copy(scale = it)) },
-                valueRange = 0.75f..1.4f,
-                colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
-            )
+                Text("Escala Botones (${"%.2f".format(touchConfig.scale)}x)", color = PureWhite, fontSize = 12.sp)
+                Slider(
+                    value = touchConfig.scale,
+                    onValueChange = { onTouchConfigChange(touchConfig.copy(scale = it)) },
+                    valueRange = 0.75f..1.4f,
+                    colors = SliderDefaults.colors(thumbColor = PureWhite, activeTrackColor = SilverGray, inactiveTrackColor = GraphiteSurface)
+                )
+            }
 
-            if (isNetplay) {
+            if (isNetplay && !isReplayMode) {
                 Text("Volumen Voz (${(voiceVolume * 100).toInt()}%)", color = PureWhite, fontSize = 12.sp)
                 Slider(
                     value = voiceVolume,
@@ -149,42 +159,44 @@ fun InGameQuickMenu(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Mostrar táctil con mando", color = PureWhite, fontSize = 12.sp)
-                Switch(
-                    checked = touchConfig.forceShowTouch,
-                    onCheckedChange = { onTouchConfigChange(touchConfig.copy(forceShowTouch = it)) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = PureBlack,
-                        checkedTrackColor = PureWhite,
-                        uncheckedThumbColor = MutedGray,
-                        uncheckedTrackColor = GraphiteSurface
-                    )
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(
-                    onClick = onToggleEditLayout,
-                    border = BorderStroke(1.dp, if (editLayoutMode) PureWhite else SteelBorder),
-                    modifier = Modifier.weight(1f)
+            if (!isReplayMode) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        if (editLayoutMode) "LISTO" else "REUBICAR",
-                        color = PureWhite,
-                        fontSize = 11.sp
+                    Text("Mostrar táctil con mando", color = PureWhite, fontSize = 12.sp)
+                    Switch(
+                        checked = touchConfig.forceShowTouch,
+                        onCheckedChange = { onTouchConfigChange(touchConfig.copy(forceShowTouch = it)) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PureBlack,
+                            checkedTrackColor = PureWhite,
+                            uncheckedThumbColor = MutedGray,
+                            uncheckedTrackColor = GraphiteSurface
+                        )
                     )
                 }
-                OutlinedButton(
-                    onClick = onResetLayout,
-                    border = BorderStroke(1.dp, CharcoalBorder),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("RESET", color = MutedGray, fontSize = 11.sp)
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = onToggleEditLayout,
+                        border = BorderStroke(1.dp, if (editLayoutMode) PureWhite else SteelBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            if (editLayoutMode) "LISTO" else "REUBICAR",
+                            color = PureWhite,
+                            fontSize = 11.sp
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onResetLayout,
+                        border = BorderStroke(1.dp, CharcoalBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("RESET", color = MutedGray, fontSize = 11.sp)
+                    }
                 }
             }
 
