@@ -9,7 +9,7 @@ Este documento describe en detalle el diseño, las reglas de negocio, el esquema
 ### 1.1 Principio de funcionamiento
 En lugar de grabar y almacenar archivos de video pesados en la nube, **bald.dog ARCADE** registra exclusivamente los **inputs del jugador frame a frame** en el formato estándar **Libretro BSV1**, comprimidos con **gzip** (`flate2`):
 
-- **Cabecera BSV1 (32 bytes):** Magic `"BSV1"`, versión, CRC32/identificador y tamaño de estado inicial (0 bytes para arranque en frío).
+- **Cabecera BSV1 (16 bytes):** Magic `"BSV1"`, `rom_crc32` (4 bytes), `state_size` (4 bytes) y campo reservado (4 bytes, 0 para cold boot).
 - **Datos por frame (8 bytes crudos a 60 fps):** `[u16; 4]` representando los 4 puertos de entrada (`RetroJoypad`).
 - **Compresión gzip:** Debido a la alta redundancia de inputs consecutivos en juegos arcade, la compresión gzip reduce el tamaño entre **10x y 20x**. Una partida completa de 15–20 minutos pesa en promedio **~25 KB** (vs. 150–300 MB en MP4).
 
@@ -33,7 +33,7 @@ En lugar de grabar y almacenar archivos de video pesados en la nube, **bald.dog 
   - `startReplayGame(nativeLibDir, romPath, systemDir, saveDir, replayPath, scoreDef)`
   - `setReplaySpeed(speedMultiplier)` (`1x`, `2x`, `4x`)
   - `restartReplay()`
-  - `getReplayHudInfo() -> ReplayHudInfo` (`isReplayMode`, `currentFrame`, `totalFrames`, `speedMultiplier`, `finished`, `paused`)
+  - `getReplayHudInfo() -> ReplayHudInfo` (`is_replay`, `current_frame`, `total_frames`, `speed`, `finished`, `paused`)
   - `exportRecordedReplay(destPath)`
   - `captureScreenshotPng(destPath)`
   - `OfflineReplayRenderer` (renderizado headless sin superficie gráfica para exportación de video MP4).

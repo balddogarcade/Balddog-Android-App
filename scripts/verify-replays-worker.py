@@ -131,7 +131,22 @@ def verify_item(
     with tempfile.TemporaryDirectory(prefix="balddog_verify_") as tmp:
         tmp_dir = Path(tmp)
         local_replay = tmp_dir / "replay.bsv.gz"
-        download_replay(base_url, service_key, replay_path, local_replay)
+        try:
+            download_replay(base_url, service_key, replay_path, local_replay)
+        except Exception as e:
+            rpc_call(
+                base_url,
+                service_key,
+                "complete_replay_verification",
+                {
+                    "p_score_id": score_id,
+                    "p_status": "error",
+                    "p_verified_score": None,
+                    "p_verifier_version": verifier_version,
+                    "p_error": f"download_failed: {str(e)[:200]}",
+                },
+            )
+            return
 
         if expected_replay_sha:
             actual_replay_sha = sha256_file(local_replay)
@@ -150,40 +165,47 @@ def verify_item(
                 )
                 return
 
-        proc = subprocess.run(
-            [
-                str(verifier_bin),
-                "--core",
-                str(core_path),
-                "--rom",
-                str(rom_path),
-                "--replay",
-                str(local_replay),
-                "--lboard",
-                lboard_expr,
-                "--system-dir",
-                str(roms_dir),
-                "--save-dir",
-                str(tmp_dir / "saves"),
-                "--expected-score",
-                str(claimed_score),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+        try:
+            proc = subprocess.run(
+                [
+                    str(verifier_bin),
+                    "--core",
+                    str(core_path),
+                    "--rom",
+                    str(rom_path),
+                    "--replay",
+                    str(local_replay),
+                    "--lboard",
+                    lboard_expr,
+                    "--system-dir",
+                    str(roms_dir),
+                    "--save-dir",
+                    str(tmp_dir / "saves"),
+                    "--expected-score",
+                    str(claimed_score),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
 
-        stdout = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else "{}"
-        verdict = json.loads(stdout)
-        verified_score = int(verdict.get("verified_score", 0))
-        reason = verdict.get("reason")
+            stdout = proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else "{}"
+            verdict = json.loads(stdout)
+            verified_score = int(verdict.get("verified_score", 0))
+            reason = verdict.get("reason")
 
-        if verdict.get("valid") is True:
-            status = "verified"
-        elif proc.returncode == 1:
+            if verdict.get("valid") is True:
+                status = "verified"
+            else:
+                status = "rejected"
+        except subprocess.TimeoutExpired:
             status = "rejected"
-        else:
-            status = "error"
+            verified_score = 0
+            reason = "timeout_exceeded"
+        except Exception as e:
+            status = "rejected"
+            verified_score = 0
+            reason = f"verifier_error: {str(e)[:200]}"
 
         rpc_call(
             base_url,
@@ -211,7 +233,7 @@ def main() -> None:
     verifier_bin = Path(env_required("VERIFIER_BIN"))
 
     poll_secs = int(os.environ.get("POLL_INTERVAL_SECS", "15"))
-    batch_size = int(os.environ.get("BATCH_SIZE", "5"))
+    batch_size = int(os.environ.get("BATCH_SIZE", "1"))
     verifier_version = os.environ.get("VERIFIER_VERSION", "fbneo-headless-v1")
     run_once = os.environ.get("ONCE", "0") == "1"
 

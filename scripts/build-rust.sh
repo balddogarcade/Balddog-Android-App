@@ -8,7 +8,11 @@ source "$SCRIPT_DIR/env.sh"
 export CMAKE_POLICY_VERSION_MINIMUM="${CMAKE_POLICY_VERSION_MINIMUM:-3.5}"
 
 PROFILE="${1:-debug}"
-CARGO_FLAGS=()
+if [ "$PROFILE" != "debug" ] && [ "$PROFILE" != "release" ]; then
+  echo "ERROR: Perfil inválido '$PROFILE'. Uso: $0 [debug|release]" >&2
+  exit 1
+fi
+CARGO_FLAGS=(-j 2)
 if [ "$PROFILE" = "release" ]; then
   CARGO_FLAGS+=(--release)
 fi

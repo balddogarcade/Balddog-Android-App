@@ -21,16 +21,23 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
   - Strict **1CC (One Coin Clear)** enforcement: scores are only submitted if completed with 1 credit.
   - In-game live score indicator & 1CC eligibility in `InGameQuickMenu`.
   - Global Top 50 leaderboards and personal rank sheets with offline score queuing (`PendingScoreQueue`).
-- **Deterministic Replays & Media Export (`.bsv.gz` / MP4)**:
+- **Deterministic Replays & Anti-Cheat (`.bsv.gz` / MP4)**:
   - Automatic frame-by-frame `BSV1` input recording (gzip-compressed) during ranked 1CC sessions, stored in Supabase Storage.
+  - Headless server-side replay verifier (`verify_replay.rs` and Python worker) preventing hacked score submissions.
   - Watch any Top 50 replay from `GameLeaderboardSheet` with `1x / 2x / 4x` speed controls, play/pause, restart, and progress HUD (`ReplayHudOverlay`).
   - Export PNG screenshots (`Pictures/balddog ARCADE/`) and H.264 MP4 video clips (`Movies/balddog ARCADE/`) locally via Android `MediaCodec` + `MediaMuxer` + `MediaStore`.
+- **P2P Netplay & Voice Chat**:
+  - Rollback netplay via GGRS with LAN discovery (`LanNsdManager`) and STUN NAT traversal.
+  - Low-latency P2P voice chat with Opus compression, jitter buffering, and Voice Activity Detection (VAD).
+- **Gamification, Social & Rankings**:
+  - Global rankings, rebalanced `ArcadeRank` tiers (Novato to Leyenda), medals, and follower network.
+  - Public profile screens with activity history and game statistics.
 - **Adaptive Controls**:
   - Physical gamepad support (`ControllerManager`, `RetroJoypad`).
   - Customizable touch overlay (`ArcadeTouchOverlay`, `TouchLayoutPrefs`) and in-game quick menu (`InGameQuickMenu`).
 - **Authentication & Security**:
-  - Email or guest/anonymous sign-in with **Supabase Auth**.
-  - Encrypted token storage via `androidx.security:security-crypto`.
+  - Email sign-in with **Supabase Auth** (registered accounts only; guest/anonymous login prohibited).
+  - Encrypted token storage via `androidx.security:security-crypto` with automatic Keystore corruption recovery.
 
 ---
 
@@ -122,14 +129,24 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 5. `supabase/migrations/005_leaderboards_schema.sql` — High scores table with `UNIQUE(game_id, user_id)` and strict client RLS.
 6. `supabase/migrations/006_leaderboard_rpcs.sql` — Atomic RPCs (`submit_high_score`, `get_game_leaderboard`, `get_my_game_rank`).
 7. `supabase/migrations/007_seed_score_configs.sql` — Initial `score_config` seed with verified `max_valid_score`.
-8. `supabase/migrations/008_seed_captcomm_score_config.sql`..`014_seed_mslug3_viostorm_score_configs.sql` — Empirical RAM expressions for 22 verified games (CPS-1, CPS-2, Neo Geo, Toaplan, Konami, Irem, Data East, Technos, etc.).
+8. `supabase/migrations/008_profile_rpcs.sql`..`014_seed_mslug3_viostorm_score_configs.sql` — Empirical RAM expressions for 22 verified games (CPS-1, CPS-2, Neo Geo, Toaplan, Konami, Irem, Data East, Technos, etc.).
 9. `supabase/migrations/015_replays_storage_and_schema.sql` — `replays` Storage bucket, `high_scores.replay_path` columns, and updated leaderboard RPCs.
+10. `supabase/migrations/016_match_history_and_profile_replays.sql` — Match history, session tracking, and profile replays.
+11. `supabase/migrations/017_replay_verification.sql` — Headless replay verification schema and RPCs.
+12. `supabase/migrations/018_fix_max_valid_score.sql` — Score validation fixes.
+13. `supabase/migrations/019_public_profiles_and_social.sql` — Public profile system, social links, and registered-user constraints.
+14. `supabase/migrations/020_user_follows.sql` — User follower network schema and RPCs.
+15. `supabase/migrations/021_rankings_and_gamification_rpcs.sql` — Global rankings, points, and gamification RPCs.
+16. `supabase/migrations/022_security_and_consistency_fixes.sql` — Consolidated RLS hardening, SECURITY DEFINER privileges, and anti-cheat fixes.
+17. `supabase/migrations/023_harden_replay_sha256_and_room_messages_rls.sql` — Unique replay SHA-256 enforcement and room messages RLS hardening.
 
 ---
 
 ## Documentation
 
 - **[Adding New Games to bald.dog ARCADE](docs/ADDING_GAMES.md)**: Comprehensive, step-by-step guide on ROM sourcing, Pinata/IPFS distribution, memory reverse-engineering with `ram_probe`, `rcheevos` leaderboard expression calibration, and Android validation.
+- **[Gamification & Rankings System](docs/GAMIFICATION.md)**: Complete guide to global points, rebalanced ArcadeRank tiers, badges, and desync tie-breakers.
+- **[Replays, History & Anti-Cheat](docs/REPLAYS_AND_HISTORY.md)**: Specifications for BSV1 deterministic recording, headless server verification, and match history.
 - **[Brand Manual](docs/BRAND_MANUAL.md)**: Design guidelines, color palette, typography, and logo usage.
 
 ---

@@ -25,13 +25,15 @@
 - **Container Height:** `36.dp`–`40.dp` with `ContentScale.Fit`, aligned to the start of the top bar.
 - **Accessibility:** Always provide `contentDescription = "bald.dog ARCADE"`.
 - **Clear Space:** Maintain at least `12.dp` vertical breathing room and `16.dp` horizontal screen margin.
-- **Auth & Splash Screens:** May pair the icon (`72.dp`–`96.dp`) with a clean monochrome wordmark (`bald.dog ARCADE`) using `Space Grotesk Bold`.
+- **Auth & Splash Screens:** Pairs the icon (`72.dp`–`96.dp`) with the official wordmark logo asset (`R.drawable.logo_text`).
 
 ---
 
 ## 3. Color System (High-Contrast Grayscale)
 
-All UI chrome uses an achromatic scale engineered for OLED contrast and WCAG AA/AAA readability.
+All UI chrome uses an achromatic scale engineered for OLED contrast and WCAG AA/AAA readability, accented with semantic tokens:
+- `DangerRed` (`#FF3B30`) / `DangerRedBorder` (`#661A1A`) for destructive actions and errors.
+- `ReadyGreen` (`#34C759`) / `ReadyGreenAccent` (`#1A5C29`) for ready status in netplay lobbies.
 
 ### Core Palette Tokens
 
@@ -56,23 +58,23 @@ All UI chrome uses an achromatic scale engineered for OLED contrast and WCAG AA/
 - `tertiary` / `onTertiary`: `GraphiteSurface` / `PureWhite`
 - `outline` / `outlineVariant`: `SteelBorder` / `CharcoalBorder`
 
-### State & Feedback Rules (Monochrome)
-- **Primary Action (`PLAY`, `CREATE`, `READY`):** Solid `PureWhite` (`#FAFAFA`) fill with `PureBlack` (`#000000`) bold label.
-- **Secondary Action (`DOWNLOAD`, `REFRESH`, `CHANGE`):** `GraphiteSurface` (`#1A1A1E`) fill with `1.dp` `SteelBorder` (`#44444E`) and `PureWhite` label.
-- **Destructive / Critical Confirmation (`DELETE ROM`, `SIGN OUT`):** Outlined `CarbonSurface` with `PureWhite` icon/label inside a mandatory confirmation dialog for irreversible actions.
+### State & Feedback Rules
+- **Primary Action (`JUGAR`, `CREAR`, `LISTO`):** Solid `PureWhite` (`#FAFAFA`) fill with `PureBlack` (`#000000`) bold label.
+- **Secondary Action (`DESCARGAR`, `ACTUALIZAR`, `CAMBIAR`):** `GraphiteSurface` (`#1A1A1E`) fill with `1.dp` `SteelBorder` (`#44444E`) and `PureWhite` label.
+- **Destructive / Critical Confirmation (`BORRAR ROM`, `CERRAR SESIÓN`):** Outlined `CarbonSurface` with `DangerRed` / `PureWhite` icon/label inside a mandatory confirmation dialog for irreversible actions.
 - **Progress Indicators:** `PureWhite` track fill over `GraphiteSurface` track.
 
 ---
 
 ## 4. Typography System
 
-All fonts are bundled as static `.ttf` files in `app/src/main/res/font/`.
+All fonts are bundled as variable `.ttf` files in `app/src/main/res/font/` configured via Compose `FontVariation.Settings` (`Type.kt`).
 
-| Role | Font Family | Weights Bundled | Usage |
+| Role | Font Family | Variable Axes | Usage |
 | :--- | :--- | :--- | :--- |
-| **Display & Headings** | `Space Grotesk` | `Medium (500)`, `SemiBold (600)`, `Bold (700)` | Screen titles, card titles, badges, primary buttons |
-| **Body & UI** | `Inter` | `Regular (400)`, `Medium (500)`, `SemiBold (600)` | Descriptions, search input, nav labels, dialogs |
-| **Technical / Mono** | `JetBrains Mono` | `Regular (400)`, `Medium (500)` | Room codes (`#4821A`), file sizes (`12.4 MB`), SHA-256, Rust logs |
+| **Display & Headings** | `Space Grotesk` | Weight `500`–`700` | Screen titles, card titles, badges, primary buttons |
+| **Body & UI** | `Inter` | Weight `400`–`600` | Descriptions, search input, nav labels, dialogs |
+| **Technical / Mono** | `JetBrains Mono` | Weight `400`–`500` | Room codes (`#4821A`), file sizes (`12.4 MB`), SHA-256, Rust logs |
 
 ### Type Scale
 - `headlineMedium`: `Space Grotesk Bold`, `22.sp`, tracking `-0.3.sp`
@@ -94,12 +96,12 @@ All fonts are bundled as static `.ttf` files in `app/src/main/res/font/`.
 - **Grid Gutters:** `12.dp` horizontal, `12.dp` vertical.
 
 ### Card Anatomy (`ArcadeGameCard`)
-Each card uses `CarbonSurface` (`#101012`), `RoundedCornerShape(14.dp)`, and a `1.dp` `CharcoalBorder` (`#2A2A30`):
+Each card uses `CarbonSurface` (`#101012`), `RectangleShape` (`0.dp`), and a `1.dp` `CharcoalBorder` (`#2A2A30`):
 1. **Poster Stage (Top):**
    - Aspect ratio `3f / 4f` (`width : height = 3 : 4`).
    - Renders `GameCoverImage` with `ContentScale.Fit` on an `ObsidianBlack` (`#050506`) backdrop so the **entire vertical height of the flyer is visible** without cropping.
    - Top-left overlay badge: **System** (`NEOGEO`, `CPS2`) in high-contrast dark pill (`ObsidianBlack` 82% alpha + `1.dp` `SteelBorder`).
-   - Top-right overlay (Library only): subtle circular `Delete` icon button (`ObsidianBlack` 78% alpha) triggering a confirmation dialog.
+   - Top-right overlay (Library only): subtle `Delete` icon button (`ObsidianBlack` 78% alpha) triggering a confirmation dialog.
 2. **Metadata Block (Middle, `10.dp` padding):**
    - **Title:** `titleSmall` (`Space Grotesk SemiBold`, `13.sp`), `minLines = 2`, `maxLines = 2`, `TextOverflow.Ellipsis` to guarantee uniform row heights across columns.
    - **Badge Row:** Compact `FlowRow` / `Row` with `4.dp` gap:
@@ -107,14 +109,14 @@ Each card uses `CarbonSurface` (`#101012`), `RoundedCornerShape(14.dp)`, and a `
      - `CO-OP` badge (when `isCoop == true`)
      - Size badge in `JetBrains Mono` (`e.g. 24 MB`, when `sizeBytes > 0`)
 3. **Action Footer (Bottom):**
-   - **Catalog:** Full-width `DOWNLOAD` button (`GraphiteSurface` + `PureWhite` border/text), transitioning to an inline progress bar + percentage when actively downloading.
-   - **Library:** Full-width `PLAY` button (`PureWhite` fill + `PureBlack` bold text).
+   - **Catalog:** Full-width `DESCARGAR` button (`GraphiteSurface` + `PureWhite` border/text), transitioning to an inline progress bar + percentage when actively downloading.
+   - **Library:** Full-width `JUGAR` button (`PureWhite` fill + `PureBlack` bold text).
 
 ### Badge Taxonomy
-- **Shape:** `RoundedCornerShape(6.dp)`
+- **Shape:** `RectangleShape` (`0.dp`)
 - **Padding:** `horizontal = 6.dp, vertical = 2.dp`
 - **Variants:**
-  - *Solid Contrast:* `PureWhite` bg / `PureBlack` text (for primary status like `CO-OP` or `READY`)
+  - *Solid Contrast:* `PureWhite` bg / `PureBlack` text (for primary status like `CO-OP` or `LISTO`)
   - *Outline:* `GraphiteSurface` bg / `CharcoalBorder` `1.dp` / `SilverGray` text (for `2P`, `NEOGEO`, `MB`)
 
 ---
@@ -122,7 +124,7 @@ Each card uses `CarbonSurface` (`#101012`), `RoundedCornerShape(14.dp)`, and a `
 ## 6. Quick Search Bar Specification
 
 - Present at the top of both **Catalog** and **Library**.
-- **Container:** `CarbonSurface` (`#101012`), `RoundedCornerShape(12.dp)`, `1.dp` `CharcoalBorder` (`SteelBorder` when focused).
+- **Container:** `CarbonSurface` (`#101012`), `RectangleShape` (`0.dp`), `1.dp` `CharcoalBorder` (`SteelBorder` when focused).
 - **Elements:** Leading `Search` icon (`MutedGray`), single-line `Inter` input (`PureWhite`), trailing `Close` (`X`) icon button when query is non-empty.
 - **Behavior:** Instant client-side filtering matching `title`, `system`, or `slug`; `ImeAction.Search` dismisses the keyboard.
 

@@ -55,11 +55,11 @@ Cada juego del catálogo que posea leaderboard activo (`score_config.lboard` no 
 | Rango | Umbral mínimo (`global_points`) |
 | :--- | :--- |
 | **Novato** | `0` pts |
-| **Retador** | `250` pts |
-| **Luchador** | `600` pts |
-| **Maestro** | `1,200` pts |
-| **Gran Maestro** | `2,500` pts |
-| **Leyenda** | `5,000` pts |
+| **Retador** | `150` pts |
+| **Luchador** | `450` pts |
+| **Maestro** | `900` pts |
+| **Gran Maestro** | `1,500` pts |
+| **Leyenda** | `2,000` pts |
 
 ---
 
@@ -72,7 +72,7 @@ Las medallas se calculan a partir de datos verificados en Supabase y se exhiben 
 | **Rey del Arcade** | Ser `#1` en al menos 1 juego | Único (muestra cantidad de `#1`s) |
 | **Podio** | Estar en Top 3 (`#1`–`#3`) en al menos 1 juego | Único (muestra cantidad de podios) |
 | **1CC Master** | Tener al menos 1 récord 1CC validado | Único (muestra total de juegos 1CC) |
-| **Replay Verificado** | Tener al menos 1 replay verificado (`replay_status = 'verified'`) | Único |
+| **Replay Verificado** | Tener al menos 1 replay verificado (`verification_status = 'verified'`) | Único |
 | **Veterano** | Tiempo total acumulado (`total_play_seconds`) | **Bronce:** 25h · **Plata:** 100h · **Oro:** 250h |
 | **Anfitrión Netplay** | Partidas multijugador completadas en sala | **Bronce:** 25 · **Plata:** 100 · **Oro:** 250 |
 

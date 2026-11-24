@@ -156,38 +156,34 @@ Crea un script de migración SQL en `supabase/migrations/` siguiendo la convenci
 INSERT INTO public.games (
     slug,
     title,
-    description,
-    year,
-    genre,
-    developer,
     system,
-    min_players,
-    max_players,
     rom_filename,
-    rom_size,
-    rom_crc32,
-    rom_sha256,
     ipfs_cid,
+    sha256,
+    crc32,
+    size_bytes,
+    max_players,
+    is_coop,
+    parent_game_id,
+    bios_id,
     cover_url,
-    screen_orientation,
+    max_valid_score,
     score_config
 ) VALUES (
     'slug_juego',
     'Título del Juego',
-    'Descripción del juego y detalles arcade.',
-    1993,
-    'Beat em up',
-    'Capcom',
     'cps2',
-    1,
-    4,
     'slug_juego.zip',
-    12345678,
-    '1a2b3c4d',
-    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     'QmXyz123...',
+    'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    '1a2b3c4d',
+    12345678,
+    4,
+    true,
+    null,
+    null,
     'https://gateway.pinata.cloud/ipfs/QmCoverHash...',
-    'horizontal',
+    99999990,
     jsonb_build_object(
         'max_valid_score', 99999990,
         'verified', false
@@ -195,11 +191,15 @@ INSERT INTO public.games (
 )
 ON CONFLICT (slug) DO UPDATE SET
     title = EXCLUDED.title,
-    rom_size = EXCLUDED.rom_size,
-    rom_crc32 = EXCLUDED.rom_crc32,
-    rom_sha256 = EXCLUDED.rom_sha256,
-    ipfs_cid = EXCLUDED.ipfs_cid;
+    size_bytes = EXCLUDED.size_bytes,
+    crc32 = EXCLUDED.crc32,
+    sha256 = EXCLUDED.sha256,
+    ipfs_cid = EXCLUDED.ipfs_cid,
+    max_valid_score = EXCLUDED.max_valid_score;
 ```
+
+> [!NOTE]
+> Las carátulas visuales de los juegos se cargan directamente de los assets empaquetados en la aplicación Android (`app/src/main/assets/covers/<slug>.webp`). Al agregar un nuevo juego, asegúrate de colocar su portada en formato `.webp` con el mismo nombre que el `slug`.
 
 ---
 
@@ -281,7 +281,7 @@ Edita `rust/balddog-core/src/retro/leaderboard.rs`:
 
 ```rust
 #[test]
-fn parses_all_curated_leaderboard_expressions() {
+fn parses_all_cps_family_leaderboard_expressions() {
     let defs = [
         // ... expresiones existentes ...
         "STA:0xH004C=1::CAN:0=1::SUB:0xH004C=0::VAL:A:b0x 0206*10000_M:b0x 0208", // ssriders
@@ -303,15 +303,16 @@ cargo test --manifest-path rust/Cargo.toml -p balddog-core leaderboard
 ## 8. Paso 6: Compilación y Verificación en la App Android
 
 ### 8.1 Actualizar `score_config` en Supabase
-Una vez validada la expresión con `ram_probe` y el test de Rust, aplica la actualización en Supabase:
+Una vez validada la expresión con `ram_probe` y el test de Rust, aplica la actualización en Supabase (actualizando tanto `score_config` como la columna de validación `max_valid_score`):
 
 ```sql
 UPDATE public.games
-SET score_config = jsonb_build_object(
-    'lboard', 'STA:0xH0820=1::CAN:0=1::SUB:0xH0820=0::VAL:A:b0x 2000*10000_M:b0x 2002',
-    'max_valid_score', 99999999,
-    'verified', true
-)
+SET max_valid_score = 99999999,
+    score_config = jsonb_build_object(
+        'lboard', 'STA:0xH0820=1::CAN:0=1::SUB:0xH0820=0::VAL:A:b0x 2000*10000_M:b0x 2002',
+        'max_valid_score', 99999999,
+        'verified', true
+    )
 WHERE slug = 'altbeast';
 ```
 
@@ -332,7 +333,7 @@ adb shell am start -n dog.bald.arcade.debug/dog.bald.arcade.MainActivity
 3. **Elegibilidad 1CC**: Inserta solo 1 moneda (botón SELECT) y pulsa START. Abre el menú rápido (gesto hacia abajo o botón de menú); el panel superior debe mostrar `1CC: ELIGIBLE`.
 4. **Lectura de Puntaje en Vivo**: Juega unos momentos y gana puntos. En el menú rápido, el campo `Live Score` debe reflejar exactamente el puntaje visto en pantalla.
 5. **Fin de Partida**: Deja morir a tu personaje hasta que termine el contador de continuar.
-6. **Persistencia en Leaderboard**: Sal del juego; el logcat (`adb logcat -s ArcadeSession:D GameActivity:D`) debe confirmar:
+6. **Persistencia en Leaderboard**: Sal del juego; el logcat (`adb logcat -s BaldDogScore:D ArcadeSession:D`) confirmará el envío:
    ```text
    Score submission successful for <slug>: score=XXXX
    ```
