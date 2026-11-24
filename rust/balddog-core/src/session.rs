@@ -170,6 +170,31 @@ pub struct EmulationSession {
     thread: Option<JoinHandle<()>>,
 }
 
+#[derive(Clone)]
+pub struct SessionControl {
+    cmd_tx: Sender<SessionCommand>,
+}
+
+impl SessionControl {
+    pub fn attach_surface(&self, window_ptr: usize, width: u32, height: u32) {
+        let _ = self.cmd_tx.send(SessionCommand::AttachSurface {
+            window_ptr,
+            width,
+            height,
+        });
+    }
+
+    pub fn resize_surface(&self, width: u32, height: u32) {
+        let _ = self
+            .cmd_tx
+            .send(SessionCommand::ResizeSurface { width, height });
+    }
+
+    pub fn detach_surface_sync(&self) {
+        EmulationSession::detach_surface_sync_on(&self.cmd_tx);
+    }
+}
+
 pub fn clear_deterministic_nvram(save_dir: &Path, rom_path: &Path) {
     let Some(stem) = rom_path.file_stem().and_then(|s| s.to_str()) else {
         return;
@@ -679,6 +704,12 @@ impl EmulationSession {
         }
     }
 
+    pub fn control(&self) -> SessionControl {
+        SessionControl {
+            cmd_tx: self.cmd_tx.clone(),
+        }
+    }
+
     pub fn attach_surface(&self, window_ptr: usize, width: u32, height: u32) {
         let _ = self.cmd_tx.send(SessionCommand::AttachSurface {
             window_ptr,
@@ -693,15 +724,20 @@ impl EmulationSession {
             .send(SessionCommand::ResizeSurface { width, height });
     }
 
-    pub fn detach_surface_sync(&self) {
+    pub fn detach_surface_sync_on(cmd_tx: &Sender<SessionCommand>) {
         let (ack_tx, ack_rx) = bounded(1);
-        if self
-            .cmd_tx
+        if cmd_tx
             .send(SessionCommand::DetachSurface { ack: ack_tx })
             .is_ok()
         {
-            let _ = ack_rx.recv_timeout(Duration::from_secs(2));
+            // Esperar de forma incondicional hasta que el hilo de emulación destruya `wgpu::Surface`
+            // (o cierre `cmd_rx` tras ejecutar `renderer.detach()` al salir del bucle).
+            let _ = ack_rx.recv();
         }
+    }
+
+    pub fn detach_surface_sync(&self) {
+        Self::detach_surface_sync_on(&self.cmd_tx);
     }
 
     pub fn set_paused(&self, paused: bool) {
@@ -873,5 +909,39 @@ mod tests {
         }
         assert_eq!(tracker.coins_inserted(), 301);
         assert_eq!(tracker.credits_used(), u8::MAX);
+    }
+
+    #[test]
+    fn detach_surface_sync_waits_for_ack_and_unblocks_on_channel_close() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        use std::time::Duration;
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let ctrl = super::SessionControl { cmd_tx: tx };
+        let detached = Arc::new(AtomicBool::new(false));
+        let detached_worker = Arc::clone(&detached);
+
+        let worker = std::thread::spawn(move || {
+            if let Ok(super::SessionCommand::DetachSurface { ack }) = rx.recv() {
+                std::thread::sleep(Duration::from_millis(30));
+                detached_worker.store(true, Ordering::Release);
+                let _ = ack.send(());
+            }
+        });
+
+        ctrl.detach_surface_sync();
+        assert!(detached.load(Ordering::Acquire));
+        worker.join().unwrap();
+
+        // Also unblocks cleanly if the receiver closes without sending ack (thread shutdown).
+        let (tx2, rx2) = crossbeam_channel::unbounded();
+        let ctrl2 = super::SessionControl { cmd_tx: tx2 };
+        let worker2 = std::thread::spawn(move || {
+            let _cmd = rx2.recv();
+            drop(rx2);
+        });
+        ctrl2.detach_surface_sync();
+        worker2.join().unwrap();
     }
 }

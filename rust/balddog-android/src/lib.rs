@@ -3,11 +3,13 @@ mod jni_surface;
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use balddog_core::audio::engine::set_global_ducking;
 use balddog_core::retro::core::LibretroCore;
 use balddog_core::retro::replay::ReplayPlayer;
+#[cfg(target_os = "android")]
+use balddog_core::session::SessionControl;
 use balddog_core::session::{clear_deterministic_nvram, EmulationSession};
 use balddog_core::{engine_info, recent_logs, record_log, CoreError};
 use balddog_netplay::voice::{VoicePeerEndpoint, VoiceSession, VoiceSessionConfig};
@@ -18,8 +20,20 @@ use thiserror::Error;
 
 uniffi::setup_scaffolding!();
 
+static SESSION_LIFECYCLE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static ACTIVE_SESSION: OnceLock<Mutex<Option<EmulationSession>>> = OnceLock::new();
 static ACTIVE_VOICE: OnceLock<Mutex<Option<VoiceSession>>> = OnceLock::new();
+
+fn lifecycle_lock() -> &'static Mutex<()> {
+    SESSION_LIFECYCLE_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn lock_unpoisoned<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    match m.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
 
 fn session_slot() -> &'static Mutex<Option<EmulationSession>> {
     ACTIVE_SESSION.get_or_init(|| Mutex::new(None))
@@ -29,12 +43,16 @@ fn voice_slot() -> &'static Mutex<Option<VoiceSession>> {
     ACTIVE_VOICE.get_or_init(|| Mutex::new(None))
 }
 
+#[cfg(target_os = "android")]
+pub(crate) fn clone_session_control() -> Option<SessionControl> {
+    lock_unpoisoned(session_slot())
+        .as_ref()
+        .map(|s| s.control())
+}
+
 pub(crate) fn with_active_session<R>(f: impl FnOnce(&mut EmulationSession) -> R) -> Option<R> {
-    if let Ok(mut guard) = session_slot().lock() {
-        guard.as_mut().map(f)
-    } else {
-        None
-    }
+    let mut guard = lock_unpoisoned(session_slot());
+    guard.as_mut().map(f)
 }
 
 #[derive(Debug, Error, uniffi::Error)]
@@ -129,7 +147,8 @@ pub fn start_game_with_score(
     save_dir: String,
     score_def: Option<String>,
 ) -> Result<(), EngineBridgeError> {
-    stop_game();
+    let _lifecycle = lock_unpoisoned(lifecycle_lock());
+    stop_game_inner();
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
     let session = EmulationSession::start(
         core_path,
@@ -139,9 +158,14 @@ pub fn start_game_with_score(
         None,
         score_def,
     )?;
-    if let Ok(mut guard) = session_slot().lock() {
+    #[cfg(target_os = "android")]
+    let ctrl = session.control();
+    {
+        let mut guard = lock_unpoisoned(session_slot());
         *guard = Some(session);
     }
+    #[cfg(target_os = "android")]
+    jni_surface::attach_current_surface(&ctrl);
     Ok(())
 }
 
@@ -158,7 +182,8 @@ pub fn start_netplay_game(
     peer_addrs: Vec<String>,
     input_delay: u8,
 ) -> Result<(), EngineBridgeError> {
-    stop_game();
+    let _lifecycle = lock_unpoisoned(lifecycle_lock());
+    stop_game_inner();
     if peer_handles.len() != peer_addrs.len() {
         return Err(EngineBridgeError::Core {
             detail: "peer_handles y peer_addrs deben tener el mismo tamaño".into(),
@@ -194,9 +219,14 @@ pub fn start_netplay_game(
         Some(netplay_cfg),
         None,
     )?;
-    if let Ok(mut guard) = session_slot().lock() {
+    #[cfg(target_os = "android")]
+    let ctrl = session.control();
+    {
+        let mut guard = lock_unpoisoned(session_slot());
         *guard = Some(session);
     }
+    #[cfg(target_os = "android")]
+    jni_surface::attach_current_surface(&ctrl);
     Ok(())
 }
 
@@ -205,14 +235,21 @@ pub fn discover_public_udp_endpoint(local_port: u16) -> Result<String, EngineBri
     Ok(discover_stun_endpoint(local_port)?)
 }
 
+fn stop_game_inner() {
+    stop_voice_session();
+    let session_opt = {
+        let mut guard = lock_unpoisoned(session_slot());
+        guard.take()
+    };
+    if let Some(mut session) = session_opt {
+        session.stop();
+    }
+}
+
 #[uniffi::export]
 pub fn stop_game() {
-    stop_voice_session();
-    if let Ok(mut guard) = session_slot().lock() {
-        if let Some(mut session) = guard.take() {
-            session.stop();
-        }
-    }
+    let _lifecycle = lock_unpoisoned(lifecycle_lock());
+    stop_game_inner();
 }
 
 #[uniffi::export]
@@ -422,7 +459,8 @@ pub fn start_replay_game(
     replay_path: String,
     score_def: Option<String>,
 ) -> Result<(), EngineBridgeError> {
-    stop_game();
+    let _lifecycle = lock_unpoisoned(lifecycle_lock());
+    stop_game_inner();
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
     let session = EmulationSession::start_replay(
         core_path,
@@ -432,9 +470,14 @@ pub fn start_replay_game(
         PathBuf::from(replay_path),
         score_def,
     )?;
-    if let Ok(mut guard) = session_slot().lock() {
+    #[cfg(target_os = "android")]
+    let ctrl = session.control();
+    {
+        let mut guard = lock_unpoisoned(session_slot());
         *guard = Some(session);
     }
+    #[cfg(target_os = "android")]
+    jni_surface::attach_current_surface(&ctrl);
     Ok(())
 }
 
@@ -585,7 +628,8 @@ pub fn open_offline_replay_renderer(
     save_dir: String,
     replay_path: String,
 ) -> Result<std::sync::Arc<OfflineReplayRenderer>, EngineBridgeError> {
-    stop_game();
+    let _lifecycle = lock_unpoisoned(lifecycle_lock());
+    stop_game_inner();
     let rom_pb = PathBuf::from(&rom_path);
     let save_pb = PathBuf::from(&save_dir);
     clear_deterministic_nvram(&save_pb, &rom_pb);
