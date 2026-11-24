@@ -241,6 +241,9 @@ class ArcadeRepository(context: Context) {
     }
 
     suspend fun downloadReplay(replayPath: String, destFile: File): File {
+        if (destFile.exists() && destFile.length() > 0L) {
+            return destFile
+        }
         val cleanPath = replayPath.trimStart('/')
         val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/object/public/replays/$cleanPath"
         return withContext(Dispatchers.IO) {

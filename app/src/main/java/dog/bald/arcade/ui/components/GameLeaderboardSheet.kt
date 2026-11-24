@@ -80,6 +80,7 @@ fun GameLeaderboardSheet(
     var loading by remember(game.id) { mutableStateOf(true) }
     var errorMsg by remember(game.id) { mutableStateOf<String?>(null) }
     var data by remember(game.id) { mutableStateOf(GameLeaderboardData()) }
+    var loadingReplayUserId by remember { mutableStateOf<String?>(null) }
     val currentUid = remember { repo.currentUserId() }
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
     val hasLeaderboard = !game.scoreConfig?.lboard.isNullOrBlank()
@@ -255,8 +256,12 @@ fun GameLeaderboardSheet(
                                 formattedScore = numberFmt.format(entry.score),
                                 onClick = { onOpenUserProfile(entry.userId) },
                                 onWatchReplay = if (!entry.replayPath.isNullOrBlank()) {
-                                    { onWatchReplay(entry) }
-                                } else null
+                                    {
+                                        loadingReplayUserId = entry.userId
+                                        onWatchReplay(entry)
+                                    }
+                                } else null,
+                                replayLoading = loadingReplayUserId == entry.userId
                             )
                         }
                     }
@@ -302,7 +307,8 @@ private fun LeaderboardRow(
     isMe: Boolean,
     formattedScore: String,
     onClick: () -> Unit = {},
-    onWatchReplay: (() -> Unit)? = null
+    onWatchReplay: (() -> Unit)? = null,
+    replayLoading: Boolean = false
 ) {
     val bgColor = if (isMe) GraphiteSurface else CarbonSurface
     val borderColor = if (isMe || entry.rank <= 3L) SteelBorder else CharcoalBorder
@@ -404,17 +410,26 @@ private fun LeaderboardRow(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .background(PureWhite)
-                    .clickable(onClick = onWatchReplay)
+                    .clickable(enabled = !replayLoading, onClick = onWatchReplay)
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Ver Replay",
-                    tint = PureBlack,
-                    modifier = Modifier.size(14.dp)
-                )
+                if (replayLoading) {
+                    CircularProgressIndicator(
+                        color = PureBlack,
+                        strokeWidth = 1.5.dp,
+                        modifier = Modifier.size(12.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Ver Replay",
+                        tint = PureBlack,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(3.dp))
                 Text(
-                    text = "REPLAY",
+                    text = if (replayLoading) "..." else "REPLAY",
                     fontFamily = JetBrainsMonoFamily,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,

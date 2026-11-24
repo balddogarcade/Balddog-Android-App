@@ -732,8 +732,8 @@ fun MainShellScreen(
                         if (!rPath.isNullOrBlank()) {
                             runCatching {
                                 romManager.ensureGameReady(game, games, biosList) { _, _ -> }
-                                val uid = repo.currentUserId().orEmpty()
-                                val dest = java.io.File(context.cacheDir, "replays/${game.slug}_${uid}.bsv.gz")
+                                val cacheName = rPath.trimStart('/').replace('/', '_')
+                                val dest = java.io.File(context.cacheDir, "replays/$cacheName")
                                 repo.downloadReplay(rPath, dest)
                             }.onSuccess { replayFile ->
                                 val entry = LeaderboardEntryDto(
@@ -839,7 +839,8 @@ fun MainShellScreen(
                             scope.launch {
                                 runCatching {
                                     romManager.ensureGameReady(g, games, biosList) { _, _ -> }
-                                    val dest = java.io.File(context.cacheDir, "replays/${g.slug}_${entry.userId}.bsv.gz")
+                                    val cacheName = rPath.trimStart('/').replace('/', '_')
+                                    val dest = java.io.File(context.cacheDir, "replays/$cacheName")
                                     repo.downloadReplay(rPath, dest)
                                 }.onSuccess { replayFile ->
                                     val lbEntry = LeaderboardEntryDto(
@@ -883,7 +884,8 @@ fun MainShellScreen(
                 scope.launch {
                     runCatching {
                         romManager.ensureGameReady(game, games, biosList) { _, _ -> }
-                        val dest = java.io.File(context.cacheDir, "replays/${game.slug}_${entry.userId}.bsv.gz")
+                        val cacheName = rPath.trimStart('/').replace('/', '_')
+                        val dest = java.io.File(context.cacheDir, "replays/$cacheName")
                         repo.downloadReplay(rPath, dest)
                     }.onSuccess { replayFile ->
                         leaderboardGame = null

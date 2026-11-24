@@ -104,7 +104,7 @@ class IpfsRomManager(context: Context) {
             val biosInRoms = File(romsDir, bios.filename)
             val biosInSys = File(systemDir, bios.filename)
             val valid = biosInRoms.exists() && (biosInSys.exists() || runCatching { biosInRoms.copyTo(biosInSys, overwrite = true) }.isSuccess) &&
-                verifyExistingFile(biosInRoms, bios.sha256, bios.crc32, bios.sizeBytes)
+                (bios.sizeBytes <= 0L || biosInRoms.length() == bios.sizeBytes)
             if (!valid) {
                 onProgress("Descargando BIOS ${bios.filename}...", 0f)
                 downloadAndVerify(
@@ -123,7 +123,7 @@ class IpfsRomManager(context: Context) {
             val parent = allGames.firstOrNull { it.id == game.parentGameId }
             if (parent != null) {
                 val parentFile = File(romsDir, parent.romFilename)
-                val valid = parentFile.exists() && verifyExistingFile(parentFile, parent.sha256, parent.crc32, parent.sizeBytes)
+                val valid = parentFile.exists() && (parent.sizeBytes <= 0L || parentFile.length() == parent.sizeBytes)
                 if (!valid) {
                     onProgress("Descargando ROM base ${parent.romFilename}...", 0f)
                     downloadAndVerify(
@@ -139,7 +139,7 @@ class IpfsRomManager(context: Context) {
 
         // 3. ROM principal
         val target = File(romsDir, game.romFilename)
-        val valid = target.exists() && verifyExistingFile(target, game.sha256, game.crc32, game.sizeBytes)
+        val valid = target.exists() && (game.sizeBytes <= 0L || target.length() == game.sizeBytes)
         if (!valid) {
             onProgress("Descargando ${game.title}...", 0f)
             downloadAndVerify(

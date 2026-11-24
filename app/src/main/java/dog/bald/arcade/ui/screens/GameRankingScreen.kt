@@ -91,6 +91,7 @@ fun GameRankingScreen(
     var refreshKey by remember(game.id) { mutableIntStateOf(0) }
 
     var loading by remember(game.id) { mutableStateOf(true) }
+    var loadingReplayUserId by remember { mutableStateOf<String?>(null) }
     var errorMsg by remember(game.id) { mutableStateOf<String?>(null) }
     var entries by remember(game.id) { mutableStateOf<List<GameLeaderboardV2EntryDto>>(emptyList()) }
 
@@ -430,16 +431,29 @@ fun GameRankingScreen(
                                 fontSize = 13.sp
                             )
                             if (mode == "1cc" && !entry.replayPath.isNullOrBlank()) {
+                                val isReplayLoading = loadingReplayUserId == entry.userId
                                 IconButton(
-                                    onClick = { onWatchReplay(entry) },
+                                    onClick = {
+                                        loadingReplayUserId = entry.userId
+                                        onWatchReplay(entry)
+                                    },
+                                    enabled = !isReplayLoading,
                                     modifier = Modifier.size(32.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Ver replay",
-                                        tint = PureWhite,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    if (isReplayLoading) {
+                                        CircularProgressIndicator(
+                                            color = PureWhite,
+                                            strokeWidth = 1.5.dp,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Ver replay",
+                                            tint = PureWhite,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
