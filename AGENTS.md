@@ -160,3 +160,56 @@ Para integrar y certificar nuevos juegos arcade en el catálogo de bald.dog ARCA
   - Core nativo de diagnóstico para Linux: `/tmp/fbneo-linux/src/burner/libretro/fbneo_libretro.so`.
 - **Regla de Integridad de Leaderboards:** **NUNCA** inventes ni asumas direcciones de memoria de puntaje o banderas `P1_ACTIVE`. Toda expresión `rcheevos` debe ser verificada empíricamente contra capturas HUD reales en `ram_probe`, incorporada en los tests unitarios de `rust/balddog-core/src/retro/leaderboard.rs`, y sembrada en Supabase mediante una migración SQL numerada.
 
+---
+
+## Protocolo Obligatorio: Migraciones de Base de Datos (Supabase)
+
+Cada vez que se **cree** o **modifique** una migración SQL en `supabase/migrations/` (ej. `025_add_avatar_seed_to_room_slots.sql`):
+
+### 1. Regla Mandatoria
+- **NUNCA** dejar una migración solo como archivo SQL local esperando ejecución manual.
+- **SIEMPRE** ejecutar la migración inmediatamente contra la base de datos de Supabase.
+- **SIEMPRE** verificar que los cambios (funciones, tablas, columnas, índices, triggers o filas actualizadas) hayan tomado efecto real en la base de datos antes de dar la tarea por concluida.
+- **NUNCA** hacer commit ni exponer en logs las credenciales de `local.properties` (respetar la Regla Crítica 2 de Git).
+
+### 2. Extracción Segura de Credenciales
+Las credenciales se obtienen directamente de `local.properties` (archivo ignorado por git):
+- `SUPABASE_PROJECT_ID` (ej. `trwgnawmmslpmykqxpkg`)
+- `SUPABASE_ACCESS_TOKEN` (token bearer `sbp_...`)
+
+### 3. Ejecución de la Migración
+Ejecuta la migración vía Supabase Management API usando `BypassSandbox: true`:
+```bash
+python3 -c "
+import urllib.request, json, re
+
+props = {}
+with open('local.properties') as f:
+    for line in f:
+        m = re.match(r'^([^#=]+)=(.*)$', line.strip())
+        if m: props[m.group(1).strip()] = m.group(2).strip()
+
+project_id = props.get('SUPABASE_PROJECT_ID')
+token = props.get('SUPABASE_ACCESS_TOKEN')
+assert project_id and token, 'Credenciales de Supabase no encontradas en local.properties'
+
+with open('supabase/migrations/<MIGRATION_FILE>.sql') as f:
+    sql = f.read()
+
+req = urllib.request.Request(
+    f'https://api.supabase.com/v1/projects/{project_id}/database/query',
+    data=json.dumps({'query': sql}).encode('utf-8'),
+    headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+)
+with urllib.request.urlopen(req) as resp:
+    print('Status:', resp.status)
+"
+```
+
+### 4. Verificación Obligatoria
+Inmediatamente tras la ejecución, lanza una consulta de verificación contra la API para confirmar el cambio:
+- **Para funciones RPC:** Consultar `pg_proc` verificando que `prosrc` contenga el nuevo código/columnas.
+- **Para tablas/columnas:** Consultar `information_schema.columns` verificando que `column_name` exista.
+- **Para seeds de juegos o configuraciones:** Consultar la fila en `public.games` verificando el nuevo valor.
+
+
