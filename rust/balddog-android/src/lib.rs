@@ -504,6 +504,11 @@ pub fn restart_replay() {
 }
 
 #[uniffi::export]
+pub fn seek_replay(target_frame: u64) {
+    with_active_session(|s| s.seek_replay(target_frame));
+}
+
+#[uniffi::export]
 pub fn get_replay_hud_info() -> ReplayHudInfo {
     with_active_session(|s| {
         let st = s.replay_hud_stats();

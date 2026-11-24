@@ -778,6 +778,8 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -840,6 +842,8 @@ internal interface UniffiLib : Library {
     fun uniffi_balddog_android_fn_func_restart_replay(uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_save_game_state(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    fun uniffi_balddog_android_fn_func_seek_replay(`targetFrame`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_set_audio_ducking(`enabled`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -1013,6 +1017,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_balddog_android_checksum_func_save_game_state(
     ): Short
+    fun uniffi_balddog_android_checksum_func_seek_replay(
+    ): Short
     fun uniffi_balddog_android_checksum_func_set_audio_ducking(
     ): Short
     fun uniffi_balddog_android_checksum_func_set_game_paused(
@@ -1110,6 +1116,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_save_game_state() != 60917.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_seek_replay() != 6045.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_set_audio_ducking() != 19391.toShort()) {
@@ -2401,6 +2410,14 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
     uniffiRustCallWithError(EngineBridgeException) { _status ->
     UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_save_game_state(
         FfiConverterString.lower(`path`),_status)
+}
+    
+    
+ fun `seekReplay`(`targetFrame`: kotlin.ULong)
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_seek_replay(
+        FfiConverterULong.lower(`targetFrame`),_status)
 }
     
     

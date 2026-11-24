@@ -47,6 +47,7 @@ pub enum SessionCommand {
     },
     SetReplaySpeed(u8),
     RestartReplay,
+    SeekReplay(u64),
     ExportReplay {
         path: PathBuf,
         ack: Sender<Result<u64, CoreError>>,
@@ -390,11 +391,9 @@ impl EmulationSession {
         let (init_tx, init_rx) = bounded::<Result<(), CoreError>>(1);
 
         let is_replay_mode = replay_path.is_some();
-        let rom_crc32 = compute_file_crc32(&rom_path)
-            .map_err(|e| CoreError::CoreLoad(format!("No se pudo leer la ROM {:?}: {e}", rom_path)))?;
         let initial_replay_player = match replay_path {
             Some(ref rp) => Some(
-                ReplayPlayer::from_gzip_file(rp, Some(rom_crc32))
+                ReplayPlayer::from_gzip_file(rp, None)
                     .map_err(|e| CoreError::Init(format!("Replay inválido: {e}")))?,
             ),
             None => None,
@@ -496,7 +495,8 @@ impl EmulationSession {
                 );
                 let mut replay_player = initial_replay_player;
                 let mut recorder = if netplay.is_none() && replay_player.is_none() && leaderboard.is_some() {
-                    Some(ReplayRecorder::new(rom_crc32))
+                    let rom_crc = compute_file_crc32(&rom_path).unwrap_or(0);
+                    Some(ReplayRecorder::new(rom_crc))
                 } else {
                     None
                 };
@@ -599,6 +599,58 @@ impl EmulationSession {
                                             break;
                                         }
                                     }
+                                }
+                            }
+                            SessionCommand::SeekReplay(target_frame) => {
+                                if let Some(ref mut p) = replay_player {
+                                    let max_frame = p.total_frames();
+                                    let target = target_frame.min(max_frame);
+                                    let curr = p.current_frame();
+                                    if target < curr {
+                                        clear_deterministic_nvram(&save_dir, &rom_path);
+                                        if core.load_game(&rom_path).is_ok() {
+                                            let state_ok = if !p.initial_state().is_empty() {
+                                                core.load_state_bytes(p.initial_state()).is_ok()
+                                            } else {
+                                                true
+                                            };
+                                            if state_ok {
+                                                p.restart();
+                                                if let Some(ref mut lb) = leaderboard {
+                                                    lb.reset();
+                                                }
+                                                reset_replay_stats(&stats_clone, &mut coin_tracker);
+                                                last_frame_rgba.invalidate();
+                                            }
+                                        }
+                                    }
+                                    while p.current_frame() < target && !p.is_finished() {
+                                        let Some(frame_inputs) = p.next_frame() else {
+                                            break;
+                                        };
+                                        core.set_inputs(frame_inputs);
+                                        core.run_frame();
+                                    }
+                                    if let Some(ref mut lb) = leaderboard {
+                                        if let Some(ram) = core.system_ram() {
+                                            let out = lb.evaluate_frame(ram);
+                                            stats_clone.current_score.store(out.current_score, Ordering::Relaxed);
+                                            if out.current_score > 0 {
+                                                stats_clone.best_session_score.fetch_max(out.current_score, Ordering::Relaxed);
+                                            }
+                                        }
+                                    }
+                                    core.take_audio_samples(|_| {});
+                                    stats_clone
+                                        .replay_current_frame
+                                        .store(p.current_frame(), Ordering::Relaxed);
+                                    let finished = p.is_finished();
+                                    stats_clone.replay_finished.store(finished, Ordering::Release);
+                                    let rot = core.rotation();
+                                    core.take_video_frame(|w, h, rgba| {
+                                        last_frame_rgba.update(w, h, rot, rgba);
+                                        renderer.render_frame(w, h, rgba, rot);
+                                    });
                                 }
                             }
                             SessionCommand::ExportReplay { path, ack } => {
@@ -981,6 +1033,10 @@ impl EmulationSession {
 
     pub fn restart_replay(&self) {
         let _ = self.cmd_tx.send(SessionCommand::RestartReplay);
+    }
+
+    pub fn seek_replay(&self, target_frame: u64) {
+        let _ = self.cmd_tx.send(SessionCommand::SeekReplay(target_frame));
     }
 
     pub fn replay_hud_stats(&self) -> ReplayHudStats {
