@@ -1,14 +1,16 @@
-use std::cell::RefCell;
 use std::ffi::{c_char, CString};
 use std::os::raw::{c_uint, c_void};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 
 use libloading::Library;
 
 use crate::retro::types::*;
 use crate::{record_log, CoreError};
 
-/// Contexto activo en el hilo de emulación para los callbacks C de Libretro.
+/// Contexto activo para los callbacks C de Libretro.
+/// Se protege con `Mutex` global (en lugar de `thread_local!`) porque `LibretroCore` es `Send`
+/// y puede inicializarse, ejecutarse y liberarse en hilos distintos (ej. `OfflineReplayRenderer`).
 struct CallbackContext {
     system_dir_cstr: CString,
     save_dir_cstr: CString,
@@ -22,18 +24,18 @@ struct CallbackContext {
     inputs: [u16; 4],
 }
 
-thread_local! {
-    static ACTIVE_CTX: RefCell<Option<CallbackContext>> = const { RefCell::new(None) };
+static ACTIVE_CTX: Mutex<Option<CallbackContext>> = Mutex::new(None);
+
+fn lock_ctx() -> MutexGuard<'static, Option<CallbackContext>> {
+    match ACTIVE_CTX.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
 }
 
 fn with_ctx<R>(f: impl FnOnce(&mut CallbackContext) -> R) -> Option<R> {
-    ACTIVE_CTX.with(|cell| {
-        if let Ok(mut borrow) = cell.try_borrow_mut() {
-            borrow.as_mut().map(f)
-        } else {
-            None
-        }
-    })
+    let mut guard = lock_ctx();
+    guard.as_mut().map(f)
 }
 
 /// Callback de entorno Libretro.
@@ -362,8 +364,9 @@ impl LibretroCore {
             unsafe extern "C" fn(c_uint) -> usize
         );
 
-        ACTIVE_CTX.with(|cell| {
-            *cell.borrow_mut() = Some(CallbackContext {
+        {
+            let mut guard = lock_ctx();
+            *guard = Some(CallbackContext {
                 system_dir_cstr,
                 save_dir_cstr,
                 pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
@@ -375,9 +378,9 @@ impl LibretroCore {
                 audio_scratch: Vec::with_capacity(4096),
                 inputs: [0; 4],
             });
-        });
+        }
 
-        // SAFETY: Callbacks estáticos válidos mientras `ACTIVE_CTX` esté inicializado en este hilo.
+        // SAFETY: Callbacks estáticos válidos mientras `ACTIVE_CTX` esté inicializado.
         unsafe {
             retro_set_environment(environment_cb);
             retro_set_video_refresh(video_refresh_cb);
@@ -555,8 +558,77 @@ impl Drop for LibretroCore {
             }
             (self.retro_deinit)();
         }
-        ACTIVE_CTX.with(|cell| {
-            *cell.borrow_mut() = None;
-        });
+        *lock_ctx() = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct CtxResetGuard;
+
+    impl Drop for CtxResetGuard {
+        fn drop(&mut self) {
+            *lock_ctx() = None;
+        }
+    }
+
+    #[test]
+    fn active_ctx_is_accessible_across_threads_and_recovers_from_poison() {
+        let _reset = CtxResetGuard;
+
+        {
+            let mut guard = lock_ctx();
+            *guard = Some(CallbackContext {
+                system_dir_cstr: CString::new("/tmp/sys").unwrap(),
+                save_dir_cstr: CString::new("/tmp/save").unwrap(),
+                pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
+                rotation: 0,
+                frame_rgba: Vec::new(),
+                frame_width: 0,
+                frame_height: 0,
+                frame_dirty: false,
+                audio_scratch: Vec::new(),
+                inputs: [0; 4],
+            });
+        }
+
+        // Simula hilo de worker (como Dispatchers.IO en OfflineReplayRenderer) mutando inputs y video.
+        std::thread::spawn(|| {
+            with_ctx(|ctx| {
+                ctx.inputs[0] = 0b1010;
+            });
+            let state = unsafe { input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK) };
+            assert_eq!(state, 0b1010);
+
+            unsafe {
+                audio_sample_cb(123, -456);
+            }
+        })
+        .join()
+        .unwrap();
+
+        let audio = with_ctx(|ctx| ctx.audio_scratch.clone()).unwrap();
+        assert_eq!(audio, vec![123, -456]);
+
+        // Simula pánico mientras se sostiene ACTIVE_CTX para verificar recuperación de poison.
+        let _ = std::thread::spawn(|| {
+            let _guard = lock_ctx();
+            panic!("simulated callback panic");
+        })
+        .join();
+
+        let recovered = with_ctx(|ctx| ctx.inputs[0]);
+        assert_eq!(recovered, Some(0b1010));
+
+        // Simula Drop en otro hilo (UniffiCleaner) limpiando ACTIVE_CTX.
+        std::thread::spawn(|| {
+            *lock_ctx() = None;
+        })
+        .join()
+        .unwrap();
+
+        assert!(with_ctx(|_| ()).is_none());
     }
 }
