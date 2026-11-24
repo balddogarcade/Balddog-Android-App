@@ -99,11 +99,23 @@ fn print_result(
     );
 }
 
+fn compute_expected_rom_crc(rom: &std::path::Path) -> Result<u32, String> {
+    compute_file_crc32(rom).map_err(|e| format!("rom_load_failed: {e}"))
+}
+
 fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
             print_result(false, 0, 0, 0, 0, 0, Some(&e));
+            return ExitCode::from(2);
+        }
+    };
+
+    let expected_crc = match compute_expected_rom_crc(&args.rom) {
+        Ok(crc) => Some(crc),
+        Err(reason) => {
+            print_result(false, 0, 0, 0, 0, 0, Some(&reason));
             return ExitCode::from(2);
         }
     };
@@ -118,7 +130,6 @@ fn main() -> ExitCode {
     let _ = std::fs::create_dir_all(&system_dir);
     clear_deterministic_nvram(&save_dir, &args.rom);
 
-    let expected_crc = compute_file_crc32(&args.rom).ok();
     let mut player = match ReplayPlayer::from_gzip_file(&args.replay, expected_crc) {
         Ok(p) => p,
         Err(e) => {
@@ -238,5 +249,32 @@ fn main() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::compute_expected_rom_crc;
+
+    #[test]
+    fn compute_expected_rom_crc_returns_rom_load_failed_on_missing_or_dir() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let missing = manifest_dir.join("missing_rom_for_verify_test.zip");
+        let err = compute_expected_rom_crc(&missing).unwrap_err();
+        assert!(
+            err.starts_with("rom_load_failed: "),
+            "unexpected error format: {err}"
+        );
+
+        let dir_err = compute_expected_rom_crc(manifest_dir).unwrap_err();
+        assert!(
+            dir_err.starts_with("rom_load_failed: "),
+            "unexpected dir error format: {dir_err}"
+        );
+
+        let valid = manifest_dir.join("Cargo.toml");
+        assert!(compute_expected_rom_crc(&valid).is_ok());
     }
 }

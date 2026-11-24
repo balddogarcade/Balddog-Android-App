@@ -648,9 +648,11 @@ pub fn open_offline_replay_renderer(
     let save_pb = PathBuf::from(&save_dir);
     clear_deterministic_nvram(&save_pb, &rom_pb);
 
-    let expected_crc = compute_file_crc32(&rom_pb).ok();
+    let expected_crc = compute_file_crc32(&rom_pb).map_err(|e| EngineBridgeError::Core {
+        detail: format!("No se pudo leer la ROM {:?}: {e}", rom_pb),
+    })?;
     let player =
-        ReplayPlayer::from_gzip_file(Path::new(&replay_path), expected_crc).map_err(|e| {
+        ReplayPlayer::from_gzip_file(Path::new(&replay_path), Some(expected_crc)).map_err(|e| {
             EngineBridgeError::Core {
                 detail: format!("Replay inválido: {e}"),
             }

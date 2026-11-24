@@ -390,10 +390,11 @@ impl EmulationSession {
         let (init_tx, init_rx) = bounded::<Result<(), CoreError>>(1);
 
         let is_replay_mode = replay_path.is_some();
-        let rom_crc32 = compute_file_crc32(&rom_path).ok();
+        let rom_crc32 = compute_file_crc32(&rom_path)
+            .map_err(|e| CoreError::CoreLoad(format!("No se pudo leer la ROM {:?}: {e}", rom_path)))?;
         let initial_replay_player = match replay_path {
             Some(ref rp) => Some(
-                ReplayPlayer::from_gzip_file(rp, rom_crc32)
+                ReplayPlayer::from_gzip_file(rp, Some(rom_crc32))
                     .map_err(|e| CoreError::Init(format!("Replay inválido: {e}")))?,
             ),
             None => None,
@@ -495,7 +496,7 @@ impl EmulationSession {
                 );
                 let mut replay_player = initial_replay_player;
                 let mut recorder = if netplay.is_none() && replay_player.is_none() && leaderboard.is_some() {
-                    Some(ReplayRecorder::new(rom_crc32.unwrap_or(0)))
+                    Some(ReplayRecorder::new(rom_crc32))
                 } else {
                     None
                 };
@@ -584,6 +585,9 @@ impl EmulationSession {
                                                 }
                                                 reset_replay_stats(&stats_clone, &mut coin_tracker);
                                                 last_frame_rgba.invalidate();
+                                            } else {
+                                                running_clone.store(false, Ordering::Release);
+                                                break;
                                             }
                                         }
                                         Err(e) => {
@@ -591,6 +595,8 @@ impl EmulationSession {
                                                 "ERROR",
                                                 &format!("Error recargando ROM en RestartReplay: {e}"),
                                             );
+                                            running_clone.store(false, Ordering::Release);
+                                            break;
                                         }
                                     }
                                 }

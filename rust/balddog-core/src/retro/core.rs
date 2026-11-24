@@ -1,6 +1,7 @@
 use std::ffi::{c_char, CString};
 use std::os::raw::{c_uint, c_void};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use libloading::Library;
@@ -8,10 +9,13 @@ use libloading::Library;
 use crate::retro::types::*;
 use crate::{record_log, CoreError};
 
+static NEXT_CORE_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
+
 /// Contexto activo para los callbacks C de Libretro.
 /// Se protege con `Mutex` global (en lugar de `thread_local!`) porque `LibretroCore` es `Send`
 /// y puede inicializarse, ejecutarse y liberarse en hilos distintos (ej. `OfflineReplayRenderer`).
 struct CallbackContext {
+    instance_id: u64,
     system_dir_cstr: CString,
     save_dir_cstr: CString,
     pixel_format: c_uint,
@@ -324,7 +328,8 @@ unsafe extern "C" fn input_state_cb(
 
 #[allow(dead_code)]
 pub struct LibretroCore {
-    _lib: Library,
+    _lib: Option<Library>,
+    instance_id: u64,
     retro_init: unsafe extern "C" fn(),
     retro_deinit: unsafe extern "C" fn(),
     retro_set_environment: unsafe extern "C" fn(RetroEnvironmentFn),
@@ -420,9 +425,11 @@ impl LibretroCore {
             unsafe extern "C" fn(c_uint) -> usize
         );
 
+        let instance_id = NEXT_CORE_INSTANCE_ID.fetch_add(1, Ordering::Relaxed);
         {
             let mut guard = lock_ctx();
             *guard = Some(CallbackContext {
+                instance_id,
                 system_dir_cstr,
                 save_dir_cstr,
                 pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
@@ -450,7 +457,8 @@ impl LibretroCore {
         record_log("INFO", "FBNeo Libretro core inicializado");
 
         Ok(Self {
-            _lib: lib,
+            _lib: Some(lib),
+            instance_id,
             retro_init,
             retro_deinit,
             retro_set_environment,
@@ -473,7 +481,27 @@ impl LibretroCore {
         })
     }
 
+    pub(crate) fn validate_rom_readable(rom_path: &Path) -> Result<(), CoreError> {
+        let file = std::fs::File::open(rom_path).map_err(|e| {
+            CoreError::CoreLoad(format!("No se pudo abrir la ROM {:?}: {e}", rom_path))
+        })?;
+        let meta = file.metadata().map_err(|e| {
+            CoreError::CoreLoad(format!(
+                "No se pudo leer metadatos de ROM {:?}: {e}",
+                rom_path
+            ))
+        })?;
+        if !meta.is_file() {
+            return Err(CoreError::CoreLoad(format!(
+                "La ruta de ROM {:?} no es un archivo regular",
+                rom_path
+            )));
+        }
+        Ok(())
+    }
+
     pub fn load_game(&mut self, rom_path: &Path) -> Result<RetroSystemAvInfo, CoreError> {
+        Self::validate_rom_readable(rom_path)?;
         let rom_cstr = CString::new(rom_path.to_string_lossy().as_ref())
             .map_err(|e| CoreError::CoreLoad(format!("Ruta ROM inválida: {e}")))?;
 
@@ -533,6 +561,9 @@ impl LibretroCore {
     }
 
     pub fn run_frame(&self) {
+        if !self.game_loaded {
+            return;
+        }
         with_ctx(|ctx| {
             ctx.frame_dirty = false;
             ctx.audio_scratch.clear();
@@ -571,6 +602,9 @@ impl LibretroCore {
     }
 
     pub fn save_state_bytes(&self) -> Result<Vec<u8>, CoreError> {
+        if !self.game_loaded {
+            return Err(CoreError::State("No hay juego cargado".into()));
+        }
         // SAFETY: Llamado desde el hilo de emulación con el juego cargado.
         let size = unsafe { (self.retro_serialize_size)() };
         if size == 0 {
@@ -586,6 +620,9 @@ impl LibretroCore {
     }
 
     pub fn load_state_bytes(&self, data: &[u8]) -> Result<(), CoreError> {
+        if !self.game_loaded {
+            return Err(CoreError::State("No hay juego cargado".into()));
+        }
         // SAFETY: `data` es un slice válido de bytes de savestate.
         let ok = unsafe { (self.retro_unserialize)(data.as_ptr() as *const c_void, data.len()) };
         if !ok {
@@ -655,14 +692,26 @@ pub fn rotate_rgba(width: u32, height: u32, src: &[u8], rotation: u32) -> (u32, 
 
 impl Drop for LibretroCore {
     fn drop(&mut self) {
-        // SAFETY: Se descarga el juego antes de desinicializar el core y limpiar `ACTIVE_CTX`.
-        unsafe {
-            if self.game_loaded {
-                (self.retro_unload_game)();
+        let owns_active_ctx = lock_ctx()
+            .as_ref()
+            .is_some_and(|ctx| ctx.instance_id == self.instance_id);
+        if owns_active_ctx {
+            // SAFETY: Esta instancia es la dueña vigente de `ACTIVE_CTX`; el lock ya fue
+            // liberado para evitar deadlocks en callbacks durante `retro_unload_game`/`retro_deinit`.
+            unsafe {
+                if self.game_loaded {
+                    (self.retro_unload_game)();
+                }
+                (self.retro_deinit)();
             }
-            (self.retro_deinit)();
+            let mut guard = lock_ctx();
+            if guard
+                .as_ref()
+                .is_some_and(|ctx| ctx.instance_id == self.instance_id)
+            {
+                *guard = None;
+            }
         }
-        *lock_ctx() = None;
     }
 }
 
@@ -699,6 +748,7 @@ mod tests {
         {
             let mut guard = lock_ctx();
             *guard = Some(CallbackContext {
+                instance_id: 1,
                 system_dir_cstr: CString::new("/tmp/sys").unwrap(),
                 save_dir_cstr: CString::new("/tmp/save").unwrap(),
                 pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
@@ -753,6 +803,7 @@ mod tests {
     #[test]
     fn reset_transient_ctx_state_clears_frame_audio_inputs_and_rotation() {
         let mut ctx = CallbackContext {
+            instance_id: 1,
             system_dir_cstr: CString::new("/tmp/sys").unwrap(),
             save_dir_cstr: CString::new("/tmp/save").unwrap(),
             pixel_format: RETRO_PIXEL_FORMAT_XRGB8888,
@@ -785,6 +836,7 @@ mod tests {
         {
             let mut guard = lock_ctx();
             *guard = Some(CallbackContext {
+                instance_id: 1,
                 system_dir_cstr: CString::new("/tmp/sys").unwrap(),
                 save_dir_cstr: CString::new("/tmp/save").unwrap(),
                 pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
@@ -943,5 +995,162 @@ mod tests {
         assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_XRGB8888, 4, 2, 12, &buf, &mut dst));
         assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 9000, 2, 18000, &buf, &mut dst));
         assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 2, 2, 4, &buf[..6], &mut dst));
+    }
+
+    static DUMMY_DEINIT_CALLS: AtomicU64 = AtomicU64::new(0);
+    static DUMMY_UNLOAD_CALLS: AtomicU64 = AtomicU64::new(0);
+    static DUMMY_RUN_CALLS: AtomicU64 = AtomicU64::new(0);
+    static DUMMY_SERIALIZE_CALLS: AtomicU64 = AtomicU64::new(0);
+    static DUMMY_UNSERIALIZE_CALLS: AtomicU64 = AtomicU64::new(0);
+
+    unsafe extern "C" fn dummy_void() {}
+    unsafe extern "C" fn dummy_deinit() {
+        DUMMY_DEINIT_CALLS.fetch_add(1, Ordering::Relaxed);
+    }
+    unsafe extern "C" fn dummy_unload() {
+        DUMMY_UNLOAD_CALLS.fetch_add(1, Ordering::Relaxed);
+    }
+    unsafe extern "C" fn dummy_run() {
+        DUMMY_RUN_CALLS.fetch_add(1, Ordering::Relaxed);
+    }
+    unsafe extern "C" fn dummy_set_env(_: RetroEnvironmentFn) {}
+    unsafe extern "C" fn dummy_set_video(_: RetroVideoRefreshFn) {}
+    unsafe extern "C" fn dummy_set_audio(_: RetroAudioSampleFn) {}
+    unsafe extern "C" fn dummy_set_audio_batch(_: RetroAudioSampleBatchFn) {}
+    unsafe extern "C" fn dummy_set_poll(_: RetroInputPollFn) {}
+    unsafe extern "C" fn dummy_set_input(_: RetroInputStateFn) {}
+    unsafe extern "C" fn dummy_av_info(_: *mut RetroSystemAvInfo) {}
+    unsafe extern "C" fn dummy_port_dev(_: c_uint, _: c_uint) {}
+    unsafe extern "C" fn dummy_load_game(_: *const RetroGameInfo) -> bool {
+        false
+    }
+    unsafe extern "C" fn dummy_serialize_size() -> usize {
+        DUMMY_SERIALIZE_CALLS.fetch_add(1, Ordering::Relaxed);
+        0
+    }
+    unsafe extern "C" fn dummy_serialize(_: *mut c_void, _: usize) -> bool {
+        DUMMY_SERIALIZE_CALLS.fetch_add(1, Ordering::Relaxed);
+        false
+    }
+    unsafe extern "C" fn dummy_unserialize(_: *const c_void, _: usize) -> bool {
+        DUMMY_UNSERIALIZE_CALLS.fetch_add(1, Ordering::Relaxed);
+        false
+    }
+    unsafe extern "C" fn dummy_mem_data(_: c_uint) -> *mut c_void {
+        std::ptr::null_mut()
+    }
+    unsafe extern "C" fn dummy_mem_size(_: c_uint) -> usize {
+        0
+    }
+
+    fn dummy_core_with_id(instance_id: u64, game_loaded: bool) -> LibretroCore {
+        LibretroCore {
+            _lib: None,
+            instance_id,
+            retro_init: dummy_void,
+            retro_deinit: dummy_deinit,
+            retro_set_environment: dummy_set_env,
+            retro_set_video_refresh: dummy_set_video,
+            retro_set_audio_sample: dummy_set_audio,
+            retro_set_audio_sample_batch: dummy_set_audio_batch,
+            retro_set_input_poll: dummy_set_poll,
+            retro_set_input_state: dummy_set_input,
+            retro_get_system_av_info: dummy_av_info,
+            retro_set_controller_port_device: dummy_port_dev,
+            retro_load_game: dummy_load_game,
+            retro_unload_game: dummy_unload,
+            retro_run: dummy_run,
+            retro_serialize_size: dummy_serialize_size,
+            retro_serialize: dummy_serialize,
+            retro_unserialize: dummy_unserialize,
+            retro_get_memory_data: dummy_mem_data,
+            retro_get_memory_size: dummy_mem_size,
+            game_loaded,
+        }
+    }
+
+    fn make_test_ctx(instance_id: u64) -> CallbackContext {
+        CallbackContext {
+            instance_id,
+            system_dir_cstr: CString::new("/tmp/sys").unwrap(),
+            save_dir_cstr: CString::new("/tmp/save").unwrap(),
+            pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
+            rotation: 0,
+            frame_rgba: Vec::new(),
+            frame_width: 0,
+            frame_height: 0,
+            frame_dirty: false,
+            audio_scratch: Vec::new(),
+            inputs: [0; 4],
+        }
+    }
+
+    #[test]
+    fn validate_rom_readable_rejects_missing_and_directory_and_accepts_file() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let missing = manifest_dir.join("does_not_exist_rom.zip");
+        assert!(matches!(
+            LibretroCore::validate_rom_readable(&missing),
+            Err(CoreError::CoreLoad(_))
+        ));
+
+        // Passing a directory rather than a regular file must fail.
+        assert!(matches!(
+            LibretroCore::validate_rom_readable(manifest_dir),
+            Err(CoreError::CoreLoad(_))
+        ));
+
+        let valid_file = manifest_dir.join("Cargo.toml");
+        assert!(LibretroCore::validate_rom_readable(&valid_file).is_ok());
+    }
+
+    #[test]
+    fn stale_core_drop_does_not_wipe_newer_active_ctx_or_deinit() {
+        let _reset = CtxResetGuard::acquire();
+        DUMMY_DEINIT_CALLS.store(0, Ordering::SeqCst);
+        DUMMY_UNLOAD_CALLS.store(0, Ordering::SeqCst);
+
+        let core1 = dummy_core_with_id(101, true);
+        let core2 = dummy_core_with_id(102, true);
+        *lock_ctx() = Some(make_test_ctx(102));
+
+        // Dropping stale core1 must NOT call retro_unload_game/retro_deinit or clear core2's ctx.
+        drop(core1);
+        assert_eq!(DUMMY_DEINIT_CALLS.load(Ordering::SeqCst), 0);
+        assert_eq!(DUMMY_UNLOAD_CALLS.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            lock_ctx().as_ref().map(|c| c.instance_id),
+            Some(102)
+        );
+
+        // Dropping owning core2 MUST call retro_unload_game + retro_deinit and clear ACTIVE_CTX.
+        drop(core2);
+        assert_eq!(DUMMY_UNLOAD_CALLS.load(Ordering::SeqCst), 1);
+        assert_eq!(DUMMY_DEINIT_CALLS.load(Ordering::SeqCst), 1);
+        assert!(lock_ctx().is_none());
+    }
+
+    #[test]
+    fn unloaded_core_guards_run_frame_and_savestate_calls() {
+        let _reset = CtxResetGuard::acquire();
+        DUMMY_RUN_CALLS.store(0, Ordering::SeqCst);
+        DUMMY_SERIALIZE_CALLS.store(0, Ordering::SeqCst);
+        DUMMY_UNSERIALIZE_CALLS.store(0, Ordering::SeqCst);
+
+        let core = dummy_core_with_id(201, false);
+        core.run_frame();
+        assert!(matches!(core.save_state_bytes(), Err(CoreError::State(_))));
+        assert!(matches!(core.load_state_bytes(&[1, 2, 3]), Err(CoreError::State(_))));
+        assert!(core.system_ram().is_none());
+
+        assert_eq!(DUMMY_RUN_CALLS.load(Ordering::SeqCst), 0);
+        assert_eq!(DUMMY_SERIALIZE_CALLS.load(Ordering::SeqCst), 0);
+        assert_eq!(DUMMY_UNSERIALIZE_CALLS.load(Ordering::SeqCst), 0);
+
+        // Ensure load_game rejects missing ROM without invoking C load_game or unload_game.
+        let mut core_mut = core;
+        let missing = Path::new("/nonexistent_balddog_rom_test/missing.zip");
+        assert!(matches!(core_mut.load_game(missing), Err(CoreError::CoreLoad(_))));
+        assert!(!core_mut.game_loaded);
     }
 }
