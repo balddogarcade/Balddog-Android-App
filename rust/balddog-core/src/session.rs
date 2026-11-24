@@ -239,6 +239,14 @@ fn apply_leaderboard_frame(
     }
 }
 
+fn reset_replay_stats(stats: &SharedStats, coin_tracker: &mut CoinTracker) {
+    stats.replay_current_frame.store(0, Ordering::Release);
+    stats.replay_finished.store(false, Ordering::Release);
+    stats.current_score.store(0, Ordering::Release);
+    stats.best_session_score.store(0, Ordering::Release);
+    *coin_tracker = CoinTracker::new();
+}
+
 pub fn clear_deterministic_nvram(save_dir: &Path, rom_path: &Path) {
     let Some(stem) = rom_path.file_stem().and_then(|s| s.to_str()) else {
         return;
@@ -473,11 +481,21 @@ impl EmulationSession {
                             SessionCommand::RestartReplay => {
                                 if let Some(ref mut p) = replay_player {
                                     clear_deterministic_nvram(&save_dir, &rom_path);
-                                    if core.load_game(&rom_path).is_ok() {
-                                        p.restart();
-                                        stats_clone.replay_current_frame.store(0, Ordering::Release);
-                                        stats_clone.replay_finished.store(false, Ordering::Release);
-                                        stats_clone.current_score.store(0, Ordering::Release);
+                                    match core.load_game(&rom_path) {
+                                        Ok(_) => {
+                                            p.restart();
+                                            if let Some(ref mut lb) = leaderboard {
+                                                lb.reset();
+                                            }
+                                            reset_replay_stats(&stats_clone, &mut coin_tracker);
+                                            last_frame_rgba = None;
+                                        }
+                                        Err(e) => {
+                                            record_log(
+                                                "ERROR",
+                                                &format!("Error recargando ROM en RestartReplay: {e}"),
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -1096,5 +1114,30 @@ mod tests {
         assert_eq!(stats.current_score.load(Ordering::Relaxed), 5_000);
         assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 5_000);
         assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 5_000);
+    }
+
+    #[test]
+    fn reset_replay_stats_clears_progress_scores_and_coin_tracker() {
+        use std::sync::atomic::Ordering;
+
+        let stats = super::SharedStats::default();
+        stats.replay_current_frame.store(1200, Ordering::Release);
+        stats.replay_finished.store(true, Ordering::Release);
+        stats.current_score.store(45_000, Ordering::Release);
+        stats.best_session_score.store(90_000, Ordering::Release);
+
+        let mut tracker = CoinTracker::new();
+        assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(true, &[RETRO_COIN_MASK, 0, 0, 0]), 2);
+        assert!(tracker.has_player_started());
+
+        super::reset_replay_stats(&stats, &mut tracker);
+
+        assert_eq!(stats.replay_current_frame.load(Ordering::Acquire), 0);
+        assert!(!stats.replay_finished.load(Ordering::Acquire));
+        assert_eq!(stats.current_score.load(Ordering::Acquire), 0);
+        assert_eq!(stats.best_session_score.load(Ordering::Acquire), 0);
+        assert!(!tracker.has_player_started());
+        assert_eq!(tracker.credits_used(), 1);
     }
 }

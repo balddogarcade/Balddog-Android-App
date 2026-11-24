@@ -33,6 +33,17 @@ fn lock_ctx() -> MutexGuard<'static, Option<CallbackContext>> {
     }
 }
 
+fn reset_transient_ctx_state(ctx: &mut CallbackContext) {
+    ctx.pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
+    ctx.rotation = 0;
+    ctx.frame_rgba.clear();
+    ctx.frame_width = 0;
+    ctx.frame_height = 0;
+    ctx.frame_dirty = false;
+    ctx.audio_scratch.clear();
+    ctx.inputs = [0; 4];
+}
+
 fn with_ctx<R>(f: impl FnOnce(&mut CallbackContext) -> R) -> Option<R> {
     let mut guard = lock_ctx();
     guard.as_mut().map(f)
@@ -421,6 +432,15 @@ impl LibretroCore {
         let rom_cstr = CString::new(rom_path.to_string_lossy().as_ref())
             .map_err(|e| CoreError::CoreLoad(format!("Ruta ROM inválida: {e}")))?;
 
+        if self.game_loaded {
+            // SAFETY: Descargar el juego previo antes de recargar evita fugas y corrupción en FBNeo.
+            unsafe {
+                (self.retro_unload_game)();
+            }
+            self.game_loaded = false;
+        }
+        with_ctx(reset_transient_ctx_state);
+
         let game_info = RetroGameInfo {
             path: rom_cstr.as_ptr(),
             data: std::ptr::null(),
@@ -630,5 +650,34 @@ mod tests {
         .unwrap();
 
         assert!(with_ctx(|_| ()).is_none());
+    }
+
+    #[test]
+    fn reset_transient_ctx_state_clears_frame_audio_inputs_and_rotation() {
+        let mut ctx = CallbackContext {
+            system_dir_cstr: CString::new("/tmp/sys").unwrap(),
+            save_dir_cstr: CString::new("/tmp/save").unwrap(),
+            pixel_format: RETRO_PIXEL_FORMAT_XRGB8888,
+            rotation: 3,
+            frame_rgba: vec![1, 2, 3, 4],
+            frame_width: 320,
+            frame_height: 240,
+            frame_dirty: true,
+            audio_scratch: vec![10, -20],
+            inputs: [0xFFFF, 1, 2, 3],
+        };
+
+        reset_transient_ctx_state(&mut ctx);
+
+        assert_eq!(ctx.system_dir_cstr.to_str().unwrap(), "/tmp/sys");
+        assert_eq!(ctx.save_dir_cstr.to_str().unwrap(), "/tmp/save");
+        assert_eq!(ctx.pixel_format, RETRO_PIXEL_FORMAT_0RGB1555);
+        assert_eq!(ctx.rotation, 0);
+        assert!(ctx.frame_rgba.is_empty());
+        assert_eq!(ctx.frame_width, 0);
+        assert_eq!(ctx.frame_height, 0);
+        assert!(!ctx.frame_dirty);
+        assert!(ctx.audio_scratch.is_empty());
+        assert_eq!(ctx.inputs, [0; 4]);
     }
 }
