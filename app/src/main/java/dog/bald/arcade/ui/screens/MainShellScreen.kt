@@ -128,6 +128,7 @@ import kotlinx.coroutines.withContext
 import uniffi.balddog_android.EngineStatus
 import uniffi.balddog_android.discoverPublicUdpEndpoint
 import uniffi.balddog_android.getRecentLogs
+import uniffi.balddog_android.logFromAndroid
 import uniffi.balddog_android.pingEngine
 
 private enum class MainTab(val label: String, val icon: ImageVector) {
@@ -201,6 +202,9 @@ fun MainShellScreen(
         } else {
             withContext(Dispatchers.IO) {
                 runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
+                    .onFailure { t ->
+                        logFromAndroid("WARN", "STUN no respondió en puerto $port: ${t.message}. Usando fallback local.")
+                    }
                     .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
             }
         }
@@ -397,6 +401,7 @@ fun MainShellScreen(
                 myEndpoint = myEndpoint,
                 myUdpPort = myUdpPort,
                 myVoiceEndpoint = myVoiceEndpoint,
+                myAvatarSeed = avatarSeed,
                 hasActiveOverlay = topOverlay != null,
                 onOpenUserProfile = { uid ->
                     overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
@@ -648,7 +653,8 @@ fun MainShellScreen(
                                     localIp = localIp,
                                     localPort = port,
                                     isPrivate = isPrivate,
-                                    voiceEndpoint = voiceEndpoint
+                                    voiceEndpoint = voiceEndpoint,
+                                    avatarSeed = avatarSeed
                                 )
                                 activeRoom = created
                             } catch (t: Throwable) {

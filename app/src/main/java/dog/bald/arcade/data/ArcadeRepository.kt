@@ -112,7 +112,8 @@ class ArcadeRepository(context: Context) {
         localIp: String?,
         localPort: Int?,
         isPrivate: Boolean = false,
-        voiceEndpoint: String? = null
+        voiceEndpoint: String? = null,
+        avatarSeed: String? = null
     ): RoomDto {
         val uid = currentUserId() ?: throw IllegalStateException("Usuario no autenticado")
         var lastException: Throwable? = null
@@ -124,7 +125,8 @@ class ArcadeRepository(context: Context) {
                     username = username,
                     endpoint = endpoint,
                     voiceEndpoint = voiceEndpoint?.ifBlank { null },
-                    ready = true
+                    ready = true,
+                    avatarSeed = avatarSeed?.ifBlank { null }
                 )
             )
             val payload = buildJsonObject {

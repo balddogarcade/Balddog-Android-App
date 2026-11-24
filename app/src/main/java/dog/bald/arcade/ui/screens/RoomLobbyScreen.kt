@@ -133,6 +133,7 @@ fun RoomLobbyScreen(
     myEndpoint: String,
     myUdpPort: Int,
     myVoiceEndpoint: String = "",
+    myAvatarSeed: String? = null,
     hasActiveOverlay: Boolean = false,
     onOpenUserProfile: (String) -> Unit = {},
     onLeave: (String?) -> Unit,
@@ -229,11 +230,11 @@ fun RoomLobbyScreen(
         matchLaunched = true
         errorMsg = null
         failedPlayingLaunch = false
+        latencyMonitor.close()
         launchJob = scope.launch {
             val result = onStartMatch(targetRoom, slot)
             if (result.isSuccess) {
                 preparingMatch = false
-                latencyMonitor.close()
             } else {
                 val err = result.exceptionOrNull()
                 if (err !is CancellationException) {
@@ -245,6 +246,7 @@ fun RoomLobbyScreen(
                     }
                     errorMsg = err?.toUserMessage("Error preparando partida")
                         ?: "Error preparando partida"
+                    latencyMonitor.start(scope)
                 }
             }
         }
@@ -786,6 +788,7 @@ fun RoomLobbyScreen(
                     isSlotHost = isSlotHost,
                     isOnlineRoom = isOnlineRoom,
                     pingMs = pingMs,
+                    myAvatarSeed = myAvatarSeed,
                     onClaim = { claimSlot(slot) },
                     onInspectOccupant = occupant?.let { occ -> { onOpenUserProfile(occ.userId) } },
                     modifier = Modifier.weight(1f)
@@ -1078,6 +1081,7 @@ private fun PlayerSlotCard(
     isSlotHost: Boolean,
     isOnlineRoom: Boolean,
     pingMs: Int?,
+    myAvatarSeed: String? = null,
     onClaim: () -> Unit,
     onInspectOccupant: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -1168,8 +1172,13 @@ private fun PlayerSlotCard(
                     .border(1.dp, if (occupant != null) SteelBorder else CharcoalBorder)
             ) {
                 if (occupant != null) {
+                    val effectiveAvatarSeed = when {
+                        isMine && !myAvatarSeed.isNullOrBlank() -> myAvatarSeed
+                        !occupant.avatarSeed.isNullOrBlank() -> occupant.avatarSeed
+                        else -> occupant.username.ifBlank { occupant.userId }
+                    }
                     DiceBearPixelArtAvatar(
-                        seed = occupant.username.ifBlank { occupant.userId },
+                        seed = effectiveAvatarSeed,
                         modifier = Modifier.size(38.dp)
                     )
                 } else {
