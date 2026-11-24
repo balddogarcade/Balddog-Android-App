@@ -3,9 +3,11 @@ package dog.bald.arcade
 import android.Manifest
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
@@ -51,9 +53,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import dog.bald.arcade.audio.VoiceAudioManager
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.MatchHistoryPlayerDto
@@ -79,10 +83,12 @@ import dog.bald.arcade.ui.theme.PureBlack
 import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SteelBorder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import uniffi.balddog_android.NetplayHudInfo
 import uniffi.balddog_android.ReplayHudInfo
@@ -194,6 +200,19 @@ class GameActivity : ComponentActivity() {
                 syncVoiceControls()
             } else {
                 voiceNoticeMsg = "Permiso de micrófono denegado"
+            }
+        }
+
+    private var pendingStorageExportAction: (() -> Unit)? = null
+
+    private val writeStoragePermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val pending = pendingStorageExportAction
+            pendingStorageExportAction = null
+            if (granted) {
+                pending?.invoke()
+            } else {
+                voiceNoticeMsg = "Permiso de almacenamiento denegado"
             }
         }
 
@@ -1220,19 +1239,45 @@ class GameActivity : ComponentActivity() {
         }
     }
 
+    private fun hasLegacyWriteStoragePermission(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun ensureLegacyWriteStoragePermission(onGranted: () -> Unit): Boolean {
+        if (hasLegacyWriteStoragePermission()) {
+            return true
+        }
+        pendingStorageExportAction = onGranted
+        writeStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        return false
+    }
+
     private fun captureAndSaveScreenshot(title: String) {
+        if (!ensureLegacyWriteStoragePermission { captureAndSaveScreenshot(title) }) return
         val appCtx = applicationContext
         val tmpPng = File(cacheDir, "screenshots/shot_${System.currentTimeMillis()}.png")
-        CoroutineScope(Dispatchers.IO).launch {
-            val captured = runCatching {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val captured = try {
+                tmpPng.parentFile?.mkdirs()
                 captureScreenshotPng(tmpPng.absolutePath)
-                MediaExportHelper.savePngToGallery(appCtx, tmpPng, title).getOrThrow()
+                MediaExportHelper.savePngToGallery(appCtx, tmpPng, title)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Result.failure(t)
+            } finally {
+                tmpPng.delete()
             }
-            tmpPng.delete()
-            voiceNoticeMsg = if (captured.isSuccess) {
-                "Captura guardada: ${captured.getOrNull()}"
-            } else {
-                "Error al capturar pantalla"
+            if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
+                voiceNoticeMsg = if (captured.isSuccess) {
+                    "Captura guardada: ${captured.getOrNull()}"
+                } else {
+                    "Error al capturar pantalla"
+                }
             }
         }
     }
@@ -1244,38 +1289,56 @@ class GameActivity : ComponentActivity() {
         title: String,
     ) {
         if (exportProgressPct != null || replayPath.isBlank()) return
+        if (!ensureLegacyWriteStoragePermission {
+                exportReplayVideoClip(romPath, systemDir, saveDir, title)
+            }
+        ) {
+            return
+        }
         exportProgressPct = 0
         val appCtx = applicationContext
         val nativeDir = applicationInfo.nativeLibraryDir
         val rPath = replayPath
         val sDef = scoreDef
-        CoroutineScope(Dispatchers.IO).launch {
-            stopGame()
-            val res = ReplayVideoExporter.exportToGallery(
-                context = appCtx,
-                nativeLibDir = nativeDir,
-                romPath = romPath,
-                systemDir = systemDir,
-                saveDir = saveDir,
-                replayPath = rPath,
-                gameTitle = title,
-                onProgress = { pct -> exportProgressPct = pct }
-            )
-            exportProgressPct = null
-            runCatching {
-                startReplayGame(
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                stopGame()
+                val res = ReplayVideoExporter.exportToGallery(
+                    context = appCtx,
                     nativeLibDir = nativeDir,
                     romPath = romPath,
                     systemDir = systemDir,
                     saveDir = saveDir,
                     replayPath = rPath,
-                    scoreDef = sDef
+                    gameTitle = title,
+                    onProgress = { pct ->
+                        if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
+                            exportProgressPct = pct
+                        }
+                    }
                 )
-            }
-            voiceNoticeMsg = if (res.isSuccess) {
-                "Clip MP4 guardado en Movies/balddog ARCADE"
-            } else {
-                "Error exportando MP4: ${res.exceptionOrNull()?.message ?: "desconocido"}"
+                if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
+                    exportProgressPct = null
+                    runCatching {
+                        startReplayGame(
+                            nativeLibDir = nativeDir,
+                            romPath = romPath,
+                            systemDir = systemDir,
+                            saveDir = saveDir,
+                            replayPath = rPath,
+                            scoreDef = sDef
+                        )
+                    }
+                    voiceNoticeMsg = if (res.isSuccess) {
+                        "Clip MP4 guardado en Movies/balddog ARCADE"
+                    } else {
+                        "Error exportando MP4: ${res.exceptionOrNull()?.message ?: "desconocido"}"
+                    }
+                }
+            } finally {
+                if (!isFinishing && !isDestroyed) {
+                    exportProgressPct = null
+                }
             }
         }
     }

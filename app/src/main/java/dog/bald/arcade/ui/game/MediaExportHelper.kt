@@ -1,18 +1,35 @@
 package dog.bald.arcade.ui.game
 
+import android.Manifest
 import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 object MediaExportHelper {
+    private fun ensureLegacyWritePermission(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                throw SecurityException("Permiso WRITE_EXTERNAL_STORAGE requerido en Android 8–9")
+            }
+        }
+    }
+
     suspend fun savePngToGallery(context: Context, sourcePng: File, title: String): Result<String> {
         return withContext(Dispatchers.IO) {
-            runCatching {
+            try {
+                ensureLegacyWritePermission(context)
                 val safeTitle = title.replace(Regex("[^a-zA-Z0-9_-]"), "_").take(32)
                 val filename = "balddog_${safeTitle}_${System.currentTimeMillis()}.png"
                 val resolver = context.contentResolver
@@ -36,17 +53,22 @@ object MediaExportHelper {
                         resolver.update(uri, values, null, null)
                     }
                 } catch (t: Throwable) {
-                    resolver.delete(uri, null, null)
+                    runCatching { resolver.delete(uri, null, null) }
                     throw t
                 }
-                filename
+                Result.success(filename)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Result.failure(t)
             }
         }
     }
 
     suspend fun saveMp4ToGallery(context: Context, sourceMp4: File, title: String): Result<String> {
         return withContext(Dispatchers.IO) {
-            runCatching {
+            try {
+                ensureLegacyWritePermission(context)
                 val safeTitle = title.replace(Regex("[^a-zA-Z0-9_-]"), "_").take(32)
                 val filename = "balddog_clip_${safeTitle}_${System.currentTimeMillis()}.mp4"
                 val resolver = context.contentResolver
@@ -70,10 +92,14 @@ object MediaExportHelper {
                         resolver.update(uri, values, null, null)
                     }
                 } catch (t: Throwable) {
-                    resolver.delete(uri, null, null)
+                    runCatching { resolver.delete(uri, null, null) }
                     throw t
                 }
-                filename
+                Result.success(filename)
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Result.failure(t)
             }
         }
     }
