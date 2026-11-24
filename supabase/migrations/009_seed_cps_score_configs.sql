@@ -1,7 +1,15 @@
--- Fase 5: Configuraciones rcheevos verificadas contra RETRO_MEMORY_SYSTEM_RAM (CpsRamFF) para CPS1 y CPS2
+-- Fase 4/5: Configuraciones rcheevos verificadas contra RETRO_MEMORY_SYSTEM_RAM (CpsRamFF) para CPS1 y CPS2
+-- Captain Commando (captcomm) CpsRamFF (64KB, 16-bit word-swapped):
+--   0xA855: P1 active (1 = en partida / continue, 0 = game over / attract)
+--   0xAA7D: P1 lives (>0 al iniciar)
+--   0xAA74..0xAA77: P1 score en BCD (dos palabras de 16 bits LE)
 
 update public.games
 set score_config = case slug
+    when 'captcomm' then jsonb_build_object(
+        'format', 'rcheevos',
+        'lboard', 'STA:0xHA855=1_0xHAA7D>0::CAN:0=1::SUB:0xHA855=0::VAL:A:b0x AA74*10000_M:b0x AA76'
+    )
     when 'dino' then jsonb_build_object(
         'format', 'rcheevos',
         'lboard', 'STA:0xHB345=1::CAN:0=1::SUB:0xHB345=0::VAL:A:b0x B374*10000_M:b0x B376'
@@ -27,5 +35,9 @@ set score_config = case slug
         'lboard', 'STA:0xH86C8=1::CAN:0=1::SUB:0xH86C8=0::VAL:A:b0x 8748*10000_M:b0x 874A'
     )
     else score_config
+end,
+max_valid_score = case slug
+    when 'captcomm' then 9999999
+    else max_valid_score
 end
-where slug in ('dino', 'ffight', 'knights', 'kod', 'punisher', 'ddtod');
+where slug in ('captcomm', 'dino', 'ffight', 'knights', 'kod', 'punisher', 'ddtod');
