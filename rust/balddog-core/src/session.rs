@@ -13,10 +13,10 @@ use crossbeam_channel::{bounded, unbounded, Sender};
 use ggrs::{GgrsEvent, GgrsRequest, InputStatus, SessionState};
 
 use crate::audio::engine::AudioEngine;
-use crate::retro::core::LibretroCore;
+use crate::retro::core::{rotate_rgba, LibretroCore};
 use crate::retro::leaderboard::{LeaderboardEngine, LeaderboardFrameOutput};
 use crate::retro::replay::{ReplayPlayer, ReplayRecorder};
-use crate::video::renderer::WgpuRenderer;
+use crate::video::renderer::{effective_game_aspect, WgpuRenderer};
 use crate::{record_log, CoreError};
 
 pub enum SessionCommand {
@@ -389,7 +389,13 @@ impl EmulationSession {
                     }
                 };
 
-                let mut renderer = WgpuRenderer::new(av_info.geometry.aspect_ratio);
+                let game_aspect = effective_game_aspect(
+                    av_info.geometry.aspect_ratio,
+                    av_info.geometry.base_width,
+                    av_info.geometry.base_height,
+                    core.rotation(),
+                );
+                let mut renderer = WgpuRenderer::new(game_aspect);
                 let mut leaderboard = if netplay.is_none() {
                     score_def
                         .as_deref()
@@ -420,7 +426,7 @@ impl EmulationSession {
                     None
                 };
                 let mut replay_speed: u8 = 1;
-                let mut last_frame_rgba: Option<(u32, u32, Vec<u8>)> = None;
+                let mut last_frame_rgba: Option<(u32, u32, u32, Vec<u8>)> = None;
                 let _ = init_tx.send(Ok(()));
 
                 let target_fps = if av_info.timing.fps > 10.0 {
@@ -511,7 +517,11 @@ impl EmulationSession {
                             }
                             SessionCommand::CaptureScreenshot { path, ack } => {
                                 let res = match last_frame_rgba.as_ref() {
-                                    Some((w, h, rgba)) => write_png_rgba(&path, *w, *h, rgba),
+                                    Some((w, h, rot, rgba)) => {
+                                        let (out_w, out_h, rotated) =
+                                            rotate_rgba(*w, *h, rgba, *rot);
+                                        write_png_rgba(&path, out_w, out_h, &rotated)
+                                    }
                                     None => Err(CoreError::State("Aún no hay frame renderizado".into())),
                                 };
                                 let _ = ack.send(res);
@@ -703,9 +713,10 @@ impl EmulationSession {
                         }
                     }
 
+                    let rot = core.rotation();
                     core.take_video_frame(|w, h, rgba| {
-                        last_frame_rgba = Some((w, h, rgba.to_vec()));
-                        renderer.render_frame(w, h, rgba);
+                        last_frame_rgba = Some((w, h, rot, rgba.to_vec()));
+                        renderer.render_frame(w, h, rgba, rot);
                     });
 
                     if !is_replay_mode {

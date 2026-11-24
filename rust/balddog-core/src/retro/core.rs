@@ -105,8 +105,11 @@ unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -> bool {
             if data.is_null() {
                 return false;
             }
-            // SAFETY: `data` apunta a un `c_uint` válido (0, 1, 2, 3 * 90 grados).
+            // SAFETY: `data` apunta a un `c_uint` válido (0, 1, 2, 3 * 90 grados CCW).
             let rot = unsafe { *(data as *const c_uint) };
+            if rot > 3 {
+                return false;
+            }
             with_ctx(|ctx| {
                 ctx.rotation = rot;
                 true
@@ -498,6 +501,10 @@ impl LibretroCore {
         }
     }
 
+    pub fn rotation(&self) -> u32 {
+        with_ctx(|ctx| ctx.rotation % 4).unwrap_or(0)
+    }
+
     pub fn take_video_frame<R>(&self, f: impl FnOnce(u32, u32, &[u8]) -> R) -> Option<R> {
         with_ctx(|ctx| {
             if ctx.frame_dirty && ctx.frame_width > 0 && ctx.frame_height > 0 {
@@ -569,6 +576,41 @@ impl LibretroCore {
     }
 }
 
+/// Rota un framebuffer RGBA8888 según la convención Libretro CCW (`0=0°, 1=90° CCW, 2=180°, 3=270° CCW`).
+pub fn rotate_rgba(width: u32, height: u32, src: &[u8], rotation: u32) -> (u32, u32, Vec<u8>) {
+    let rot = rotation % 4;
+    let w = width as usize;
+    let h = height as usize;
+    let expected_len = w.saturating_mul(h).saturating_mul(4);
+    if rot == 0 || w == 0 || h == 0 || src.len() < expected_len {
+        return (width, height, src.to_vec());
+    }
+
+    let (out_w, out_h) = if rot % 2 == 1 {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let out_w_usize = out_w as usize;
+    let mut dst = vec![0u8; expected_len];
+
+    for sy in 0..h {
+        for sx in 0..w {
+            let (dx, dy) = match rot {
+                1 => (sy, w - 1 - sx),
+                2 => (w - 1 - sx, h - 1 - sy),
+                3 => (h - 1 - sy, sx),
+                _ => (sx, sy),
+            };
+            let src_idx = (sy * w + sx) * 4;
+            let dst_idx = (dy * out_w_usize + dx) * 4;
+            dst[dst_idx..dst_idx + 4].copy_from_slice(&src[src_idx..src_idx + 4]);
+        }
+    }
+
+    (out_w, out_h, dst)
+}
+
 impl Drop for LibretroCore {
     fn drop(&mut self) {
         // SAFETY: Se descarga el juego antes de desinicializar el core y limpiar `ACTIVE_CTX`.
@@ -586,9 +628,23 @@ impl Drop for LibretroCore {
 mod tests {
     use super::*;
 
-    struct CtxResetGuard;
+    static TEST_CTX_LOCK: Mutex<()> = Mutex::new(());
 
-    impl Drop for CtxResetGuard {
+    struct CtxResetGuard<'a> {
+        _lock: MutexGuard<'a, ()>,
+    }
+
+    impl<'a> CtxResetGuard<'a> {
+        fn acquire() -> Self {
+            let lock = match TEST_CTX_LOCK.lock() {
+                Ok(g) => g,
+                Err(p) => p.into_inner(),
+            };
+            Self { _lock: lock }
+        }
+    }
+
+    impl Drop for CtxResetGuard<'_> {
         fn drop(&mut self) {
             *lock_ctx() = None;
         }
@@ -596,7 +652,7 @@ mod tests {
 
     #[test]
     fn active_ctx_is_accessible_across_threads_and_recovers_from_poison() {
-        let _reset = CtxResetGuard;
+        let _reset = CtxResetGuard::acquire();
 
         {
             let mut guard = lock_ctx();
@@ -679,5 +735,95 @@ mod tests {
         assert!(!ctx.frame_dirty);
         assert!(ctx.audio_scratch.is_empty());
         assert_eq!(ctx.inputs, [0; 4]);
+    }
+
+    #[test]
+    fn environment_cb_validates_rotation_bounds() {
+        let _reset = CtxResetGuard::acquire();
+        {
+            let mut guard = lock_ctx();
+            *guard = Some(CallbackContext {
+                system_dir_cstr: CString::new("/tmp/sys").unwrap(),
+                save_dir_cstr: CString::new("/tmp/save").unwrap(),
+                pixel_format: RETRO_PIXEL_FORMAT_0RGB1555,
+                rotation: 0,
+                frame_rgba: Vec::new(),
+                frame_width: 0,
+                frame_height: 0,
+                frame_dirty: false,
+                audio_scratch: Vec::new(),
+                inputs: [0; 4],
+            });
+        }
+
+        let mut rot: c_uint = 1;
+        assert!(unsafe {
+            environment_cb(
+                RETRO_ENVIRONMENT_SET_ROTATION,
+                (&mut rot as *mut c_uint) as *mut c_void,
+            )
+        });
+        assert_eq!(with_ctx(|ctx| ctx.rotation), Some(1));
+
+        let mut invalid_rot: c_uint = 4;
+        assert!(!unsafe {
+            environment_cb(
+                RETRO_ENVIRONMENT_SET_ROTATION,
+                (&mut invalid_rot as *mut c_uint) as *mut c_void,
+            )
+        });
+        assert_eq!(with_ctx(|ctx| ctx.rotation), Some(1));
+    }
+
+    #[test]
+    fn rotate_rgba_dimensions_and_corner_pixels() {
+        // 2x3 image:
+        // (0,0)=R  (1,0)=G
+        // (0,1)=B  (1,1)=W
+        // (0,2)=Y  (1,2)=C
+        let r = [255, 0, 0, 255];
+        let g = [0, 255, 0, 255];
+        let b = [0, 0, 255, 255];
+        let w = [255, 255, 255, 255];
+        let y = [255, 255, 0, 255];
+        let c = [0, 255, 255, 255];
+        let src: Vec<u8> = [r, g, b, w, y, c].concat();
+
+        let (w0, h0, out0) = rotate_rgba(2, 3, &src, 0);
+        assert_eq!((w0, h0), (2, 3));
+        assert_eq!(out0, src);
+
+        // 90 deg CCW -> 3x2:
+        // top row:    G, W, C
+        // bottom row: R, B, Y
+        let (w1, h1, out1) = rotate_rgba(2, 3, &src, 1);
+        assert_eq!((w1, h1), (3, 2));
+        assert_eq!(out1, [g, w, c, r, b, y].concat());
+
+        // 180 deg -> 2x3:
+        // C, Y / W, B / G, R
+        let (w2, h2, out2) = rotate_rgba(2, 3, &src, 2);
+        assert_eq!((w2, h2), (2, 3));
+        assert_eq!(out2, [c, y, w, b, g, r].concat());
+
+        // 270 deg CCW -> 3x2:
+        // top row:    Y, B, R
+        // bottom row: C, W, G
+        let (w3, h3, out3) = rotate_rgba(2, 3, &src, 3);
+        assert_eq!((w3, h3), (3, 2));
+        assert_eq!(out3, [y, b, r, c, w, g].concat());
+
+        // Rotating 90 CCW four times returns to original
+        let mut cur_w = 2;
+        let mut cur_h = 3;
+        let mut cur = src.clone();
+        for _ in 0..4 {
+            let (nw, nh, next) = rotate_rgba(cur_w, cur_h, &cur, 1);
+            cur_w = nw;
+            cur_h = nh;
+            cur = next;
+        }
+        assert_eq!((cur_w, cur_h), (2, 3));
+        assert_eq!(cur, src);
     }
 }

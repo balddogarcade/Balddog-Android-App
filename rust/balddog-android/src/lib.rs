@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use balddog_core::audio::engine::set_global_ducking;
-use balddog_core::retro::core::LibretroCore;
+use balddog_core::retro::core::{rotate_rgba, LibretroCore};
 use balddog_core::retro::replay::ReplayPlayer;
 #[cfg(target_os = "android")]
 use balddog_core::session::SessionControl;
@@ -588,13 +588,15 @@ impl OfflineReplayRenderer {
         let frame_index = guard.player.current_frame();
         guard.core.set_inputs(frame_inputs);
         guard.core.run_frame();
+        let rot = guard.core.rotation();
         let mut out_w = guard.last_w;
         let mut out_h = guard.last_h;
         let mut out_rgba = Vec::new();
         guard.core.take_video_frame(|w, h, rgba| {
-            out_w = w;
-            out_h = h;
-            out_rgba = rgba.to_vec();
+            let (rw, rh, rotated) = rotate_rgba(w, h, rgba, rot);
+            out_w = rw;
+            out_h = rh;
+            out_rgba = rotated;
         });
         guard.core.take_audio_samples(|_| {});
         if !out_rgba.is_empty() {
@@ -647,9 +649,17 @@ pub fn open_offline_replay_renderer(
     } else {
         60.0
     };
+    let rot = core.rotation();
+    let raw_w = av.geometry.base_width.max(2);
+    let raw_h = av.geometry.base_height.max(2);
+    let (meta_w, meta_h) = if rot % 2 == 1 {
+        (raw_h, raw_w)
+    } else {
+        (raw_w, raw_h)
+    };
     let meta = OfflineReplayMeta {
-        width: av.geometry.base_width.max(2),
-        height: av.geometry.base_height.max(2),
+        width: meta_w,
+        height: meta_h,
         fps,
         sample_rate: av.timing.sample_rate.max(8000.0) as u32,
         total_frames: player.total_frames(),

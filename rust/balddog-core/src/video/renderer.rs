@@ -13,7 +13,54 @@ use crate::{record_log, CoreError};
 #[derive(Copy, Clone, Pod, Zeroable)]
 struct AspectUniform {
     scale: [f32; 2],
-    _pad: [f32; 2],
+    rotation: u32,
+    _pad: u32,
+}
+
+/// Calcula la relación de aspecto de pantalla efectiva.
+/// Nota: FBNeo ya devuelve en `av_info.geometry.aspect_ratio` el aspecto final orientado
+/// (ej. `0.75` para TATE 3:4), por lo que NO debe invertirse cuando `reported_aspect > 0.1`.
+/// Solo el fallback desde `base_width / base_height` se invierte en rotaciones impares (90/270 CCW).
+pub fn effective_game_aspect(
+    reported_aspect: f32,
+    base_width: u32,
+    base_height: u32,
+    rotation: u32,
+) -> f32 {
+    if reported_aspect.is_finite() && reported_aspect > 0.1 {
+        return reported_aspect;
+    }
+    if base_width > 0 && base_height > 0 {
+        let rot = rotation % 4;
+        if rot % 2 == 1 {
+            return base_height as f32 / base_width as f32;
+        }
+        return base_width as f32 / base_height as f32;
+    }
+    4.0 / 3.0
+}
+
+pub fn compute_aspect_scale(surface_w: u32, surface_h: u32, target_aspect: f32) -> [f32; 2] {
+    let safe_aspect = if target_aspect.is_finite() && target_aspect > 0.01 {
+        target_aspect
+    } else {
+        4.0 / 3.0
+    };
+    let screen_aspect = surface_w.max(1) as f32 / surface_h.max(1) as f32;
+    if screen_aspect > safe_aspect {
+        [safe_aspect / screen_aspect, 1.0]
+    } else {
+        [1.0, screen_aspect / safe_aspect]
+    }
+}
+
+pub fn rotate_uv(uv: [f32; 2], rotation: u32) -> [f32; 2] {
+    match rotation % 4 {
+        1 => [1.0 - uv[1], uv[0]],
+        2 => [1.0 - uv[0], 1.0 - uv[1]],
+        3 => [uv[1], 1.0 - uv[0]],
+        _ => uv,
+    }
 }
 
 pub struct WgpuRenderer {
@@ -31,6 +78,7 @@ pub struct WgpuRenderer {
     tex_width: u32,
     tex_height: u32,
     game_aspect: f32,
+    rotation: u32,
 }
 
 impl WgpuRenderer {
@@ -54,6 +102,7 @@ impl WgpuRenderer {
             tex_width: 0,
             tex_height: 0,
             game_aspect: if game_aspect > 0.1 { game_aspect } else { 4.0 / 3.0 },
+            rotation: 0,
         }
     }
 
@@ -309,20 +358,25 @@ impl WgpuRenderer {
     }
 
     fn compute_aspect_uniform(&self, surface_w: u32, surface_h: u32) -> AspectUniform {
-        let screen_aspect = surface_w as f32 / surface_h.max(1) as f32;
-        let target_aspect = self.game_aspect;
-        let (sx, sy) = if screen_aspect > target_aspect {
-            (target_aspect / screen_aspect, 1.0)
-        } else {
-            (1.0, screen_aspect / target_aspect)
-        };
         AspectUniform {
-            scale: [sx, sy],
-            _pad: [0.0, 0.0],
+            scale: compute_aspect_scale(surface_w, surface_h, self.game_aspect),
+            rotation: self.rotation % 4,
+            _pad: 0,
         }
     }
 
-    pub fn render_frame(&mut self, width: u32, height: u32, rgba: &[u8]) {
+    pub fn render_frame(&mut self, width: u32, height: u32, rgba: &[u8], rotation: u32) {
+        let rot = rotation % 4;
+        if self.rotation != rot {
+            self.rotation = rot;
+            if let (Some(queue), Some(cfg), Some(buf)) =
+                (&self.queue, &self.config, &self.aspect_buffer)
+            {
+                let aspect_data = self.compute_aspect_uniform(cfg.width, cfg.height);
+                queue.write_buffer(buf, 0, bytemuck::bytes_of(&aspect_data));
+            }
+        }
+
         let (Some(surface), Some(device), Some(queue), Some(pipeline), Some(bgl), Some(sampler), Some(aspect_buf)) = (
             &self.surface,
             &self.device,
@@ -444,5 +498,50 @@ impl WgpuRenderer {
 
         queue.submit(std::iter::once(encoder.finish()));
         output.present();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compute_aspect_scale, effective_game_aspect, rotate_uv};
+
+    #[test]
+    fn aspect_scale_landscape_and_portrait() {
+        // 4:3 game inside 1920x1080 (16:9) -> pillarboxed horizontally
+        let s1 = compute_aspect_scale(1920, 1080, 4.0 / 3.0);
+        assert!((s1[0] - 0.75).abs() < 1e-4);
+        assert!((s1[1] - 1.0).abs() < 1e-4);
+
+        // 3:4 TATE game inside 1080x1920 (9:16) -> letterboxed vertically
+        let s2 = compute_aspect_scale(1080, 1920, 0.75);
+        assert!((s2[0] - 1.0).abs() < 1e-4);
+        assert!((s2[1] - 0.75).abs() < 1e-4);
+
+        // Zero height guard does not NaN/div0
+        let s3 = compute_aspect_scale(1080, 0, 4.0 / 3.0);
+        assert!(s3[0].is_finite() && s3[1].is_finite());
+    }
+
+    #[test]
+    fn effective_aspect_preserves_reported_and_swaps_fallback_on_odd_rotations() {
+        // FBNeo reports post-rotation aspect (0.75 for vertical games) -> preserved untouched
+        assert!((effective_game_aspect(0.75, 320, 240, 1) - 0.75).abs() < 1e-5);
+        assert!((effective_game_aspect(1.3333, 320, 240, 0) - 1.3333).abs() < 1e-5);
+
+        // Missing/zero aspect falls back to base_width/base_height and swaps on odd rotations
+        assert!((effective_game_aspect(0.0, 320, 240, 0) - (4.0 / 3.0)).abs() < 1e-5);
+        assert!((effective_game_aspect(0.0, 320, 240, 1) - 0.75).abs() < 1e-5);
+        assert!((effective_game_aspect(0.0, 320, 240, 2) - (4.0 / 3.0)).abs() < 1e-5);
+        assert!((effective_game_aspect(0.0, 320, 240, 3) - 0.75).abs() < 1e-5);
+    }
+
+    #[test]
+    fn rotate_uv_matches_libretro_ccw_convention() {
+        // Screen top-left UV (0, 0)
+        assert_eq!(rotate_uv([0.0, 0.0], 0), [0.0, 0.0]);
+        assert_eq!(rotate_uv([0.0, 0.0], 1), [1.0, 0.0]); // 90 CCW samples raw top-right
+        assert_eq!(rotate_uv([0.0, 0.0], 2), [1.0, 1.0]); // 180 samples raw bottom-right
+        assert_eq!(rotate_uv([0.0, 0.0], 3), [0.0, 1.0]); // 270 CCW samples raw bottom-left
+        assert_eq!(rotate_uv([0.0, 0.0], 4), [0.0, 0.0]);
     }
 }
