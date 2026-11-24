@@ -10,13 +10,58 @@ import kotlin.math.abs
 /**
  * Gestiona hasta 4 mandos Bluetooth/USB simultáneos y mantiene las máscaras de entrada por puerto.
  */
-class ControllerManager(
-    context: Context,
+class ControllerManager internal constructor(
     private val onControllerPresenceChanged: (Boolean) -> Unit,
-    private val onPortMaskChanged: (port: Int, mask: Int) -> Unit
+    private val onPortMaskChanged: (port: Int, mask: Int) -> Unit,
+    private val backend: DeviceBackend
 ) {
-    private val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
+    constructor(
+        context: Context,
+        onControllerPresenceChanged: (Boolean) -> Unit,
+        onPortMaskChanged: (port: Int, mask: Int) -> Unit
+    ) : this(
+        onControllerPresenceChanged = onControllerPresenceChanged,
+        onPortMaskChanged = onPortMaskChanged,
+        backend = AndroidDeviceBackend(context)
+    )
+
+    internal interface DeviceBackend {
+        fun registerListener(listener: InputManager.InputDeviceListener)
+        fun unregisterListener(listener: InputManager.InputDeviceListener)
+        fun getActiveGamepadDeviceIds(): List<Int>
+    }
+
+    private class AndroidDeviceBackend(context: Context) : DeviceBackend {
+        private val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
+
+        override fun registerListener(listener: InputManager.InputDeviceListener) {
+            inputManager.registerInputDeviceListener(listener, null)
+        }
+
+        override fun unregisterListener(listener: InputManager.InputDeviceListener) {
+            inputManager.unregisterInputDeviceListener(listener)
+        }
+
+        override fun getActiveGamepadDeviceIds(): List<Int> {
+            val result = mutableListOf<Int>()
+            for (id in InputDevice.getDeviceIds()) {
+                val dev = InputDevice.getDevice(id) ?: continue
+                if (!dev.isEnabled || dev.isVirtual) continue
+                val sources = dev.sources
+                val hasGamepad = (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                val hasJoystick = (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK &&
+                    dev.getMotionRange(MotionEvent.AXIS_X) != null &&
+                    dev.getMotionRange(MotionEvent.AXIS_Y) != null
+                if (hasGamepad || hasJoystick) {
+                    result.add(id)
+                }
+            }
+            return result
+        }
+    }
+
     private val deviceToPort = mutableMapOf<Int, Int>()
+    private val portToDevice = IntArray(4) { -1 }
     private val portKeyMasks = IntArray(4)
     private val portAxisMasks = IntArray(4)
 
@@ -27,29 +72,47 @@ class ControllerManager(
     }
 
     fun start() {
-        inputManager.registerInputDeviceListener(deviceListener, null)
+        backend.registerListener(deviceListener)
         refreshDevices()
     }
 
     fun stop() {
-        inputManager.unregisterInputDeviceListener(deviceListener)
+        backend.unregisterListener(deviceListener)
+        val hadAny = deviceToPort.isNotEmpty()
+        deviceToPort.clear()
+        for (port in 0 until 4) {
+            val hadInput = portKeyMasks[port] != 0 || portAxisMasks[port] != 0
+            val hadDevice = portToDevice[port] != -1
+            portKeyMasks[port] = 0
+            portAxisMasks[port] = 0
+            portToDevice[port] = -1
+            if (hadInput || hadDevice) {
+                onPortMaskChanged(port, 0)
+            }
+        }
+        if (hadAny) {
+            onControllerPresenceChanged(false)
+        }
     }
 
     fun refreshDevices() {
         val prevCount = deviceToPort.size
         deviceToPort.clear()
+        val newPortToDevice = IntArray(4) { -1 }
         var nextPort = 0
-        for (id in InputDevice.getDeviceIds()) {
-            val dev = InputDevice.getDevice(id) ?: continue
-            if (!dev.isEnabled || dev.isVirtual) continue
-            val sources = dev.sources
-            val hasGamepad = (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
-            val hasJoystick = (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK &&
-                dev.getMotionRange(MotionEvent.AXIS_X) != null &&
-                dev.getMotionRange(MotionEvent.AXIS_Y) != null
-            if ((hasGamepad || hasJoystick) && nextPort < 4) {
+        for (id in backend.getActiveGamepadDeviceIds()) {
+            if (nextPort < 4) {
                 deviceToPort[id] = nextPort
+                newPortToDevice[nextPort] = id
                 nextPort++
+            }
+        }
+        for (port in 0 until 4) {
+            if (portToDevice[port] != newPortToDevice[port]) {
+                portKeyMasks[port] = 0
+                portAxisMasks[port] = 0
+                onPortMaskChanged(port, 0)
+                portToDevice[port] = newPortToDevice[port]
             }
         }
         val hasAny = deviceToPort.isNotEmpty()
@@ -61,11 +124,15 @@ class ControllerManager(
     fun hasPhysicalController(): Boolean = deviceToPort.isNotEmpty()
 
     fun handleKeyEvent(event: KeyEvent): Boolean {
-        val port = deviceToPort[event.deviceId] ?: return false
-        val bit = mapKeyCodeToBit(event.keyCode)
+        return applyKeyState(event.deviceId, event.keyCode, event.action)
+    }
+
+    internal fun applyKeyState(deviceId: Int, keyCode: Int, action: Int): Boolean {
+        val port = deviceToPort[deviceId] ?: return false
+        val bit = mapKeyCodeToBit(keyCode)
         if (bit == 0) return false
 
-        when (event.action) {
+        when (action) {
             KeyEvent.ACTION_DOWN -> portKeyMasks[port] = portKeyMasks[port] or bit
             KeyEvent.ACTION_UP -> portKeyMasks[port] = portKeyMasks[port] and bit.inv()
             else -> return true
@@ -75,18 +142,31 @@ class ControllerManager(
     }
 
     fun handleMotionEvent(event: MotionEvent): Boolean {
-        if ((event.source and InputDevice.SOURCE_JOYSTICK) != InputDevice.SOURCE_JOYSTICK &&
-            (event.source and InputDevice.SOURCE_GAMEPAD) != InputDevice.SOURCE_GAMEPAD
+        return applyAxisState(
+            deviceId = event.deviceId,
+            source = event.source,
+            hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X),
+            hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y),
+            stickX = event.getAxisValue(MotionEvent.AXIS_X),
+            stickY = event.getAxisValue(MotionEvent.AXIS_Y)
+        )
+    }
+
+    internal fun applyAxisState(
+        deviceId: Int,
+        source: Int,
+        hatX: Float,
+        hatY: Float,
+        stickX: Float,
+        stickY: Float
+    ): Boolean {
+        if ((source and InputDevice.SOURCE_JOYSTICK) != InputDevice.SOURCE_JOYSTICK &&
+            (source and InputDevice.SOURCE_GAMEPAD) != InputDevice.SOURCE_GAMEPAD
         ) {
             return false
         }
-        val port = deviceToPort[event.deviceId] ?: return false
+        val port = deviceToPort[deviceId] ?: return false
         var axisMask = 0
-
-        val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
-        val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
-        val stickX = event.getAxisValue(MotionEvent.AXIS_X)
-        val stickY = event.getAxisValue(MotionEvent.AXIS_Y)
 
         val x = if (abs(hatX) > 0.4f) hatX else stickX
         val y = if (abs(hatY) > 0.4f) hatY else stickY

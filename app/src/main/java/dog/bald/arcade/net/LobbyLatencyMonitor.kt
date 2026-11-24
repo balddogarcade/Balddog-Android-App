@@ -3,6 +3,7 @@ package dog.bald.arcade.net
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +15,7 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
+import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 
 data class LobbyPeerTarget(
@@ -45,7 +47,23 @@ class LobbyLatencyMonitor(
     private val lastSeenNanos = ConcurrentHashMap<String, Long>()
     private val currentLatencies = ConcurrentHashMap<String, Int>()
     private val pendingStunPings = ConcurrentHashMap<String, Long>()
+    private val secureRandom = SecureRandom()
+    private val socketLock = Any()
     private var scopeJob: Job? = null
+
+    internal val activeJob: Job?
+        get() = scopeJob
+
+    internal fun isSocketOpen(): Boolean = synchronized(socketLock) {
+        socket?.let { !it.isClosed } == true
+    }
+
+    private fun closeSocket() {
+        val toClose = synchronized(socketLock) {
+            socket.also { socket = null }
+        }
+        runCatching { toClose?.close() }
+    }
 
     fun updatePeers(newPeers: List<LobbyPeerTarget>) {
         peers = newPeers
@@ -65,8 +83,11 @@ class LobbyLatencyMonitor(
 
     fun start(parentScope: CoroutineScope) {
         if (closed || scopeJob != null) return
-        val job = Job()
+        val job = SupervisorJob(parentScope.coroutineContext[Job])
         scopeJob = job
+        job.invokeOnCompletion {
+            closeSocket()
+        }
         val ioScope = CoroutineScope(parentScope.coroutineContext + Dispatchers.IO + job)
 
         ioScope.launch {
@@ -78,11 +99,13 @@ class LobbyLatencyMonitor(
                 }
             }.getOrNull() ?: return@launch
 
-            if (closed) {
-                runCatching { sock.close() }
-                return@launch
+            synchronized(socketLock) {
+                if (closed || !job.isActive) {
+                    runCatching { sock.close() }
+                    return@launch
+                }
+                socket = sock
             }
-            socket = sock
 
             val recvJob = launch {
                 val buf = ByteArray(256)
@@ -210,7 +233,7 @@ class LobbyLatencyMonitor(
         return null
     }
 
-    private fun buildStunBindingRequest(): Pair<String, ByteArray> {
+    internal fun buildStunBindingRequest(): Pair<String, ByteArray> {
         val req = ByteArray(20)
         req[0] = 0x00
         req[1] = 0x01
@@ -218,9 +241,7 @@ class LobbyLatencyMonitor(
         req[5] = 0x12
         req[6] = 0xA4.toByte()
         req[7] = 0x42
-        val tid = java.security.SecureRandom().let { rng ->
-            ByteArray(12).also { rng.nextBytes(it) }
-        }
+        val tid = ByteArray(12).also { secureRandom.nextBytes(it) }
         System.arraycopy(tid, 0, req, 8, 12)
         val txKey = tid.joinToString("") { "%02x".format(it) }
         return txKey to req
@@ -242,7 +263,6 @@ class LobbyLatencyMonitor(
         closed = true
         scopeJob?.cancel()
         scopeJob = null
-        runCatching { socket?.close() }
-        socket = null
+        closeSocket()
     }
 }
