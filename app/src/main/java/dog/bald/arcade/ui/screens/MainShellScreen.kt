@@ -50,6 +50,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -116,6 +117,7 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -367,125 +369,36 @@ fun MainShellScreen(
     }
 
     val topOverlay = overlayStack.lastOrNull()
-    if (topOverlay != null) {
-        when (topOverlay) {
-            is AppOverlay.PublicProfile -> PublicProfileScreen(
-                userId = topOverlay.userId,
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (currentRoom != null) {
+            val roomGame = games.firstOrNull { it.id == currentRoom.gameId }
+            RoomLobbyScreen(
                 repo = repo,
-                games = games,
-                onBack = { overlayStack = overlayStack.dropLast(1) },
-                onOpenGameRanking = { game ->
-                    overlayStack = overlayStack + AppOverlay.GameRanking(game)
-                },
-                onOpenFollowList = { uid, dir, uname ->
-                    overlayStack = overlayStack + AppOverlay.FollowList(uid, dir, uname)
-                },
-                onFollowChanged = {
-                    scope.launch {
-                        myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
-                        repo.currentUserId()?.let { uid ->
-                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
-                        }
-                    }
-                }
-            )
-            is AppOverlay.FollowList -> FollowListScreen(
-                targetUserId = topOverlay.userId,
-                direction = topOverlay.direction,
-                targetUsername = topOverlay.username,
-                repo = repo,
-                onBack = { overlayStack = overlayStack.dropLast(1) },
+                lanNsd = lanNsd,
+                initialRoom = currentRoom,
+                game = roomGame,
+                myUsername = profile?.username ?: "Jugador",
+                myEndpoint = myEndpoint,
+                myUdpPort = myUdpPort,
+                myVoiceEndpoint = myVoiceEndpoint,
+                hasActiveOverlay = topOverlay != null,
                 onOpenUserProfile = { uid ->
                     overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
                 },
-                onFollowChanged = {
-                    scope.launch {
-                        myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
-                        repo.currentUserId()?.let { uid ->
-                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
-                        }
+                onLeave = { reason ->
+                    overlayStack = emptyList()
+                    activeRoom = null
+                    selectedTab = MainTab.ROOMS.ordinal
+                    if (reason != null) {
+                        roomNoticeMsg = reason
                     }
-                }
-            )
-            is AppOverlay.GameRanking -> GameRankingScreen(
-                game = topOverlay.game,
-                repo = repo,
-                isDownloaded = downloadedFiles.contains(topOverlay.game.romFilename),
-                isDownloading = downloadingGameId == topOverlay.game.id,
-                downloadProgress = if (downloadingGameId == topOverlay.game.id) downloadProgress else 0f,
-                onBack = { overlayStack = overlayStack.dropLast(1) },
-                onPlayOrDownload = {
-                    if (downloadedFiles.contains(topOverlay.game.romFilename)) {
-                        onLaunchLocalRom(topOverlay.game)
+                    refreshAll()
+                },
+                onStartMatch = { startedRoom, mySlot ->
+                    if (roomGame == null) {
+                        Result.failure(IllegalStateException("Juego no encontrado en el catálogo"))
                     } else {
-                        downloadOnly(topOverlay.game, launchAfter = true)
-                    }
-                },
-                onOpenUserProfile = { uid ->
-                    overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
-                },
-                onWatchReplay = { entry ->
-                    val rPath = entry.replayPath ?: return@GameRankingScreen
-                    val g = topOverlay.game
-                    scope.launch {
-                        runCatching {
-                            romManager.ensureGameReady(g, games, biosList) { _, _ -> }
-                            val dest = java.io.File(context.cacheDir, "replays/${g.slug}_${entry.userId}.bsv.gz")
-                            repo.downloadReplay(rPath, dest)
-                        }.onSuccess { replayFile ->
-                            val lbEntry = LeaderboardEntryDto(
-                                rank = entry.rank,
-                                userId = entry.userId,
-                                username = entry.username,
-                                score = entry.score,
-                                achievedAt = entry.achievedAt,
-                                replayPath = rPath,
-                                verificationStatus = entry.verificationStatus
-                            )
-                            onLaunchReplay(g, replayFile, lbEntry)
-                        }.onFailure { err ->
-                            android.widget.Toast.makeText(
-                                context,
-                                err.toUserMessage("No se pudo abrir el replay"),
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                }
-            )
-            AppOverlay.WikiHelp -> WikiHelpScreen(
-                onBack = { overlayStack = overlayStack.dropLast(1) }
-            )
-        }
-        return
-    }
-
-    if (currentRoom != null) {
-        val roomGame = games.firstOrNull { it.id == currentRoom.gameId }
-        RoomLobbyScreen(
-            repo = repo,
-            lanNsd = lanNsd,
-            initialRoom = currentRoom,
-            game = roomGame,
-            myUsername = profile?.username ?: "Jugador",
-            myEndpoint = myEndpoint,
-            myUdpPort = myUdpPort,
-            myVoiceEndpoint = myVoiceEndpoint,
-            onOpenUserProfile = { uid ->
-                overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
-            },
-            onLeave = { reason ->
-                activeRoom = null
-                selectedTab = MainTab.ROOMS.ordinal
-                if (reason != null) {
-                    roomNoticeMsg = reason
-                }
-                refreshAll()
-            },
-            onStartMatch = { startedRoom, mySlot ->
-                if (roomGame != null) {
-                    scope.launch {
-                        runCatching {
+                        try {
                             val wasDownloaded = romManager.isGameDownloaded(roomGame)
                             romManager.ensureGameReady(roomGame, games, biosList) { _, p ->
                                 downloadProgress = p
@@ -496,22 +409,22 @@ fun MainShellScreen(
                                     if (it.id == roomGame.id) it.copy(downloadCount = it.downloadCount + 1) else it
                                 }
                             }
+                            overlayStack = emptyList()
                             activeRoom = null
                             onLaunchNetplayMatch(roomGame, startedRoom, mySlot, myUdpPort, myVoiceUdpPort)
-                        }.onFailure { syncError = it.toUserMessage("Error preparando partida") }
+                            Result.success(Unit)
+                        } catch (ce: CancellationException) {
+                            throw ce
+                        } catch (t: Throwable) {
+                            Result.failure(t)
+                        }
                     }
                 }
-            }
-        )
-        return
-    }
-
-    if (isInitialLoading) {
-        AppPreloadScreen(message = "Cargando catálogo...")
-        return
-    }
-
-    Scaffold(
+            )
+        } else if (isInitialLoading) {
+            AppPreloadScreen(message = "Cargando catálogo...")
+        } else {
+            Scaffold(
         containerColor = ObsidianBlack,
         bottomBar = {
             NavigationBar(containerColor = CarbonSurface) {
@@ -829,6 +742,105 @@ fun MainShellScreen(
                         }
                     }
                 )
+            }
+        }
+        }
+        }
+
+        if (topOverlay != null) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = ObsidianBlack
+            ) {
+                when (topOverlay) {
+                    is AppOverlay.PublicProfile -> PublicProfileScreen(
+                        userId = topOverlay.userId,
+                        repo = repo,
+                        games = games,
+                        onBack = { overlayStack = overlayStack.dropLast(1) },
+                        onOpenGameRanking = { game ->
+                            overlayStack = overlayStack + AppOverlay.GameRanking(game)
+                        },
+                        onOpenFollowList = { uid, dir, uname ->
+                            overlayStack = overlayStack + AppOverlay.FollowList(uid, dir, uname)
+                        },
+                        onFollowChanged = {
+                            scope.launch {
+                                myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
+                                repo.currentUserId()?.let { uid ->
+                                    runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                                }
+                            }
+                        }
+                    )
+                    is AppOverlay.FollowList -> FollowListScreen(
+                        targetUserId = topOverlay.userId,
+                        direction = topOverlay.direction,
+                        targetUsername = topOverlay.username,
+                        repo = repo,
+                        onBack = { overlayStack = overlayStack.dropLast(1) },
+                        onOpenUserProfile = { uid ->
+                            overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+                        },
+                        onFollowChanged = {
+                            scope.launch {
+                                myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
+                                repo.currentUserId()?.let { uid ->
+                                    runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                                }
+                            }
+                        }
+                    )
+                    is AppOverlay.GameRanking -> GameRankingScreen(
+                        game = topOverlay.game,
+                        repo = repo,
+                        isDownloaded = downloadedFiles.contains(topOverlay.game.romFilename),
+                        isDownloading = downloadingGameId == topOverlay.game.id,
+                        downloadProgress = if (downloadingGameId == topOverlay.game.id) downloadProgress else 0f,
+                        onBack = { overlayStack = overlayStack.dropLast(1) },
+                        onPlayOrDownload = {
+                            if (downloadedFiles.contains(topOverlay.game.romFilename)) {
+                                onLaunchLocalRom(topOverlay.game)
+                            } else {
+                                downloadOnly(topOverlay.game, launchAfter = true)
+                            }
+                        },
+                        onOpenUserProfile = { uid ->
+                            overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
+                        },
+                        onWatchReplay = { entry ->
+                            val rPath = entry.replayPath ?: return@GameRankingScreen
+                            val g = topOverlay.game
+                            scope.launch {
+                                runCatching {
+                                    romManager.ensureGameReady(g, games, biosList) { _, _ -> }
+                                    val dest = java.io.File(context.cacheDir, "replays/${g.slug}_${entry.userId}.bsv.gz")
+                                    repo.downloadReplay(rPath, dest)
+                                }.onSuccess { replayFile ->
+                                    val lbEntry = LeaderboardEntryDto(
+                                        rank = entry.rank,
+                                        userId = entry.userId,
+                                        username = entry.username,
+                                        score = entry.score,
+                                        achievedAt = entry.achievedAt,
+                                        replayPath = rPath,
+                                        verificationStatus = entry.verificationStatus
+                                    )
+                                    onLaunchReplay(g, replayFile, lbEntry)
+                                }.onFailure { err ->
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        err.toUserMessage("No se pudo abrir el replay"),
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    )
+                    AppOverlay.WikiHelp -> WikiHelpScreen(
+                        onBack = { overlayStack = overlayStack.dropLast(1) }
+                    )
+                }
             }
         }
     }

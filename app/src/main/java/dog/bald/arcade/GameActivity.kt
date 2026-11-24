@@ -843,7 +843,7 @@ class GameActivity : ComponentActivity() {
         super.onDestroy()
         pausePlayTimer()
         flushPlayTime(force = true)
-        if (isNetplay && isNetplayHost && netplayRoomId.isNotBlank()) {
+        if (isFinishing && isNetplay && isNetplayHost && netplayRoomId.isNotBlank()) {
             val roomIdToClose = netplayRoomId
             val appCtx = applicationContext
             CoroutineScope(Dispatchers.IO).launch {

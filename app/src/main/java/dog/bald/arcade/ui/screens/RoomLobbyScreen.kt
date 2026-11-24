@@ -2,9 +2,11 @@ package dog.bald.arcade.ui.screens
 
 import dog.bald.arcade.data.toUserMessage
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
@@ -111,8 +113,10 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -129,12 +133,14 @@ fun RoomLobbyScreen(
     myEndpoint: String,
     myUdpPort: Int,
     myVoiceEndpoint: String = "",
+    hasActiveOverlay: Boolean = false,
     onOpenUserProfile: (String) -> Unit = {},
     onLeave: (String?) -> Unit,
-    onStartMatch: (room: RoomDto, mySlot: Int) -> Unit
+    onStartMatch: suspend (room: RoomDto, mySlot: Int) -> Result<Unit>
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     val myUid = repo.currentUserId().orEmpty()
 
     var room by remember { mutableStateOf(initialRoom) }
@@ -142,6 +148,10 @@ fun RoomLobbyScreen(
     var chatInput by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var matchLaunched by remember { mutableStateOf(false) }
+    var startingMatch by remember { mutableStateOf(false) }
+    var preparingMatch by remember { mutableStateOf(false) }
+    var failedPlayingLaunch by remember(initialRoom.id) { mutableStateOf(false) }
+    var launchJob by remember { mutableStateOf<Job?>(null) }
     var leftRoom by remember { mutableStateOf(false) }
     var showHostExitConfirm by remember { mutableStateOf(false) }
     var copiedRoomCode by remember { mutableStateOf(false) }
@@ -210,9 +220,42 @@ fun RoomLobbyScreen(
         }
     }
 
+    fun triggerMatchLaunch(targetRoom: RoomDto, slot: Int) {
+        if (leftRoom || matchLaunched || preparingMatch) return
+        preparingMatch = true
+        matchLaunched = true
+        errorMsg = null
+        failedPlayingLaunch = false
+        launchJob = scope.launch {
+            val result = onStartMatch(targetRoom, slot)
+            if (result.isSuccess) {
+                preparingMatch = false
+                latencyMonitor.close()
+            } else {
+                val err = result.exceptionOrNull()
+                if (err !is CancellationException) {
+                    matchLaunched = false
+                    preparingMatch = false
+                    startingMatch = false
+                    if (targetRoom.status == "playing") {
+                        failedPlayingLaunch = true
+                    }
+                    errorMsg = err?.toUserMessage("Error preparando partida")
+                        ?: "Error preparando partida"
+                }
+            }
+        }
+    }
+
     fun leaveCleanly(reason: String? = null) {
-        if (leftRoom || matchLaunched) return
+        if (leftRoom) return
+        if (matchLaunched && !preparingMatch) return
         leftRoom = true
+        launchJob?.cancel()
+        launchJob = null
+        preparingMatch = false
+        matchLaunched = false
+        startingMatch = false
         latencyMonitor.close()
         scope.launch {
             withContext(NonCancellable) {
@@ -241,14 +284,15 @@ fun RoomLobbyScreen(
         }
     }
 
-    BackHandler(enabled = !leftRoom && !matchLaunched) {
+    BackHandler(enabled = !leftRoom && (!matchLaunched || preparingMatch) && !hasActiveOverlay) {
         requestExit()
     }
 
     // Si el anfitrión sale de la pantalla sin usar el botón (o se destruye el composable), eliminar la sala
     DisposableEffect(room.id, isHost) {
         onDispose {
-            if (isHost && !matchLaunched && !leftRoom) {
+            val changingConfig = activity?.isChangingConfigurations == true
+            if (isHost && !matchLaunched && !leftRoom && !changingConfig) {
                 leftRoom = true
                 val roomIdToDelete = room.id
                 CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
@@ -261,8 +305,10 @@ fun RoomLobbyScreen(
     // Heartbeat del anfitrión para detectar cierre forzado o pérdida de conexión
     LaunchedEffect(room.id, isHost) {
         if (!isHost) return@LaunchedEffect
-        while (!matchLaunched && !leftRoom) {
-            runCatching { repo.touchRoomHeartbeat(room.id) }
+        while (!leftRoom) {
+            if (!matchLaunched || preparingMatch) {
+                runCatching { repo.touchRoomHeartbeat(room.id) }
+            }
             delay(4000)
         }
     }
@@ -271,12 +317,21 @@ fun RoomLobbyScreen(
     LaunchedEffect(room.id) {
         var lastUpdatedAt = initialRoom.updatedAt
         var lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
-        while (!matchLaunched && !leftRoom) {
+        while (!leftRoom) {
+            if (matchLaunched || preparingMatch) {
+                lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
+                delay(500)
+                continue
+            }
             runCatching {
                 val updated = repo.fetchRoomById(room.id)
                 if (updated == null || updated.status == "closed") {
-                    if (!leftRoom && !matchLaunched) {
+                    if (!leftRoom && (!matchLaunched || preparingMatch)) {
                         leftRoom = true
+                        launchJob?.cancel()
+                        launchJob = null
+                        preparingMatch = false
+                        matchLaunched = false
                         latencyMonitor.close()
                         onLeave("El anfitrión se fue de la sala.")
                     }
@@ -287,7 +342,7 @@ fun RoomLobbyScreen(
                         lastUpdatedAt = updated.updatedAt
                         lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
                     } else if (SystemClock.elapsedRealtime() - lastHeartbeatChangeMs > 15_000L) {
-                        if (!leftRoom && !matchLaunched) {
+                        if (!leftRoom && (!matchLaunched || preparingMatch)) {
                             leftRoom = true
                             runCatching { repo.closeRoom(room.id) }
                             latencyMonitor.close()
@@ -296,15 +351,16 @@ fun RoomLobbyScreen(
                         return@LaunchedEffect
                     }
                 }
+                if (updated.status != "playing") {
+                    failedPlayingLaunch = false
+                }
                 room = updated
                 val updatedSlot = updated.slotsJson.entries
                     .firstOrNull { it.value.userId == myUid }
                     ?.key
                     ?.toIntOrNull()
-                if (updated.status == "playing" && updatedSlot != null && !matchLaunched) {
-                    matchLaunched = true
-                    latencyMonitor.close()
-                    onStartMatch(updated, updatedSlot)
+                if (updated.status == "playing" && updatedSlot != null && !matchLaunched && !preparingMatch && !failedPlayingLaunch) {
+                    triggerMatchLaunch(updated, updatedSlot)
                 }
                 messages = repo.fetchRoomMessages(room.id)
             }
@@ -313,6 +369,7 @@ fun RoomLobbyScreen(
     }
 
     fun claimSlot(slotIdx: Int) {
+        if (leftRoom || matchLaunched || preparingMatch || startingMatch) return
         scope.launch {
             try {
                 val next = room.slotsJson.toMutableMap()
@@ -336,6 +393,7 @@ fun RoomLobbyScreen(
     }
 
     fun toggleReady() {
+        if (leftRoom || matchLaunched || preparingMatch || startingMatch) return
         val slot = mySlot ?: return
         scope.launch {
             try {
@@ -621,8 +679,68 @@ fun RoomLobbyScreen(
             }
         }
 
+        if (preparingMatch) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(GraphiteSurface)
+                    .border(1.dp, SteelBorder)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.HourglassTop,
+                    contentDescription = null,
+                    tint = PureWhite,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Preparando ROM y archivos de la partida...",
+                    color = PureWhite,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
         if (errorMsg != null) {
-            Text(errorMsg ?: "", color = SilverGray, fontSize = 12.sp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CarbonSurface)
+                    .border(1.dp, DangerRedBorder)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = errorMsg ?: "",
+                    color = PureWhite,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (room.status == "playing" && mySlot != null && !preparingMatch && !leftRoom) {
+                    OutlinedButton(
+                        onClick = {
+                            failedPlayingLaunch = false
+                            triggerMatchLaunch(room, mySlot)
+                        },
+                        shape = RectangleShape,
+                        border = BorderStroke(1.dp, PureWhite),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text(
+                            text = "REINTENTAR",
+                            color = PureWhite,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+            }
         }
 
         // Slots 1P..4P en una sola fila con avatares
@@ -792,32 +910,66 @@ fun RoomLobbyScreen(
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             if (!isHost && mySlot != null) {
-                val amReady = room.slotsJson[mySlot.toString()]?.ready == true
-                Button(
-                    onClick = { toggleReady() },
-                    shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (amReady) GraphiteSurface else PureWhite,
-                        contentColor = if (amReady) PureWhite else PureBlack
-                    ),
-                    border = BorderStroke(1.dp, if (amReady) ReadyGreenAccent else PureWhite),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                ) {
-                    Icon(
-                        imageVector = if (amReady) Icons.Default.CheckCircle else Icons.Default.Check,
-                        contentDescription = null,
-                        tint = if (amReady) ReadyGreenAccent else PureBlack,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (amReady) "LISTO · TOCA PARA ESPERAR" else "MARCAR LISTO",
-                        fontFamily = SpaceGroteskFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                if (room.status == "playing") {
+                    Button(
+                        enabled = !preparingMatch && !matchLaunched && !leftRoom,
+                        onClick = {
+                            failedPlayingLaunch = false
+                            triggerMatchLaunch(room, mySlot)
+                        },
+                        shape = RectangleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PureWhite,
+                            contentColor = PureBlack,
+                            disabledContainerColor = GraphiteSurface,
+                            disabledContentColor = MutedGray
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (preparingMatch) Icons.Default.HourglassTop else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (preparingMatch) "PREPARANDO ROM..." else "REINTENTAR PARTIDA",
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                } else {
+                    val amReady = room.slotsJson[mySlot.toString()]?.ready == true
+                    Button(
+                        enabled = !preparingMatch && !matchLaunched && !leftRoom,
+                        onClick = { toggleReady() },
+                        shape = RectangleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (amReady) GraphiteSurface else PureWhite,
+                            contentColor = if (amReady) PureWhite else PureBlack
+                        ),
+                        border = BorderStroke(1.dp, if (amReady) ReadyGreenAccent else PureWhite),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (amReady) Icons.Default.CheckCircle else Icons.Default.Check,
+                            contentDescription = null,
+                            tint = if (amReady) ReadyGreenAccent else PureBlack,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (amReady) "LISTO · TOCA PARA ESPERAR" else "MARCAR LISTO",
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
             if (isHost && mySlot != null) {
@@ -828,16 +980,37 @@ fun RoomLobbyScreen(
                 } else {
                     "ESPERANDO QUE TODOS ESTÉN LISTOS"
                 }
+                val buttonLabel = when {
+                    preparingMatch -> "PREPARANDO ROM..."
+                    startingMatch -> "INICIANDO..."
+                    room.status == "playing" && failedPlayingLaunch -> "REINTENTAR PARTIDA"
+                    canStart -> "INICIAR PARTIDA"
+                    else -> waitingLabel
+                }
+                val buttonEnabled = (canStart || (room.status == "playing" && failedPlayingLaunch)) &&
+                    !startingMatch && !preparingMatch && !matchLaunched
                 Button(
-                    enabled = canStart,
+                    enabled = buttonEnabled,
                     onClick = {
-                        if (matchLaunched) return@Button
+                        if (startingMatch || preparingMatch || matchLaunched || leftRoom) return@Button
+                        if (room.status == "playing") {
+                            failedPlayingLaunch = false
+                            triggerMatchLaunch(room, mySlot)
+                            return@Button
+                        }
+                        startingMatch = true
+                        errorMsg = null
                         scope.launch {
+                            val startedRoom = room.copy(status = "playing")
                             runCatching {
                                 repo.updateRoomSlots(room.id, room.slotsJson, status = "playing")
-                                matchLaunched = true
-                                latencyMonitor.close()
-                                onStartMatch(room.copy(status = "playing"), mySlot)
+                            }.onSuccess {
+                                room = startedRoom
+                                startingMatch = false
+                                triggerMatchLaunch(startedRoom, mySlot)
+                            }.onFailure { err ->
+                                startingMatch = false
+                                errorMsg = err.toUserMessage("No se pudo iniciar la partida")
                             }
                         }
                     },
@@ -848,19 +1021,23 @@ fun RoomLobbyScreen(
                         disabledContainerColor = GraphiteSurface,
                         disabledContentColor = MutedGray
                     ),
-                    border = if (canStart) null else BorderStroke(1.dp, CharcoalBorder),
+                    border = if (buttonEnabled) null else BorderStroke(1.dp, CharcoalBorder),
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp)
                 ) {
                     Icon(
-                        imageVector = if (canStart) Icons.Default.PlayArrow else Icons.Default.HourglassTop,
+                        imageVector = if (buttonEnabled && !preparingMatch && !startingMatch) {
+                            Icons.Default.PlayArrow
+                        } else {
+                            Icons.Default.HourglassTop
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (canStart) "INICIAR PARTIDA" else waitingLabel,
+                        text = buttonLabel,
                         fontFamily = SpaceGroteskFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
@@ -1021,4 +1198,10 @@ private fun PlayerSlotCard(
             }
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

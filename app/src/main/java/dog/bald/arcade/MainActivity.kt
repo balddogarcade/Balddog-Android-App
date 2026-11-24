@@ -32,12 +32,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        val roomId = activeHostRoomId
-        if (!roomId.isNullOrBlank()) {
-            activeHostRoomId = null
-            val appCtx = applicationContext
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                runCatching { ArcadeRepository(appCtx).deleteRoom(roomId) }
+        if (isFinishing) {
+            val roomId = activeHostRoomId
+            if (!roomId.isNullOrBlank()) {
+                activeHostRoomId = null
+                val appCtx = applicationContext
+                CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                    runCatching { ArcadeRepository(appCtx).deleteRoom(roomId) }
+                }
             }
         }
     }
