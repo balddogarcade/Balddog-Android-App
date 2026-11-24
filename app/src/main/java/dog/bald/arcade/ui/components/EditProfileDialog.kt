@@ -60,23 +60,6 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
-import java.security.SecureRandom
-
-private val avatarSeedRandom = SecureRandom()
-
-private fun randomAvatarSeed(currentSeed: String? = null): String {
-    val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    var next: String
-    do {
-        next = buildString(24) {
-            repeat(24) {
-                append(chars[avatarSeedRandom.nextInt(chars.length)])
-            }
-        }
-    } while (next == currentSeed)
-    return next
-}
-
 @Composable
 fun EditProfileDialog(
     profile: ProfileDto,
