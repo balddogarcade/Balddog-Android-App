@@ -214,7 +214,7 @@ pub fn start_netplay_game(
         num_players: num_players as usize,
         peers,
         input_delay: input_delay as usize,
-        disconnect_timeout_secs: 8,
+        disconnect_timeout_secs: 20,
     };
 
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");

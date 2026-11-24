@@ -59,7 +59,7 @@ pub struct NetplayHudStats {
     pub session_ended: bool,
 }
 
-pub const DISCONNECT_NOTIFY_DELAY_SECS: u64 = 2;
+pub const DISCONNECT_NOTIFY_DELAY_SECS: u64 = 3;
 
 pub fn build_p2p_session(
     cfg: &NetplaySessionConfig,
@@ -81,7 +81,7 @@ pub fn build_p2p_session(
     let mut builder = SessionBuilder::<ArcadeGgrsConfig>::new()
         .with_num_players(cfg.num_players)
         .with_input_delay(cfg.input_delay)
-        .with_disconnect_timeout(Duration::from_secs(cfg.disconnect_timeout_secs.max(5)))
+        .with_disconnect_timeout(Duration::from_secs(cfg.disconnect_timeout_secs.max(20)))
         .with_disconnect_notify_delay(Duration::from_secs(DISCONNECT_NOTIFY_DELAY_SECS));
 
     builder = builder
@@ -151,15 +151,25 @@ pub fn discover_stun_endpoint(local_port: u16) -> Result<String, NetplayError> {
 
     let mut buf = [0u8; 256];
     for server in stun_servers {
+        use std::net::ToSocketAddrs;
+        let Ok(addrs) = server.to_socket_addrs() else {
+            continue;
+        };
+        // Priorizar y requerir IPv4 para coincidir con el socket IPv4 (0.0.0.0) de GGRS
+        let Some(target) = addrs.into_iter().find(|a| a.is_ipv4()) else {
+            continue;
+        };
         let (tid, req) = build_stun_binding_request();
-        if socket.send_to(&req, server).is_err() {
+        if socket.send_to(&req, target).is_err() {
             continue;
         }
         for _ in 0..4 {
             match socket.recv_from(&mut buf) {
                 Ok((len, _)) => {
                     if let Some(addr) = parse_stun_xor_mapped(&buf[..len], &tid) {
-                        return Ok(addr.to_string());
+                        if addr.is_ipv4() {
+                            return Ok(addr.to_string());
+                        }
                     }
                 }
                 Err(_) => break,
@@ -207,13 +217,9 @@ fn parse_stun_xor_mapped(pkt: &[u8], expected_tid: &[u8; 12]) -> Option<SocketAd
                 );
                 return Some(SocketAddr::new(std::net::IpAddr::V4(ip), xport));
             }
-            if family == 0x02 && attr_len >= 20 {
-                let mut octets = [0u8; 16];
-                for i in 0..16 {
-                    octets[i] = pkt[val_start + 4 + i] ^ pkt[4 + i];
-                }
-                let ip = std::net::Ipv6Addr::from(octets);
-                return Some(SocketAddr::new(std::net::IpAddr::V6(ip), xport));
+            // IPv6 (family == 0x02) se descarta deliberadamente: el backend GGRS opera sobre socket IPv4 0.0.0.0
+            if family == 0x02 {
+                return None;
             }
         }
         let padded = (attr_len + 3) & !3;
@@ -271,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_stun_parses_ipv6_xor_mapped_address() {
+    fn parse_stun_rejects_ipv6_for_ipv4_ggrs_compatibility() {
         let tid = [0xAA, 0xBB, 0xCC, 0xDD, 1, 2, 3, 4, 5, 6, 7, 8];
         let port: u16 = 40000;
         let ip = Ipv6Addr::new(0x2001, 0x0db8, 0x85a3, 0, 0, 0x8a2e, 0x0370, 0x7334);
@@ -287,7 +293,7 @@ mod tests {
         let pkt = make_stun_response(&tid, &attr);
         assert_eq!(
             parse_stun_xor_mapped(&pkt, &tid),
-            Some(SocketAddr::new(IpAddr::V6(ip), port))
+            None
         );
     }
 

@@ -20,6 +20,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -40,15 +41,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +88,7 @@ import dog.bald.arcade.ui.theme.ObsidianBlack
 import dog.bald.arcade.ui.theme.PureBlack
 import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
+import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -381,11 +387,15 @@ class GameActivity : ComponentActivity() {
 
         setContent {
             BaldDogArcadeTheme {
+                var netplaySynchronized by remember { mutableStateOf(false) }
                 LaunchedEffect(showMenu) {
                     while (true) {
                         currentFps = getCurrentFps()
                         if (isNetplay) {
                             netplayHud = getNetplayHudStats()
+                            if (netplayHud.pingMs > 0u || currentFps > 5.0) {
+                                netplaySynchronized = true
+                            }
                             if (netplayHud.sessionEnded && netplayEndReason == null) {
                                 netplayEndReason = "El otro jugador se desconectó de la partida."
                             }
@@ -789,6 +799,47 @@ class GameActivity : ComponentActivity() {
                                 .align(Alignment.Center)
                                 .padding(24.dp)
                         )
+                    }
+
+                    if (isNetplay && !netplaySynchronized && !showMenu && netplayEndReason == null && engineError == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(ObsidianBlack.copy(alpha = 0.90f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = PureWhite,
+                                    strokeWidth = 3.dp,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Text(
+                                    text = "CONECTANDO Y SINCRONIZANDO SALA...",
+                                    color = PureWhite,
+                                    fontFamily = SpaceGroteskFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "Estableciendo conexión P2P entre jugadores...",
+                                    color = SilverGray,
+                                    fontSize = 11.sp
+                                )
+                                OutlinedButton(
+                                    onClick = { finish() },
+                                    shape = RectangleShape,
+                                    border = BorderStroke(1.dp, SteelBorder),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                                ) {
+                                    Text("CANCELAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
 
                     val endMsg = netplayEndReason
