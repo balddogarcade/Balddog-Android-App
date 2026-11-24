@@ -108,6 +108,7 @@ import uniffi.balddog_android.logFromAndroid
 import uniffi.balddog_android.pullVoicePlaybackPcm
 import uniffi.balddog_android.pushVoiceCapturePcm
 import uniffi.balddog_android.restartReplay
+import uniffi.balddog_android.seekReplay
 import uniffi.balddog_android.saveGameState
 import uniffi.balddog_android.setAudioDucking
 import uniffi.balddog_android.setGamePaused
@@ -528,6 +529,10 @@ class GameActivity : ComponentActivity() {
                                     replayManuallyPaused = false
                                     restartReplay()
                                     updateEnginePaused(false)
+                                    replayHud = getReplayHudInfo()
+                                },
+                                onSeekToFrame = { targetFrame ->
+                                    seekReplay(targetFrame.toULong())
                                     replayHud = getReplayHudInfo()
                                 },
                                 onSelectSpeed = { spd ->
