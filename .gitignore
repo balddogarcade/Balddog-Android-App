@@ -15,6 +15,7 @@ google-services.json
 app/build/
 app/.cxx/
 .gradle/
+.kotlin/
 build/
 captures/
 *.apk
