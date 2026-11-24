@@ -7,7 +7,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use balddog_core::audio::engine::set_global_ducking;
 use balddog_core::retro::core::{rotate_rgba, LibretroCore};
-use balddog_core::retro::replay::ReplayPlayer;
+use balddog_core::retro::replay::{compute_file_crc32, ReplayPlayer};
 #[cfg(target_os = "android")]
 use balddog_core::session::SessionControl;
 use balddog_core::session::{clear_deterministic_nvram, EmulationSession};
@@ -636,14 +636,19 @@ pub fn open_offline_replay_renderer(
     let save_pb = PathBuf::from(&save_dir);
     clear_deterministic_nvram(&save_pb, &rom_pb);
 
-    let player = ReplayPlayer::from_gzip_file(Path::new(&replay_path), None).map_err(|e| {
-        EngineBridgeError::Core {
-            detail: format!("Replay inválido: {e}"),
-        }
-    })?;
+    let expected_crc = compute_file_crc32(&rom_pb).ok();
+    let player =
+        ReplayPlayer::from_gzip_file(Path::new(&replay_path), expected_crc).map_err(|e| {
+            EngineBridgeError::Core {
+                detail: format!("Replay inválido: {e}"),
+            }
+        })?;
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
     let mut core = LibretroCore::load(&core_path, Path::new(&system_dir), &save_pb)?;
     let av = core.load_game(&rom_pb)?;
+    if !player.initial_state().is_empty() {
+        core.load_state_bytes(player.initial_state())?;
+    }
     let fps = if av.timing.fps > 10.0 {
         av.timing.fps
     } else {

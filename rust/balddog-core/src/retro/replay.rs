@@ -14,6 +14,26 @@ const BSV_MAGIC: [u8; 4] = *b"BSV1";
 const BSV_HEADER_LEN: usize = 16;
 const BYTES_PER_FRAME: usize = 8; // [u16; 4] little-endian
 
+/// Calcula el CRC32 IEEE-802.3 leyendo en streaming desde cualquier `Read` (chunks de 64 KiB).
+pub fn compute_crc32_reader<R: Read>(mut reader: R) -> Result<u32, std::io::Error> {
+    let mut crc = flate2::Crc::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        crc.update(&buf[..n]);
+    }
+    Ok(crc.sum())
+}
+
+/// Calcula el CRC32 IEEE-802.3 de un archivo en streaming (chunks de 64 KiB).
+pub fn compute_file_crc32(path: &Path) -> Result<u32, std::io::Error> {
+    let file = File::open(path)?;
+    compute_crc32_reader(file)
+}
+
 #[derive(Debug, Error)]
 pub enum ReplayError {
     #[error("Error de E/S en replay: {0}")]
@@ -219,5 +239,53 @@ mod tests {
 
         let bad = ReplayPlayer::from_bsv_bytes(b"NOPE1234", None).unwrap_err();
         assert!(matches!(bad, ReplayError::InvalidHeader));
+    }
+
+    #[test]
+    fn compute_file_crc32_matches_known_vector() {
+        let crc = compute_crc32_reader(std::io::Cursor::new(b"123456789")).unwrap();
+        assert_eq!(crc, 0xCBF4_3926);
+
+        let manifest_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let file_crc_1 = compute_file_crc32(&manifest_path).unwrap();
+        let file_crc_2 = compute_file_crc32(&manifest_path).unwrap();
+        assert_ne!(file_crc_1, 0);
+        assert_eq!(file_crc_1, file_crc_2);
+    }
+
+    #[test]
+    fn from_bsv_bytes_parses_initial_state_and_frames() {
+        let state = b"STATE";
+        let mut raw = Vec::new();
+        raw.extend_from_slice(&BSV_MAGIC);
+        raw.extend_from_slice(&0xCAFE_BABEu32.to_le_bytes());
+        raw.extend_from_slice(&(state.len() as u32).to_le_bytes());
+        raw.extend_from_slice(&0u32.to_le_bytes());
+        raw.extend_from_slice(state);
+        for port in [0x0001u16, 0x0002, 0x0003, 0x0004] {
+            raw.extend_from_slice(&port.to_le_bytes());
+        }
+        for port in [0x0010u16, 0x0020, 0x0030, 0x0040] {
+            raw.extend_from_slice(&port.to_le_bytes());
+        }
+
+        let mut player = ReplayPlayer::from_bsv_bytes(&raw, Some(0xCAFE_BABE)).unwrap();
+        assert_eq!(player.rom_crc32(), 0xCAFE_BABE);
+        assert_eq!(player.initial_state(), state);
+        assert_eq!(player.total_frames(), 2);
+        assert_eq!(player.next_frame(), Some([0x0001, 0x0002, 0x0003, 0x0004]));
+        assert_eq!(player.next_frame(), Some([0x0010, 0x0020, 0x0030, 0x0040]));
+        assert_eq!(player.next_frame(), None);
+    }
+
+    #[test]
+    fn legacy_zero_rom_crc_is_accepted_when_expected_crc_provided() {
+        let mut rec = ReplayRecorder::new(0);
+        rec.push_frame([0x0008, 0, 0, 0]);
+        let gz = rec.to_gzip_bytes().unwrap();
+
+        let mut player = ReplayPlayer::from_gzip_bytes(&gz, Some(0x1234_5678)).unwrap();
+        assert_eq!(player.rom_crc32(), 0);
+        assert_eq!(player.next_frame(), Some([0x0008, 0, 0, 0]));
     }
 }

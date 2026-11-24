@@ -15,7 +15,7 @@ use ggrs::{GgrsEvent, GgrsRequest, InputStatus, SessionState};
 use crate::audio::engine::AudioEngine;
 use crate::retro::core::{rotate_rgba, LibretroCore};
 use crate::retro::leaderboard::{LeaderboardEngine, LeaderboardFrameOutput};
-use crate::retro::replay::{ReplayPlayer, ReplayRecorder};
+use crate::retro::replay::{compute_file_crc32, ReplayPlayer, ReplayRecorder};
 use crate::video::renderer::{effective_game_aspect, WgpuRenderer};
 use crate::{record_log, CoreError};
 
@@ -326,9 +326,10 @@ impl EmulationSession {
         let (init_tx, init_rx) = bounded::<Result<(), CoreError>>(1);
 
         let is_replay_mode = replay_path.is_some();
+        let rom_crc32 = compute_file_crc32(&rom_path).ok();
         let initial_replay_player = match replay_path {
             Some(ref rp) => Some(
-                ReplayPlayer::from_gzip_file(rp, None)
+                ReplayPlayer::from_gzip_file(rp, rom_crc32)
                     .map_err(|e| CoreError::Init(format!("Replay inválido: {e}")))?,
             ),
             None => None,
@@ -369,6 +370,15 @@ impl EmulationSession {
                         return;
                     }
                 };
+
+                if let Some(ref p) = initial_replay_player {
+                    if !p.initial_state().is_empty() {
+                        if let Err(e) = core.load_state_bytes(p.initial_state()) {
+                            let _ = init_tx.send(Err(e));
+                            return;
+                        }
+                    }
+                }
 
                 let mut ggrs_session = match netplay.as_ref() {
                     Some(cfg) => match build_p2p_session(cfg) {
@@ -421,7 +431,7 @@ impl EmulationSession {
                 );
                 let mut replay_player = initial_replay_player;
                 let mut recorder = if netplay.is_none() && replay_player.is_none() && leaderboard.is_some() {
-                    Some(ReplayRecorder::new(0))
+                    Some(ReplayRecorder::new(rom_crc32.unwrap_or(0)))
                 } else {
                     None
                 };
@@ -489,12 +499,28 @@ impl EmulationSession {
                                     clear_deterministic_nvram(&save_dir, &rom_path);
                                     match core.load_game(&rom_path) {
                                         Ok(_) => {
-                                            p.restart();
-                                            if let Some(ref mut lb) = leaderboard {
-                                                lb.reset();
+                                            let state_ok = if !p.initial_state().is_empty() {
+                                                match core.load_state_bytes(p.initial_state()) {
+                                                    Ok(()) => true,
+                                                    Err(e) => {
+                                                        record_log(
+                                                            "ERROR",
+                                                            &format!("Error cargando initial_state en RestartReplay: {e}"),
+                                                        );
+                                                        false
+                                                    }
+                                                }
+                                            } else {
+                                                true
+                                            };
+                                            if state_ok {
+                                                p.restart();
+                                                if let Some(ref mut lb) = leaderboard {
+                                                    lb.reset();
+                                                }
+                                                reset_replay_stats(&stats_clone, &mut coin_tracker);
+                                                last_frame_rgba = None;
                                             }
-                                            reset_replay_stats(&stats_clone, &mut coin_tracker);
-                                            last_frame_rgba = None;
                                         }
                                         Err(e) => {
                                             record_log(

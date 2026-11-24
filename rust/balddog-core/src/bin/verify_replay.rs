@@ -9,7 +9,7 @@ use std::process::ExitCode;
 
 use balddog_core::retro::core::LibretroCore;
 use balddog_core::retro::leaderboard::LeaderboardEngine;
-use balddog_core::retro::replay::ReplayPlayer;
+use balddog_core::retro::replay::{compute_file_crc32, ReplayPlayer};
 use balddog_core::session::{clear_deterministic_nvram, CoinTracker};
 
 struct CliArgs {
@@ -118,7 +118,8 @@ fn main() -> ExitCode {
     let _ = std::fs::create_dir_all(&system_dir);
     clear_deterministic_nvram(&save_dir, &args.rom);
 
-    let mut player = match ReplayPlayer::from_gzip_file(&args.replay, None) {
+    let expected_crc = compute_file_crc32(&args.rom).ok();
+    let mut player = match ReplayPlayer::from_gzip_file(&args.replay, expected_crc) {
         Ok(p) => p,
         Err(e) => {
             if own_temp_dir {
@@ -157,6 +158,24 @@ fn main() -> ExitCode {
         }
         print_result(false, 0, 0, 0, 0, 0, Some(&format!("rom_load_failed: {e}")));
         return ExitCode::from(2);
+    }
+
+    if !player.initial_state().is_empty() {
+        if let Err(e) = core.load_state_bytes(player.initial_state()) {
+            if own_temp_dir {
+                let _ = std::fs::remove_dir_all(&save_dir);
+            }
+            print_result(
+                false,
+                0,
+                0,
+                0,
+                0,
+                0,
+                Some(&format!("initial_state_failed: {e}")),
+            );
+            return ExitCode::from(1);
+        }
     }
 
     let mut coin_tracker = CoinTracker::new();
