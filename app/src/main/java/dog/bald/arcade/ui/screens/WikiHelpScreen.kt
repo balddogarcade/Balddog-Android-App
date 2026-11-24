@@ -84,7 +84,7 @@ private val wikiSections = listOf(
         bullets = listOf(
             "Puntos Globales por cada juego con ranking activo: #1 = 100 pts, #2 = 75 pts, #3 = 50 pts, #4–#10 = 25 pts, 1CC (#11+) = 10 pts.",
             "Desempate Global: a igualdad de puntos gana quien tenga menor tiempo total acumulado. En un juego: menor tiempo en ese juego, luego fecha más antigua.",
-            "Rangos Arcade: Novato (0+) → Retador (250+) → Luchador (600+) → Maestro (1,200+) → Gran Maestro (2,500+) → Leyenda (5,000+).",
+            "Rangos Arcade: Novato (0+) → Retador (150+) → Luchador (450+) → Maestro (900+) → Gran Maestro (1,500+) → Leyenda (2,000+).",
             "Medallas: Rey del Arcade (#1), Podio (Top 3), 1CC Master, Replay Verificado, Veterano (25h/100h/250h) y Anfitrión Netplay (25/100/250 salas)."
         )
     ),

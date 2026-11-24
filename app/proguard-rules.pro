@@ -9,3 +9,16 @@
 # Tink / security-crypto anotaciones compile-only
 -dontwarn com.google.errorprone.annotations.**
 -dontwarn javax.annotation.**
+
+# NativeSurfaceBridge JNI methods
+-keep class dog.bald.arcade.engine.NativeSurfaceBridge { *; }
+
+# Kotlinx Serialization DTOs
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keepclassmembers class * {
+    @kotlinx.serialization.Serializable <fields>;
+    @kotlinx.serialization.SerialName <fields>;
+}
+-keep class * implements kotlinx.serialization.KSerializer {
+    <init>(...);
+}

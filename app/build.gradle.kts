@@ -33,8 +33,13 @@ android {
             abiFilters += listOf("arm64-v8a")
         }
 
-        buildConfigField("String", "SUPABASE_URL", "\"${propOrEnv("SUPABASE_URL")}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${propOrEnv("SUPABASE_ANON_KEY")}\"")
+        val supabaseUrl = propOrEnv("SUPABASE_URL")
+        val supabaseAnonKey = propOrEnv("SUPABASE_ANON_KEY")
+        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) {
+            logger.warn("WARNING: SUPABASE_URL or SUPABASE_ANON_KEY is not defined in local.properties or environment")
+        }
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     signingConfigs {
@@ -61,6 +66,7 @@ android {
             signingConfig = if (keystorePath.isNotBlank()) {
                 signingConfigs.getByName("release")
             } else {
+                logger.warn("WARNING: BALDDOG_KEYSTORE_PATH not configured; falling back to debug signing for release build")
                 signingConfigs.getByName("debug")
             }
         }

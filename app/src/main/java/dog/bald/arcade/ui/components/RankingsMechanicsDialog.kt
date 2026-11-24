@@ -71,8 +71,8 @@ fun RankingsMechanicsDialog(
                 MechanicsBlock(
                     title = "RANGOS ARCADE",
                     lines = listOf(
-                        "Novato (0+) → Retador (250+) → Luchador (600+)",
-                        "Maestro (1,200+) → Gran Maestro (2,500+) → Leyenda (5,000+)"
+                        "Novato (0+) → Retador (150+) → Luchador (450+)",
+                        "Maestro (900+) → Gran Maestro (1,500+) → Leyenda (2,000+)"
                     )
                 )
                 MechanicsBlock(

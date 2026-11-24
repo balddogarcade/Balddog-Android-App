@@ -288,11 +288,11 @@ data class FollowUserDto(
 
 enum class ArcadeRank(val title: String, val minPoints: Long) {
     NOVATO("NOVATO", 0L),
-    RETADOR("RETADOR", 250L),
-    LUCHADOR("LUCHADOR", 600L),
-    MAESTRO("MAESTRO", 1200L),
-    GRAN_MAESTRO("GRAN MAESTRO", 2500L),
-    LEYENDA("LEYENDA", 5000L);
+    RETADOR("RETADOR", 150L),
+    LUCHADOR("LUCHADOR", 450L),
+    MAESTRO("MAESTRO", 900L),
+    GRAN_MAESTRO("GRAN MAESTRO", 1500L),
+    LEYENDA("LEYENDA", 2000L);
 
     companion object {
         fun fromPoints(points: Long): ArcadeRank {
