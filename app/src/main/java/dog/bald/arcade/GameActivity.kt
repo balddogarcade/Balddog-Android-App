@@ -79,6 +79,7 @@ import dog.bald.arcade.ui.theme.PureBlack
 import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SteelBorder
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -201,6 +202,9 @@ class GameActivity : ComponentActivity() {
     private var accumulatedActiveMs: Long = 0L
     private var reportedSeconds: Long = 0L
     private var sessionCounted: Boolean = false
+
+    private val pendingExportLock = Any()
+    private val pendingReplayExports = mutableListOf<CompletableDeferred<Unit>>()
 
     private var touchMaskP1: Int = 0
     private val physicalMasks = IntArray(4)
@@ -852,13 +856,24 @@ class GameActivity : ComponentActivity() {
         }
         controllerManager?.stop()
         flushBestScoreOnExit()
+        val exportsToAwait = synchronized(pendingExportLock) { pendingReplayExports.toList() }
         recordMatchHistoryOnExit()
         voiceAudioManager?.release()
         voiceAudioManager = null
         stopVoiceSession()
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
         NativeSurfaceBridge.detachSurface()
-        stopGame()
+        if (exportsToAwait.isEmpty()) {
+            stopGame()
+        } else {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    exportsToAwait.forEach { it.await() }
+                } finally {
+                    stopGame()
+                }
+            }
+        }
     }
 
     private fun syncVoiceControls() {
@@ -974,7 +989,7 @@ class GameActivity : ComponentActivity() {
     }
 
     private fun flushBestScoreOnExit() {
-        if (isNetplay || scoreDef == null) return
+        if (isNetplay || isReplayMode || scoreDef == null) return
         val hud = runCatching { getScoreHudInfo() }.getOrNull() ?: return
         val credits = hud.creditsUsed.toInt()
         if (!hud.rankingEligible || credits > 1) return
@@ -1022,8 +1037,12 @@ class GameActivity : ComponentActivity() {
             emptyList()
         }
 
+        val repo = ArcadeRepository(appCtx)
+        val uid = repo.currentUserId() ?: return
+
         // Write-ahead enqueue so match history is never lost if offline or killed mid-exit
         val pendingEntry = PendingMatchHistoryEntry(
+            userId = uid,
             clientSessionId = sessionId,
             gameId = gid,
             mode = mode,
@@ -1038,8 +1057,6 @@ class GameActivity : ComponentActivity() {
         PendingMatchHistoryQueue.enqueue(appCtx, pendingEntry)
 
         CoroutineScope(Dispatchers.IO).launch {
-            val repo = ArcadeRepository(appCtx)
-            val uid = repo.currentUserId() ?: return@launch
             val players = if (isNetplay) {
                 initialPlayers
             } else {
@@ -1061,7 +1078,7 @@ class GameActivity : ComponentActivity() {
                 )
             }
             if (result.isSuccess) {
-                PendingMatchHistoryQueue.removeBySessionId(appCtx, sessionId)
+                PendingMatchHistoryQueue.removeBySessionId(appCtx, sessionId, uid)
             }
         }
     }
@@ -1074,22 +1091,73 @@ class GameActivity : ComponentActivity() {
         val appCtx = applicationContext
         val gid = gameId
         val sha = romSha256
-        val replayFile = File(filesDir, "pending_replays/${gid}.bsv.gz")
-        val exportedReplay = runCatching {
-            exportRecordedReplay(replayFile.absolutePath)
-            replayFile.takeIf { it.exists() && it.length() > 0L }
-        }.getOrNull()
+        val pendingDir = File(filesDir, "pending_replays")
+        val replayFile = File(
+            pendingDir,
+            "${gid}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.bsv.gz"
+        )
+        val exportDone = CompletableDeferred<Unit>()
+        synchronized(pendingExportLock) {
+            pendingReplayExports.add(exportDone)
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
-            val repo = ArcadeRepository(appCtx)
-            val currentBest = runCatching { repo.fetchMyGameRank(gid)?.score }.getOrNull() ?: 0L
-            val uploadedReplay = if (score >= currentBest) {
-                exportedReplay?.let { file ->
-                    runCatching { repo.uploadReplay(gid, file) }.getOrNull()
+            val exportedReplay = try {
+                runCatching {
+                    pendingDir.mkdirs()
+                    exportRecordedReplay(replayFile.absolutePath)
+                    replayFile.takeIf { it.exists() && it.length() > 0L }
+                }.getOrNull()
+            } finally {
+                synchronized(pendingExportLock) {
+                    pendingReplayExports.remove(exportDone)
                 }
-            } else {
-                null
+                exportDone.complete(Unit)
             }
+
+            if (exportedReplay == null) {
+                logFromAndroid("WARN", "exportRecordedReplay vacío o fallido para score=$score; omitiendo envío")
+                return@launch
+            }
+
+            val repo = ArcadeRepository(appCtx)
+            val uid = repo.currentUserId()
+            if (uid.isNullOrBlank()) {
+                exportedReplay.delete()
+                return@launch
+            }
+
+            val rankResult = runCatching { repo.fetchMyGameRank(gid) }
+            if (rankResult.isSuccess) {
+                val currentBest = rankResult.getOrNull()?.score
+                if (currentBest != null && score < currentBest) {
+                    exportedReplay.delete()
+                    logFromAndroid("INFO", "Score $score < mejor online ($currentBest); replay descartado")
+                    return@launch
+                }
+            }
+
+            val uploadedReplay = runCatching { repo.uploadReplay(gid, exportedReplay) }.getOrNull()
+            if (uploadedReplay == null) {
+                logFromAndroid("WARN", "uploadReplay falló transitoriamente, encolando offline score=$score")
+                PendingScoreQueue.enqueue(
+                    appCtx,
+                    PendingScoreSubmission(
+                        userId = uid,
+                        gameId = gid,
+                        score = score,
+                        romSha256 = sha,
+                        creditsUsed = credits,
+                        isHardcore = true,
+                        replayLocalPath = exportedReplay.absolutePath
+                    )
+                )
+                if (notifyUi && !isFinishing && !isDestroyed) {
+                    voiceNoticeMsg = "Récord guardado offline ($score)"
+                }
+                return@launch
+            }
+
             val result = runCatching {
                 repo.submitHighScore(
                     gameId = gid,
@@ -1097,21 +1165,34 @@ class GameActivity : ComponentActivity() {
                     romSha256 = sha,
                     creditsUsed = credits,
                     isHardcore = true,
-                    replayPath = uploadedReplay?.first,
-                    replaySizeBytes = uploadedReplay?.second,
-                    replaySha256 = uploadedReplay?.third
+                    replayPath = uploadedReplay.first,
+                    replaySizeBytes = uploadedReplay.second,
+                    replaySha256 = uploadedReplay.third
                 )
             }
             val dto = result.getOrNull()
             if (result.isSuccess && dto != null) {
-                if (uploadedReplay != null || score < currentBest) {
-                    exportedReplay?.delete()
+                if (dto.accepted || PendingScoreQueue.isPermanentRejection(dto.reason)) {
+                    exportedReplay.delete()
+                } else {
+                    PendingScoreQueue.enqueue(
+                        appCtx,
+                        PendingScoreSubmission(
+                            userId = uid,
+                            gameId = gid,
+                            score = score,
+                            romSha256 = sha,
+                            creditsUsed = credits,
+                            isHardcore = true,
+                            replayLocalPath = exportedReplay.absolutePath
+                        )
+                    )
                 }
                 logFromAndroid(
                     "INFO",
                     "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}"
                 )
-                if (notifyUi && dto.accepted && dto.isNewRecord) {
+                if (notifyUi && !isFinishing && !isDestroyed && dto.accepted && dto.isNewRecord) {
                     val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
                     voiceNoticeMsg = "¡Nuevo récord personal: $score$rankText!"
                 } else if (!dto.accepted) {
@@ -1123,15 +1204,16 @@ class GameActivity : ComponentActivity() {
                 PendingScoreQueue.enqueue(
                     appCtx,
                     PendingScoreSubmission(
+                        userId = uid,
                         gameId = gid,
                         score = score,
                         romSha256 = sha,
                         creditsUsed = credits,
                         isHardcore = true,
-                        replayLocalPath = exportedReplay?.absolutePath
+                        replayLocalPath = exportedReplay.absolutePath
                     )
                 )
-                if (notifyUi) {
+                if (notifyUi && !isFinishing && !isDestroyed) {
                     voiceNoticeMsg = "Récord guardado offline ($score)"
                 }
             }

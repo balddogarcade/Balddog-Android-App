@@ -89,6 +89,10 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -117,4 +121,6 @@ dependencies {
 
     // Almacenamiento cifrado de tokens (Android Keystore)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    testImplementation("junit:junit:4.13.2")
 }

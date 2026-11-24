@@ -169,7 +169,7 @@ fun MainShellScreen(
     var myFollowingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var overlayStack by remember { mutableStateOf<List<AppOverlay>>(emptyList()) }
     var postMatchRecordBanner by remember { mutableStateOf<PostMatchRecordBannerData?>(null) }
-    var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context)) }
+    var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context, repo.currentUserId())) }
     var showDiagnosticsSheet by remember { mutableStateOf(false) }
     var userMenuExpanded by remember { mutableStateOf(false) }
     val userEmail = remember(profile) { repo.currentUserEmail() }
@@ -213,6 +213,17 @@ fun MainShellScreen(
         cacheBytes = romManager.totalCacheBytes()
     }
 
+    fun performSignOut() {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                PendingScoreQueue.clear(context)
+                PendingMatchHistoryQueue.clear(context)
+            }
+            runCatching { repo.signOut() }
+            onSignedOut()
+        }
+    }
+
     fun refreshAll() {
         scope.launch {
             syncError = null
@@ -239,7 +250,7 @@ fun MainShellScreen(
                         repo.fetchGamesRankingSummary().associateBy { it.gameId }
                     }.getOrDefault(emptyMap())
                     myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(emptySet())
-                    pendingScoreCount = PendingScoreQueue.pendingCount(context)
+                    pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                     refreshLocalState()
                 } catch (t: Throwable) {
                     val msg = t.toUserMessage("Error sincronizando catálogo")
@@ -301,7 +312,7 @@ fun MainShellScreen(
                         val prevScores = myHighScores.associateBy { it.gameId }
                         runCatching { PendingScoreQueue.flushAll(context, repo) }
                         runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
-                        pendingScoreCount = PendingScoreQueue.pendingCount(context)
+                        pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                         runCatching { games = repo.fetchGames() }
                         runCatching { profile = repo.fetchMyProfile() }
                         val updatedScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
@@ -353,7 +364,7 @@ fun MainShellScreen(
                 myHighScores = repo.fetchMyHighScores()
                 myMatchHistory = repo.fetchMyMatchHistory()
                 myGameStats = repo.fetchMyGameStats()
-                pendingScoreCount = PendingScoreQueue.pendingCount(context)
+                pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
             }
         }
     }
@@ -557,10 +568,7 @@ fun MainShellScreen(
                             text = { Text("Cerrar sesión", color = SilverGray, fontSize = 13.sp) },
                             onClick = {
                                 userMenuExpanded = false
-                                scope.launch {
-                                    runCatching { repo.signOut() }
-                                    onSignedOut()
-                                }
+                                performSignOut()
                             }
                         )
                     }
@@ -694,7 +702,7 @@ fun MainShellScreen(
                     onFlushPendingScores = {
                         PendingScoreQueue.flushAll(context, repo)
                         PendingMatchHistoryQueue.flushAll(context, repo)
-                        pendingScoreCount = PendingScoreQueue.pendingCount(context)
+                        pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                         myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
                         myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(myMatchHistory)
                     },
@@ -736,10 +744,7 @@ fun MainShellScreen(
                         refreshLocalState()
                     },
                     onSignOut = {
-                        scope.launch {
-                            runCatching { repo.signOut() }
-                            onSignedOut()
-                        }
+                        performSignOut()
                     }
                 )
             }

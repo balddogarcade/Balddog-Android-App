@@ -17,6 +17,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.UUID
 import kotlin.random.Random
 
 class ArcadeRepository(context: Context) {
@@ -207,10 +208,11 @@ class ArcadeRepository(context: Context) {
         if (!file.exists() || file.length() <= 0L) return null
 
         val bytes = withContext(Dispatchers.IO) { file.readBytes() }
+        if (bytes.isEmpty()) return null
         val sha256 = MessageDigest.getInstance("SHA-256")
             .digest(bytes)
             .joinToString("") { "%02x".format(it) }
-        val objectPath = "$gameId/$uid.bsv.gz"
+        val objectPath = "$gameId/$uid/${UUID.randomUUID()}.bsv.gz"
         val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/object/replays/$objectPath"
 
         return withContext(Dispatchers.IO) {
@@ -221,7 +223,6 @@ class ArcadeRepository(context: Context) {
                 readTimeout = 30_000
                 setRequestProperty("Authorization", "Bearer $token")
                 setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                setRequestProperty("x-upsert", "true")
                 setRequestProperty("Content-Type", "application/gzip")
             }
             try {
@@ -287,7 +288,7 @@ class ArcadeRepository(context: Context) {
             if (!replayPath.isNullOrBlank()) {
                 put("p_replay_path", replayPath)
                 replaySizeBytes?.let { put("p_replay_size_bytes", it) }
-                replaySha256?.let { put("p_replay_sha256", it) }
+                replaySha256?.takeIf { it.isNotBlank() }?.let { put("p_replay_sha256", it.lowercase()) }
             }
         }
         return client.postgrest.rpc("submit_high_score", params).decodeAs<SubmitScoreResultDto>()
