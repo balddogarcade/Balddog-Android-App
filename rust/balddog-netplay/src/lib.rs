@@ -59,6 +59,8 @@ pub struct NetplayHudStats {
     pub session_ended: bool,
 }
 
+pub const DISCONNECT_NOTIFY_DELAY_SECS: u64 = 2;
+
 pub fn build_p2p_session(
     cfg: &NetplaySessionConfig,
 ) -> Result<P2PSession<ArcadeGgrsConfig>, NetplayError> {
@@ -80,7 +82,7 @@ pub fn build_p2p_session(
         .with_num_players(cfg.num_players)
         .with_input_delay(cfg.input_delay)
         .with_disconnect_timeout(Duration::from_secs(cfg.disconnect_timeout_secs.max(5)))
-        .with_disconnect_notify_delay(Duration::from_secs(2));
+        .with_disconnect_notify_delay(Duration::from_secs(DISCONNECT_NOTIFY_DELAY_SECS));
 
     builder = builder
         .add_player(PlayerType::Local, cfg.local_player_handle)

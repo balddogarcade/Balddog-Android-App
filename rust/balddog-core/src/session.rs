@@ -239,6 +239,65 @@ fn apply_leaderboard_frame(
     }
 }
 
+#[derive(Default)]
+struct LastFrameBuffer {
+    width: u32,
+    height: u32,
+    rotation: u32,
+    rgba: Vec<u8>,
+    valid: bool,
+}
+
+impl LastFrameBuffer {
+    fn update(&mut self, width: u32, height: u32, rotation: u32, src: &[u8]) {
+        if self.rgba.len() != src.len() {
+            self.rgba.resize(src.len(), 0);
+        }
+        self.rgba.copy_from_slice(src);
+        self.width = width;
+        self.height = height;
+        self.rotation = rotation % 4;
+        self.valid = true;
+    }
+
+    fn invalidate(&mut self) {
+        self.valid = false;
+    }
+
+    fn as_frame(&self) -> Option<(u32, u32, u32, &[u8])> {
+        if self.valid && self.width > 0 && self.height > 0 && !self.rgba.is_empty() {
+            Some((self.width, self.height, self.rotation, &self.rgba))
+        } else {
+            None
+        }
+    }
+}
+
+fn compute_rollback_frames(saw_load_state: bool, advance_count: u32) -> u32 {
+    if saw_load_state {
+        advance_count.saturating_sub(1)
+    } else {
+        0
+    }
+}
+
+fn compute_reconnect_secs_left(budget: Duration, elapsed: Duration) -> u32 {
+    let remaining_ms = budget.saturating_sub(elapsed).as_millis();
+    remaining_ms
+        .saturating_add(999)
+        .checked_div(1000)
+        .unwrap_or(0)
+        .min(u32::MAX as u128) as u32
+}
+
+fn aggregate_remote_ping_ms(pings: impl IntoIterator<Item = u128>) -> u32 {
+    pings
+        .into_iter()
+        .max()
+        .map(|p| p.min(u32::MAX as u128) as u32)
+        .unwrap_or(0)
+}
+
 fn reset_replay_stats(stats: &SharedStats, coin_tracker: &mut CoinTracker) {
     stats.replay_current_frame.store(0, Ordering::Release);
     stats.replay_finished.store(false, Ordering::Release);
@@ -382,7 +441,7 @@ impl EmulationSession {
 
                 let mut ggrs_session = match netplay.as_ref() {
                     Some(cfg) => match build_p2p_session(cfg) {
-                        Ok(s) => Some((s, cfg.local_player_handle, cfg.disconnect_timeout_secs)),
+                        Ok(s) => Some((s, cfg.local_player_handle)),
                         Err(e) => {
                             let _ = init_tx.send(Err(CoreError::Init(e.to_string())));
                             return;
@@ -436,7 +495,7 @@ impl EmulationSession {
                     None
                 };
                 let mut replay_speed: u8 = 1;
-                let mut last_frame_rgba: Option<(u32, u32, u32, Vec<u8>)> = None;
+                let mut last_frame_rgba = LastFrameBuffer::default();
                 let _ = init_tx.send(Ok(()));
 
                 let target_fps = if av_info.timing.fps > 10.0 {
@@ -451,7 +510,7 @@ impl EmulationSession {
                 let mut next_frame_at = Instant::now();
                 let mut fps_window_start = Instant::now();
                 let mut frames_in_window: u32 = 0;
-                let mut disconnect_started: Option<Instant> = None;
+                let mut disconnect_started: Option<(Instant, Duration)> = None;
 
                 while running_clone.load(Ordering::Relaxed) {
                     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -519,7 +578,7 @@ impl EmulationSession {
                                                     lb.reset();
                                                 }
                                                 reset_replay_stats(&stats_clone, &mut coin_tracker);
-                                                last_frame_rgba = None;
+                                                last_frame_rgba.invalidate();
                                             }
                                         }
                                         Err(e) => {
@@ -542,10 +601,10 @@ impl EmulationSession {
                                 let _ = ack.send(res);
                             }
                             SessionCommand::CaptureScreenshot { path, ack } => {
-                                let res = match last_frame_rgba.as_ref() {
+                                let res = match last_frame_rgba.as_frame() {
                                     Some((w, h, rot, rgba)) => {
                                         let (out_w, out_h, rotated) =
-                                            rotate_rgba(*w, *h, rgba, *rot);
+                                            rotate_rgba(w, h, rgba, rot);
                                         write_png_rgba(&path, out_w, out_h, &rotated)
                                     }
                                     None => Err(CoreError::State("Aún no hay frame renderizado".into())),
@@ -606,13 +665,15 @@ impl EmulationSession {
                         continue;
                     }
 
-                    if let Some((ref mut p2p, local_handle, timeout_secs)) = ggrs_session {
+                    if let Some((ref mut p2p, local_handle)) = ggrs_session {
                         p2p.poll_remote_clients();
 
                         for ev in p2p.events() {
                             match ev {
-                                GgrsEvent::NetworkInterrupted { .. } => {
-                                    disconnect_started.get_or_insert_with(Instant::now);
+                                GgrsEvent::NetworkInterrupted { disconnect_timeout, .. } => {
+                                    let ms = disconnect_timeout.min(u64::MAX as u128) as u64;
+                                    disconnect_started
+                                        .get_or_insert_with(|| (Instant::now(), Duration::from_millis(ms)));
                                     stats_clone.reconnecting.store(true, Ordering::Release);
                                 }
                                 GgrsEvent::NetworkResumed { .. } | GgrsEvent::Synchronized { .. } => {
@@ -630,9 +691,8 @@ impl EmulationSession {
                             }
                         }
 
-                        if let Some(started) = disconnect_started {
-                            let elapsed = started.elapsed().as_secs();
-                            let left = timeout_secs.saturating_sub(elapsed) as u32;
+                        if let Some((started, budget)) = disconnect_started {
+                            let left = compute_reconnect_secs_left(budget, started.elapsed());
                             stats_clone.reconnect_secs_left.store(left, Ordering::Relaxed);
                         }
 
@@ -641,21 +701,44 @@ impl EmulationSession {
                             if p2p.add_local_input(local_handle, local_input).is_ok() {
                                 match p2p.advance_frame() {
                                     Ok(requests) => {
-                                        let mut rollbacks_now: u32 = 0;
+                                        let mut saw_load_state = false;
+                                        let mut advance_count: u32 = 0;
                                         for req in requests {
                                             match req {
                                                 GgrsRequest::SaveGameState { cell, frame } => {
-                                                    if let Ok(bytes) = core.save_state_bytes() {
-                                                        cell.save(frame, Some(bytes), None);
-                                                    }
+                                                    let state_opt = match core.save_state_bytes() {
+                                                        Ok(bytes) => Some(bytes),
+                                                        Err(e) => {
+                                                            record_log(
+                                                                "ERROR",
+                                                                &format!("GGRS save_state_bytes frame {frame}: {e}"),
+                                                            );
+                                                            None
+                                                        }
+                                                    };
+                                                    cell.save(frame, state_opt, None);
                                                 }
-                                                GgrsRequest::LoadGameState { cell, .. } => {
-                                                    if let Some(bytes) = cell.load() {
-                                                        let _ = core.load_state_bytes(&bytes);
-                                                        rollbacks_now += 1;
+                                                GgrsRequest::LoadGameState { cell, frame } => {
+                                                    saw_load_state = true;
+                                                    match cell.load() {
+                                                        Some(bytes) => {
+                                                            if let Err(e) = core.load_state_bytes(&bytes) {
+                                                                record_log(
+                                                                    "ERROR",
+                                                                    &format!("GGRS load_state_bytes frame {frame}: {e}"),
+                                                                );
+                                                            }
+                                                        }
+                                                        None => {
+                                                            record_log(
+                                                                "ERROR",
+                                                                &format!("GGRS LoadGameState celda vacía en frame {frame}"),
+                                                            );
+                                                        }
                                                     }
                                                 }
                                                 GgrsRequest::AdvanceFrame { inputs: frame_inputs } => {
+                                                    advance_count = advance_count.saturating_add(1);
                                                     let mut masks = [0u16; 4];
                                                     for (i, (inp, status)) in frame_inputs.iter().enumerate() {
                                                         if i < 4 && *status != InputStatus::Disconnected {
@@ -667,9 +750,11 @@ impl EmulationSession {
                                                 }
                                             }
                                         }
-                                        if rollbacks_now > 0 {
-                                            stats_clone.rollback_frames.store(rollbacks_now, Ordering::Relaxed);
-                                        }
+                                        let rolled_back =
+                                            compute_rollback_frames(saw_load_state, advance_count);
+                                        stats_clone
+                                            .rollback_frames
+                                            .store(rolled_back, Ordering::Relaxed);
                                     }
                                     Err(e) => {
                                         record_log("WARN", &format!("GGRS advance_frame: {e}"));
@@ -677,14 +762,17 @@ impl EmulationSession {
                                 }
                             }
 
-                            // Actualizar ping desde estadísticas de GGRS para pares remotos
-                            for h in 0..p2p.num_players() {
-                                if h != local_handle {
-                                    if let Ok(ns) = p2p.network_stats(h) {
-                                        stats_clone.ping_ms.store(ns.ping as u32, Ordering::Relaxed);
+                            // Actualizar ping máximo entre pares remotos desde estadísticas de GGRS
+                            let max_ping = aggregate_remote_ping_ms((0..p2p.num_players()).filter_map(
+                                |h| {
+                                    if h != local_handle {
+                                        p2p.network_stats(h).ok().map(|ns| ns.ping)
+                                    } else {
+                                        None
                                     }
-                                }
-                            }
+                                },
+                            ));
+                            stats_clone.ping_ms.store(max_ping, Ordering::Relaxed);
                         }
                     } else if let Some(ref mut player) = replay_player {
                         let steps = if player.is_finished() { 0 } else { replay_speed.max(1) };
@@ -741,7 +829,7 @@ impl EmulationSession {
 
                     let rot = core.rotation();
                     core.take_video_frame(|w, h, rgba| {
-                        last_frame_rgba = Some((w, h, rot, rgba.to_vec()));
+                        last_frame_rgba.update(w, h, rot, rgba);
                         renderer.render_frame(w, h, rgba, rot);
                     });
 
@@ -1176,5 +1264,52 @@ mod tests {
         assert_eq!(stats.best_session_score.load(Ordering::Acquire), 0);
         assert!(!tracker.has_player_started());
         assert_eq!(tracker.credits_used(), 1);
+    }
+
+    #[test]
+    fn last_frame_buffer_reuses_allocation_and_supports_restart_invalidate() {
+        let mut buf = super::LastFrameBuffer::default();
+        let frame1 = vec![1u8; 320 * 240 * 4];
+        buf.update(320, 240, 1, &frame1);
+        let ptr1 = buf.rgba.as_ptr();
+        let cap1 = buf.rgba.capacity();
+        assert_eq!(buf.as_frame().map(|(w, h, rot, _)| (w, h, rot)), Some((320, 240, 1)));
+
+        let frame2 = vec![2u8; 320 * 240 * 4];
+        buf.update(320, 240, 1, &frame2);
+        assert_eq!(buf.rgba.as_ptr(), ptr1);
+        assert_eq!(buf.rgba.capacity(), cap1);
+
+        buf.invalidate();
+        assert!(buf.as_frame().is_none());
+        assert_eq!(buf.rgba.capacity(), cap1);
+    }
+
+    #[test]
+    fn compute_rollback_frames_resets_when_no_load_state() {
+        assert_eq!(super::compute_rollback_frames(false, 1), 0);
+        assert_eq!(super::compute_rollback_frames(false, 0), 0);
+        assert_eq!(super::compute_rollback_frames(true, 1), 0);
+        assert_eq!(super::compute_rollback_frames(true, 4), 3);
+    }
+
+    #[test]
+    fn compute_reconnect_secs_left_accounts_for_notify_delay() {
+        use std::time::Duration;
+        // 8s disconnect timeout with 2s notify delay -> GGRS delivers 6000ms budget
+        let budget = Duration::from_millis(6000);
+        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(0)), 6);
+        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(500)), 6);
+        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(1000)), 5);
+        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(5900)), 1);
+        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(6000)), 0);
+        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(8000)), 0);
+    }
+
+    #[test]
+    fn aggregate_remote_ping_takes_max_across_peers() {
+        assert_eq!(super::aggregate_remote_ping_ms([]), 0);
+        assert_eq!(super::aggregate_remote_ping_ms([24, 110, 48]), 110);
+        assert_eq!(super::aggregate_remote_ping_ms([75]), 75);
     }
 }

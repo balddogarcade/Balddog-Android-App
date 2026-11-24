@@ -171,6 +171,7 @@ impl LeaderboardEngine {
                     }
                     RC_RUNTIME_EVENT_LBOARD_CANCELED => {
                         self.active = false;
+                        self.current_score = 0;
                     }
                     _ => {}
                 }
@@ -231,6 +232,29 @@ mod tests {
         let out = engine.evaluate_frame(&ram);
         assert!(!out.active);
         assert_eq!(out.triggered_score, Some(500));
+    }
+
+    #[test]
+    fn canceling_leaderboard_clears_active_and_current_score() {
+        let mut engine =
+            LeaderboardEngine::new("STA:0xH00=1::CAN:0xH00=2::SUB:0xH00=3::VAL:0x 04")
+                .expect("debe parsear leaderboard válido");
+
+        let mut ram = [0u8; 16];
+        // Frame 1: idle (para que rcheevos arme la transición de inicio)
+        assert!(!engine.evaluate_frame(&ram).active);
+
+        ram[0] = 1;
+        ram[4] = 0x50;
+        let started = engine.evaluate_frame(&ram);
+        assert!(started.active);
+        assert_eq!(started.current_score, 0x50);
+
+        ram[0] = 2; // Cancel condition
+        let canceled = engine.evaluate_frame(&ram);
+        assert!(!canceled.active);
+        assert_eq!(canceled.current_score, 0);
+        assert_eq!(canceled.triggered_score, None);
     }
 
     #[test]

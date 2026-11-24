@@ -140,11 +140,110 @@ unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -> bool {
     }
 }
 
+const MAX_FRAME_DIM: usize = 8192;
+
+pub(crate) fn validated_frame_src_len(
+    pixel_format: c_uint,
+    width: usize,
+    height: usize,
+    pitch: usize,
+) -> Option<(usize, usize)> {
+    if width == 0 || height == 0 || width > MAX_FRAME_DIM || height > MAX_FRAME_DIM {
+        return None;
+    }
+    let bpp = match pixel_format {
+        RETRO_PIXEL_FORMAT_XRGB8888 => 4usize,
+        _ => 2usize,
+    };
+    let min_row_bytes = width.checked_mul(bpp)?;
+    if pitch < min_row_bytes {
+        return None;
+    }
+    let _dst_len = width.checked_mul(height)?.checked_mul(4)?;
+    let src_needed = (height - 1).checked_mul(pitch)?.checked_add(min_row_bytes)?;
+    Some((min_row_bytes, src_needed))
+}
+
+pub(crate) fn convert_frame_to_rgba(
+    pixel_format: c_uint,
+    width: usize,
+    height: usize,
+    pitch: usize,
+    src: &[u8],
+    dst_rgba: &mut Vec<u8>,
+) -> bool {
+    let Some((min_row_bytes, src_needed)) =
+        validated_frame_src_len(pixel_format, width, height, pitch)
+    else {
+        return false;
+    };
+    if src.len() < src_needed {
+        return false;
+    }
+    let dst_needed = width * height * 4;
+    if dst_rgba.len() != dst_needed {
+        dst_rgba.resize(dst_needed, 0xFF);
+    }
+
+    match pixel_format {
+        RETRO_PIXEL_FORMAT_RGB565 => {
+            for y in 0..height {
+                let src_row = &src[y * pitch..y * pitch + min_row_bytes];
+                let dst_row = &mut dst_rgba[y * width * 4..(y + 1) * width * 4];
+                for (x, bytes) in src_row.chunks_exact(2).enumerate() {
+                    let px = u16::from_ne_bytes([bytes[0], bytes[1]]);
+                    let r = ((px >> 11) & 0x1F) as u8;
+                    let g = ((px >> 5) & 0x3F) as u8;
+                    let b = (px & 0x1F) as u8;
+                    let idx = x * 4;
+                    dst_row[idx] = (r << 3) | (r >> 2);
+                    dst_row[idx + 1] = (g << 2) | (g >> 4);
+                    dst_row[idx + 2] = (b << 3) | (b >> 2);
+                    dst_row[idx + 3] = 0xFF;
+                }
+            }
+        }
+        RETRO_PIXEL_FORMAT_XRGB8888 => {
+            for y in 0..height {
+                let src_row = &src[y * pitch..y * pitch + min_row_bytes];
+                let dst_row = &mut dst_rgba[y * width * 4..(y + 1) * width * 4];
+                for (x, bytes) in src_row.chunks_exact(4).enumerate() {
+                    let px = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                    let idx = x * 4;
+                    dst_row[idx] = ((px >> 16) & 0xFF) as u8;
+                    dst_row[idx + 1] = ((px >> 8) & 0xFF) as u8;
+                    dst_row[idx + 2] = (px & 0xFF) as u8;
+                    dst_row[idx + 3] = 0xFF;
+                }
+            }
+        }
+        _ => {
+            // RETRO_PIXEL_FORMAT_0RGB1555
+            for y in 0..height {
+                let src_row = &src[y * pitch..y * pitch + min_row_bytes];
+                let dst_row = &mut dst_rgba[y * width * 4..(y + 1) * width * 4];
+                for (x, bytes) in src_row.chunks_exact(2).enumerate() {
+                    let px = u16::from_ne_bytes([bytes[0], bytes[1]]);
+                    let r = ((px >> 10) & 0x1F) as u8;
+                    let g = ((px >> 5) & 0x1F) as u8;
+                    let b = (px & 0x1F) as u8;
+                    let idx = x * 4;
+                    dst_row[idx] = (r << 3) | (r >> 2);
+                    dst_row[idx + 1] = (g << 3) | (g >> 2);
+                    dst_row[idx + 2] = (b << 3) | (b >> 2);
+                    dst_row[idx + 3] = 0xFF;
+                }
+            }
+        }
+    }
+    true
+}
+
 /// Callback de video Libretro: convierte el framebuffer nativo a RGBA8888 sin allocs repetidas.
 ///
 /// # Safety
 /// `data` puede ser null (frame duplicado). Si no es null, debe apuntar a al menos
-/// `height * pitch` bytes válidos en el formato `ctx.pixel_format`.
+/// `(height - 1) * pitch + width * bpp` bytes válidos en el formato `ctx.pixel_format`.
 unsafe extern "C" fn video_refresh_cb(
     data: *const c_void,
     width: c_uint,
@@ -158,72 +257,15 @@ unsafe extern "C" fn video_refresh_cb(
     with_ctx(|ctx| {
         let w = width as usize;
         let h = height as usize;
-        let needed = w.saturating_mul(h).saturating_mul(4);
-        if ctx.frame_rgba.len() != needed {
-            ctx.frame_rgba.resize(needed, 0xFF);
-        }
-        ctx.frame_width = width;
-        ctx.frame_height = height;
-        ctx.frame_dirty = true;
-
-        let src_bytes = data as *const u8;
-
-        match ctx.pixel_format {
-            RETRO_PIXEL_FORMAT_RGB565 => {
-                for y in 0..h {
-                    // SAFETY: cada fila comienza en `y * pitch` dentro del framebuffer de Libretro.
-                    let row_ptr = unsafe { src_bytes.add(y * pitch) } as *const u16;
-                    let dst_row = &mut ctx.frame_rgba[y * w * 4..(y + 1) * w * 4];
-                    for x in 0..w {
-                        // SAFETY: `x < w` y `w * 2 <= pitch`.
-                        let px = unsafe { *row_ptr.add(x) };
-                        let r = ((px >> 11) & 0x1F) as u8;
-                        let g = ((px >> 5) & 0x3F) as u8;
-                        let b = (px & 0x1F) as u8;
-                        let idx = x * 4;
-                        dst_row[idx] = (r << 3) | (r >> 2);
-                        dst_row[idx + 1] = (g << 2) | (g >> 4);
-                        dst_row[idx + 2] = (b << 3) | (b >> 2);
-                        dst_row[idx + 3] = 0xFF;
-                    }
-                }
-            }
-            RETRO_PIXEL_FORMAT_XRGB8888 => {
-                for y in 0..h {
-                    // SAFETY: cada fila comienza en `y * pitch` dentro del framebuffer de Libretro.
-                    let row_ptr = unsafe { src_bytes.add(y * pitch) } as *const u32;
-                    let dst_row = &mut ctx.frame_rgba[y * w * 4..(y + 1) * w * 4];
-                    for x in 0..w {
-                        // SAFETY: `x < w` y `w * 4 <= pitch`.
-                        let px = unsafe { *row_ptr.add(x) };
-                        let idx = x * 4;
-                        dst_row[idx] = ((px >> 16) & 0xFF) as u8;
-                        dst_row[idx + 1] = ((px >> 8) & 0xFF) as u8;
-                        dst_row[idx + 2] = (px & 0xFF) as u8;
-                        dst_row[idx + 3] = 0xFF;
-                    }
-                }
-            }
-            _ => {
-                // RETRO_PIXEL_FORMAT_0RGB1555
-                for y in 0..h {
-                    // SAFETY: cada fila comienza en `y * pitch` dentro del framebuffer de Libretro.
-                    let row_ptr = unsafe { src_bytes.add(y * pitch) } as *const u16;
-                    let dst_row = &mut ctx.frame_rgba[y * w * 4..(y + 1) * w * 4];
-                    for x in 0..w {
-                        // SAFETY: `x < w` y `w * 2 <= pitch`.
-                        let px = unsafe { *row_ptr.add(x) };
-                        let r = ((px >> 10) & 0x1F) as u8;
-                        let g = ((px >> 5) & 0x1F) as u8;
-                        let b = (px & 0x1F) as u8;
-                        let idx = x * 4;
-                        dst_row[idx] = (r << 3) | (r >> 2);
-                        dst_row[idx + 1] = (g << 3) | (g >> 2);
-                        dst_row[idx + 2] = (b << 3) | (b >> 2);
-                        dst_row[idx + 3] = 0xFF;
-                    }
-                }
-            }
+        let Some((_, src_needed)) = validated_frame_src_len(ctx.pixel_format, w, h, pitch) else {
+            return;
+        };
+        // SAFETY: `validated_frame_src_len` validó dimensiones, `pitch >= w * bpp` y ausencia de overflow.
+        let src = unsafe { std::slice::from_raw_parts(data as *const u8, src_needed) };
+        if convert_frame_to_rgba(ctx.pixel_format, w, h, pitch, src, &mut ctx.frame_rgba) {
+            ctx.frame_width = width;
+            ctx.frame_height = height;
+            ctx.frame_dirty = true;
         }
     });
 }
@@ -825,5 +867,81 @@ mod tests {
         }
         assert_eq!((cur_w, cur_h), (2, 3));
         assert_eq!(cur, src);
+    }
+
+    #[test]
+    fn convert_frame_rgb565_xrgb8888_and_0rgb1555_with_odd_pitch() {
+        // Odd pitch (width=2, pitch=5 bytes for 2-byte formats -> unaligned row 1 + padding byte)
+        let mut dst = Vec::new();
+        let px565_a = 0xF800u16.to_ne_bytes(); // pure red
+        let px565_b = 0x07E0u16.to_ne_bytes(); // pure green
+        let px565_c = 0x001Fu16.to_ne_bytes(); // pure blue
+        let px565_d = 0xFFFFu16.to_ne_bytes(); // white
+        let src565 = [
+            px565_a[0], px565_a[1], px565_b[0], px565_b[1], 0xAA, // row 0 + pad
+            px565_c[0], px565_c[1], px565_d[0], px565_d[1], // row 1 (no trailing pad needed)
+        ];
+        assert!(convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_RGB565,
+            2,
+            2,
+            5,
+            &src565,
+            &mut dst
+        ));
+        assert_eq!(
+            dst,
+            vec![
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255
+            ]
+        );
+
+        // XRGB8888 with odd pitch = 9 bytes (width=2 -> 8 bytes + 1 pad byte)
+        let p0 = 0x0012_3456u32.to_ne_bytes();
+        let p1 = 0x00AB_CDEFu32.to_ne_bytes();
+        let src8888 = [
+            p0[0], p0[1], p0[2], p0[3], p1[0], p1[1], p1[2], p1[3], 0x99,
+            p1[0], p1[1], p1[2], p1[3], p0[0], p0[1], p0[2], p0[3],
+        ];
+        assert!(convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_XRGB8888,
+            2,
+            2,
+            9,
+            &src8888,
+            &mut dst
+        ));
+        assert_eq!(
+            dst,
+            vec![
+                0x12, 0x34, 0x56, 0xFF, 0xAB, 0xCD, 0xEF, 0xFF,
+                0xAB, 0xCD, 0xEF, 0xFF, 0x12, 0x34, 0x56, 0xFF
+            ]
+        );
+
+        // 0RGB1555 (5-bit white = 0x7FFF)
+        let w1555 = 0x7FFFu16.to_ne_bytes();
+        let src1555 = [w1555[0], w1555[1]];
+        assert!(convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_0RGB1555,
+            1,
+            1,
+            2,
+            &src1555,
+            &mut dst
+        ));
+        assert_eq!(dst, vec![255, 255, 255, 255]);
+    }
+
+    #[test]
+    fn convert_frame_rejects_zero_dims_short_pitch_and_overflow() {
+        let mut dst = Vec::new();
+        let buf = [0u8; 64];
+        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 0, 2, 4, &buf, &mut dst));
+        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 2, 0, 4, &buf, &mut dst));
+        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 4, 2, 6, &buf, &mut dst));
+        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_XRGB8888, 4, 2, 12, &buf, &mut dst));
+        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 9000, 2, 18000, &buf, &mut dst));
+        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 2, 2, 4, &buf[..6], &mut dst));
     }
 }
