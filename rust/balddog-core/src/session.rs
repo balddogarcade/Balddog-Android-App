@@ -176,6 +176,11 @@ pub struct SessionControl {
 }
 
 impl SessionControl {
+    pub fn channel_pair() -> (Self, crossbeam_channel::Receiver<SessionCommand>) {
+        let (cmd_tx, cmd_rx) = unbounded();
+        (Self { cmd_tx }, cmd_rx)
+    }
+
     pub fn attach_surface(&self, window_ptr: usize, width: u32, height: u32) {
         let _ = self.cmd_tx.send(SessionCommand::AttachSurface {
             window_ptr,

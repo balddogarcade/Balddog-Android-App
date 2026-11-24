@@ -8,9 +8,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use balddog_core::audio::engine::set_global_ducking;
 use balddog_core::retro::core::{rotate_rgba, LibretroCore};
 use balddog_core::retro::replay::{compute_file_crc32, ReplayPlayer};
-#[cfg(target_os = "android")]
-use balddog_core::session::SessionControl;
-use balddog_core::session::{clear_deterministic_nvram, EmulationSession};
+use balddog_core::session::{clear_deterministic_nvram, EmulationSession, SessionControl};
 use balddog_core::{engine_info, recent_logs, record_log, CoreError};
 use balddog_netplay::voice::{VoicePeerEndpoint, VoiceSession, VoiceSessionConfig};
 use balddog_netplay::{
@@ -22,6 +20,7 @@ uniffi::setup_scaffolding!();
 
 static SESSION_LIFECYCLE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static ACTIVE_SESSION: OnceLock<Mutex<Option<EmulationSession>>> = OnceLock::new();
+static STOPPING_SESSION_CTRL: OnceLock<Mutex<Option<SessionControl>>> = OnceLock::new();
 static ACTIVE_VOICE: OnceLock<Mutex<Option<VoiceSession>>> = OnceLock::new();
 
 fn lifecycle_lock() -> &'static Mutex<()> {
@@ -39,15 +38,23 @@ fn session_slot() -> &'static Mutex<Option<EmulationSession>> {
     ACTIVE_SESSION.get_or_init(|| Mutex::new(None))
 }
 
+fn stopping_session_slot() -> &'static Mutex<Option<SessionControl>> {
+    STOPPING_SESSION_CTRL.get_or_init(|| Mutex::new(None))
+}
+
 fn voice_slot() -> &'static Mutex<Option<VoiceSession>> {
     ACTIVE_VOICE.get_or_init(|| Mutex::new(None))
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", test))]
 pub(crate) fn clone_session_control() -> Option<SessionControl> {
-    lock_unpoisoned(session_slot())
+    if let Some(ctrl) = lock_unpoisoned(session_slot())
         .as_ref()
         .map(|s| s.control())
+    {
+        return Some(ctrl);
+    }
+    lock_unpoisoned(stopping_session_slot()).clone()
 }
 
 pub(crate) fn with_active_session<R>(f: impl FnOnce(&mut EmulationSession) -> R) -> Option<R> {
@@ -239,10 +246,15 @@ fn stop_game_inner() {
     stop_voice_session();
     let session_opt = {
         let mut guard = lock_unpoisoned(session_slot());
-        guard.take()
+        let taken = guard.take();
+        if let Some(ref session) = taken {
+            *lock_unpoisoned(stopping_session_slot()) = Some(session.control());
+        }
+        taken
     };
     if let Some(mut session) = session_opt {
         session.stop();
+        *lock_unpoisoned(stopping_session_slot()) = None;
     }
 }
 
@@ -679,4 +691,79 @@ pub fn open_offline_replay_renderer(
             last_rgba: Vec::new(),
         }),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use balddog_core::session::{SessionCommand, SessionControl};
+
+    use super::{clone_session_control, lock_unpoisoned, session_slot, stopping_session_slot};
+
+    #[test]
+    fn stopping_session_ctrl_keeps_detach_surface_sync_synchronized() {
+        // Ensure clean slot state.
+        *lock_unpoisoned(session_slot()) = None;
+        *lock_unpoisoned(stopping_session_slot()) = None;
+        assert!(clone_session_control().is_none());
+
+        // Case 1: While STOPPING_SESSION_CTRL holds a control, clone_session_control()
+        // returns it and detach_surface_sync() blocks until DetachSurface ack arrives.
+        let (ctrl, cmd_rx) = SessionControl::channel_pair();
+        *lock_unpoisoned(stopping_session_slot()) = Some(ctrl);
+
+        let cloned = clone_session_control().expect("stopping session control must remain reachable");
+        let completed = Arc::new(AtomicBool::new(false));
+        let completed_bg = Arc::clone(&completed);
+
+        let join = std::thread::spawn(move || {
+            cloned.detach_surface_sync();
+            completed_bg.store(true, Ordering::Release);
+        });
+
+        let ack_sender = match cmd_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("expected DetachSurface command")
+        {
+            SessionCommand::DetachSurface { ack } => ack,
+            _ => panic!("unexpected command received"),
+        };
+
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(
+            !completed.load(Ordering::Acquire),
+            "detach_surface_sync must remain blocked until DetachSurface ack is sent"
+        );
+
+        ack_sender.send(()).expect("ack send failed");
+        join.join().expect("detach thread panicked");
+        assert!(completed.load(Ordering::Acquire));
+
+        // Case 2: Dropping the channel receiver (emulation thread exit) also unblocks detach.
+        let cloned2 = clone_session_control().expect("stopping session control still reachable");
+        let completed2 = Arc::new(AtomicBool::new(false));
+        let completed2_bg = Arc::clone(&completed2);
+
+        let join2 = std::thread::spawn(move || {
+            cloned2.detach_surface_sync();
+            completed2_bg.store(true, Ordering::Release);
+        });
+
+        let _pending_cmd = cmd_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("expected second DetachSurface command");
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(!completed2.load(Ordering::Acquire));
+
+        drop(_pending_cmd);
+        drop(cmd_rx);
+        join2.join().expect("second detach thread panicked");
+        assert!(completed2.load(Ordering::Acquire));
+
+        *lock_unpoisoned(stopping_session_slot()) = None;
+        assert!(clone_session_control().is_none());
+    }
 }
