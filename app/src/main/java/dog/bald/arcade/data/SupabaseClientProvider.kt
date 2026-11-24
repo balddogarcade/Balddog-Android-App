@@ -12,16 +12,31 @@ import io.github.jan.supabase.auth.user.UserSession
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
+import java.io.File
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private class EncryptedSessionManager(context: Context) : SessionManager {
     private val json = Json { ignoreUnknownKeys = true }
     private val prefs: SharedPreferences by lazy {
+        try {
+            createPrefs(context)
+        } catch (_: Exception) {
+            try {
+                val prefFile = File(context.filesDir.parentFile, "shared_prefs/balddog_secure_session.xml")
+                if (prefFile.exists()) prefFile.delete()
+                createPrefs(context)
+            } catch (_: Exception) {
+                context.getSharedPreferences("balddog_secure_session_fallback", Context.MODE_PRIVATE)
+            }
+        }
+    }
+
+    private fun createPrefs(context: Context): SharedPreferences {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-        EncryptedSharedPreferences.create(
+        return EncryptedSharedPreferences.create(
             context,
             "balddog_secure_session",
             masterKey,

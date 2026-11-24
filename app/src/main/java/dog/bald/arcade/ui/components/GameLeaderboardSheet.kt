@@ -284,14 +284,6 @@ fun GameLeaderboardSheet(
                         formattedScore = numberFmt.format(myEntry.score),
                         onClick = { onOpenUserProfile(myEntry.userId) }
                     )
-                    if (myEntry.isAnonymous) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Juegas como invitado: vincula un correo en Perfil para no perder tu récord.",
-                            color = MutedGray,
-                            fontSize = 11.sp
-                        )
-                    }
                 } else {
                     Text(
                         text = "Todavía no tienes puntaje en este juego. Juega en modo Solo (1 crédito) para entrar al ranking.",

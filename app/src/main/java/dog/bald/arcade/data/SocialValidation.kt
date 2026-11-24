@@ -51,13 +51,22 @@ object SocialValidation {
         return errors
     }
 
+    private fun extractHost(url: String): String {
+        return url.substringAfter("://")
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore("#")
+            .substringBefore(":")
+            .lowercase()
+    }
+
     private fun checkDomain(raw: String?, allowedHosts: Set<String>): String? {
         val v = raw?.trim().orEmpty()
         if (v.isEmpty()) return null
         if (!v.startsWith("https://", ignoreCase = true)) {
             return "Debe iniciar con https://"
         }
-        val host = runCatching { Uri.parse(v).host?.lowercase() }.getOrNull().orEmpty()
+        val host = extractHost(v)
         if (host !in allowedHosts) {
             return "Dominio inválido (usa ${allowedHosts.first()})"
         }
@@ -70,7 +79,7 @@ object SocialValidation {
         if (!v.startsWith("https://", ignoreCase = true)) {
             return "Debe iniciar con https://"
         }
-        val host = runCatching { Uri.parse(v).host }.getOrNull().orEmpty()
+        val host = extractHost(v)
         if (host.isBlank() || !host.contains(".")) {
             return "URL inválida"
         }
@@ -86,7 +95,20 @@ object SocialValidation {
             Toast.makeText(context, "Tag de Discord copiado: $value", Toast.LENGTH_SHORT).show()
             return
         }
-        val uri = runCatching { Uri.parse(value) }.getOrNull() ?: return
+        if (!value.startsWith("https://", ignoreCase = true)) {
+            Toast.makeText(context, "Solo se permiten enlaces seguros https://", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val host = extractHost(value)
+        if (host.isBlank() || !host.contains(".")) {
+            Toast.makeText(context, "Solo se permiten enlaces seguros https://", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = runCatching { Uri.parse(value) }.getOrNull()
+        if (uri == null) {
+            Toast.makeText(context, "Enlace inválido", Toast.LENGTH_SHORT).show()
+            return
+        }
         runCatching {
             val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

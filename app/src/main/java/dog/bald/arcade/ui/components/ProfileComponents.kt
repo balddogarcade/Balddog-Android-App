@@ -684,8 +684,7 @@ fun EditUsernameDialog(
 ) {
     var draft by remember(currentUsername) { mutableStateOf(currentUsername) }
     val trimmed = draft.trim()
-    val localValid = trimmed.length in 3..24 &&
-        trimmed.all { it.isLetterOrDigit() || it == '_' || it == '-' || it == '.' }
+    val localValid = SocialValidation.validateUsername(trimmed) == null
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
@@ -701,13 +700,13 @@ fun EditUsernameDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Visible en salas Netplay y tablas de clasificación (3–24 caracteres).",
+                    text = "Visible en salas Netplay y tablas de clasificación (3–20 caracteres).",
                     color = SilverGray,
                     fontSize = 12.sp
                 )
                 OutlinedTextField(
                     value = draft,
-                    onValueChange = { if (it.length <= 24) draft = it },
+                    onValueChange = { if (it.length <= 20) draft = it },
                     singleLine = true,
                     enabled = !saving,
                     label = { Text("Nombre de jugador", color = MutedGray) },
@@ -728,7 +727,7 @@ fun EditUsernameDialog(
                     )
                 } else if (draft.isNotEmpty() && !localValid) {
                     Text(
-                        text = "Usa 3–24 caracteres (letras, números, '_', '-' o '.').",
+                        text = "Usa 3–20 caracteres (solo letras, números o '_').",
                         color = MutedGray,
                         fontSize = 11.sp
                     )

@@ -8,6 +8,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.zip.CRC32
 
@@ -60,6 +61,36 @@ class IpfsRomManager(context: Context) {
         }
     }
 
+    fun verifyExistingFile(
+        file: File,
+        expectedSha256: String,
+        expectedCrc32: String,
+        expectedBytes: Long
+    ): Boolean {
+        if (!file.exists() || !file.isFile) return false
+        if (expectedBytes > 0L && file.length() != expectedBytes) return false
+        return try {
+            val sha = MessageDigest.getInstance("SHA-256")
+            val crc = CRC32()
+            val buf = ByteArray(64 * 1024)
+            file.inputStream().use { input ->
+                while (true) {
+                    val read = input.read(buf)
+                    if (read <= 0) break
+                    sha.update(buf, 0, read)
+                    crc.update(buf, 0, read)
+                }
+            }
+            val actualSha = sha.digest().joinToString("") { "%02x".format(it) }
+            val actualCrc = "%08x".format(crc.value)
+            val shaOk = expectedSha256.isBlank() || actualSha.equals(expectedSha256.trim(), ignoreCase = true)
+            val crcOk = expectedCrc32.isBlank() || actualCrc.equals(expectedCrc32.trim(), ignoreCase = true)
+            shaOk && crcOk
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
     suspend fun ensureGameReady(
         game: GameDto,
         allGames: List<GameDto>,
@@ -72,7 +103,9 @@ class IpfsRomManager(context: Context) {
                 ?: throw RomIntegrityException("BIOS requerida no encontrada en catálogo")
             val biosInRoms = File(romsDir, bios.filename)
             val biosInSys = File(systemDir, bios.filename)
-            if (!biosInRoms.exists() || !biosInSys.exists()) {
+            val valid = biosInRoms.exists() && (biosInSys.exists() || runCatching { biosInRoms.copyTo(biosInSys, overwrite = true) }.isSuccess) &&
+                verifyExistingFile(biosInRoms, bios.sha256, bios.crc32, bios.sizeBytes)
+            if (!valid) {
                 onProgress("Descargando BIOS ${bios.filename}...", 0f)
                 downloadAndVerify(
                     cid = bios.ipfsCid,
@@ -88,21 +121,26 @@ class IpfsRomManager(context: Context) {
         // 2. ROM Parent si es un clon
         if (!game.parentGameId.isNullOrBlank()) {
             val parent = allGames.firstOrNull { it.id == game.parentGameId }
-            if (parent != null && !isGameDownloaded(parent)) {
-                onProgress("Descargando ROM base ${parent.romFilename}...", 0f)
-                downloadAndVerify(
-                    cid = parent.ipfsCid,
-                    destFile = File(romsDir, parent.romFilename),
-                    expectedSha256 = parent.sha256,
-                    expectedCrc32 = parent.crc32,
-                    expectedBytes = parent.sizeBytes
-                ) { p -> onProgress("Base ${parent.romFilename}", p) }
+            if (parent != null) {
+                val parentFile = File(romsDir, parent.romFilename)
+                val valid = parentFile.exists() && verifyExistingFile(parentFile, parent.sha256, parent.crc32, parent.sizeBytes)
+                if (!valid) {
+                    onProgress("Descargando ROM base ${parent.romFilename}...", 0f)
+                    downloadAndVerify(
+                        cid = parent.ipfsCid,
+                        destFile = parentFile,
+                        expectedSha256 = parent.sha256,
+                        expectedCrc32 = parent.crc32,
+                        expectedBytes = parent.sizeBytes
+                    ) { p -> onProgress("Base ${parent.romFilename}", p) }
+                }
             }
         }
 
         // 3. ROM principal
         val target = File(romsDir, game.romFilename)
-        if (!target.exists() || target.length() == 0L) {
+        val valid = target.exists() && verifyExistingFile(target, game.sha256, game.crc32, game.sizeBytes)
+        if (!valid) {
             onProgress("Descargando ${game.title}...", 0f)
             downloadAndVerify(
                 cid = game.ipfsCid,
@@ -124,7 +162,7 @@ class IpfsRomManager(context: Context) {
         expectedBytes: Long,
         onProgress: (Float) -> Unit
     ) {
-        val tmpFile = File(destFile.parentFile, "${destFile.name}.tmp")
+        val tmpFile = File(destFile.parentFile, "${destFile.name}.${UUID.randomUUID()}.tmp")
         var lastError: Throwable? = null
 
         for (gw in gateways) {

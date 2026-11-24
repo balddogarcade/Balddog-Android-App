@@ -115,32 +115,40 @@ class ArcadeRepository(context: Context) {
         voiceEndpoint: String? = null
     ): RoomDto {
         val uid = currentUserId() ?: throw IllegalStateException("Usuario no autenticado")
-        val code = (1000..9999).random(Random).toString() + ('A'..'Z').random(Random)
-        val initialSlots = mapOf(
-            "0" to RoomSlotInfo(
-                userId = uid,
-                username = username,
-                endpoint = endpoint,
-                voiceEndpoint = voiceEndpoint?.ifBlank { null },
-                ready = true
+        var lastException: Throwable? = null
+        for (attempt in 1..5) {
+            val code = (1000..9999).random(Random).toString() + ('A'..'Z').random(Random)
+            val initialSlots = mapOf(
+                "0" to RoomSlotInfo(
+                    userId = uid,
+                    username = username,
+                    endpoint = endpoint,
+                    voiceEndpoint = voiceEndpoint?.ifBlank { null },
+                    ready = true
+                )
             )
-        )
-        val payload = buildJsonObject {
-            put("code", code)
-            put("host_id", uid)
-            put("game_id", gameId)
-            put("mode", mode)
-            put("status", "waiting")
-            put("max_players", maxPlayers.coerceIn(2, 4))
-            put("slots_json", Json.encodeToJsonElement(initialSlots))
-            put("host_endpoint", endpoint)
-            put("is_private", isPrivate)
-            if (localIp != null) put("local_ip", localIp)
-            if (localPort != null) put("local_port", localPort)
+            val payload = buildJsonObject {
+                put("code", code)
+                put("host_id", uid)
+                put("game_id", gameId)
+                put("mode", mode)
+                put("status", "waiting")
+                put("max_players", maxPlayers.coerceIn(2, 4))
+                put("slots_json", Json.encodeToJsonElement(initialSlots))
+                put("host_endpoint", endpoint)
+                put("is_private", isPrivate)
+                if (localIp != null) put("local_ip", localIp)
+                if (localPort != null) put("local_port", localPort)
+            }
+            try {
+                return client.from("rooms").insert(payload) {
+                    select()
+                }.decodeSingle<RoomDto>()
+            } catch (t: Throwable) {
+                lastException = t
+            }
         }
-        return client.from("rooms").insert(payload) {
-            select()
-        }.decodeSingle<RoomDto>()
+        throw lastException ?: IllegalStateException("No se pudo crear la sala")
     }
 
     suspend fun updateRoomSlot(
@@ -312,19 +320,17 @@ class ArcadeRepository(context: Context) {
     suspend fun updateUsername(newUsername: String): ProfileDto {
         val uid = currentUserId() ?: error("Sesión no iniciada")
         val sanitized = newUsername.trim()
-        require(sanitized.length in 3..24) {
-            "El nombre debe tener entre 3 y 24 caracteres"
-        }
-        require(sanitized.all { it.isLetterOrDigit() || it == '_' || it == '-' || it == '.' }) {
-            "Solo se permiten letras, números, '_', '-' y '.'"
-        }
-        val payload = buildJsonObject {
-            put("username", sanitized)
-        }
-        return client.from("profiles").update(payload) {
-            filter { eq("id", uid) }
-            select()
-        }.decodeSingle<ProfileDto>()
+        val validationErr = SocialValidation.validateUsername(sanitized)
+        require(validationErr == null) { validationErr ?: "Nombre de usuario inválido" }
+        val current = fetchMyProfile()
+        return updateMyProfile(
+            username = sanitized,
+            bio = current?.bio,
+            countryCode = current?.countryCode,
+            avatarSeed = current?.avatarSeed,
+            isPrivate = current?.isPrivate ?: false,
+            socialLinks = current?.socialLinks ?: SocialLinksDto()
+        )
     }
 
     suspend fun fetchMyProfile(): ProfileDto? {
@@ -337,13 +343,20 @@ class ArcadeRepository(context: Context) {
         if (existing != null) return existing
 
         val user = client.auth.currentUserOrNull()
-        val metaName = user?.userMetadata?.get("username")?.toString()?.trim('"')
+        val rawMetaName = user?.userMetadata?.get("username")?.toString()?.trim('"')
             ?.takeIf { it.isNotBlank() }
             ?: "player_${uid.replace("-", "").take(8)}"
+        val metaName = if (SocialValidation.validateUsername(rawMetaName) == null) {
+            rawMetaName
+        } else {
+            "player_${uid.replace("-", "").take(8)}"
+        }
+        val avatarSeed = "av_${uid.replace("-", "").take(8)}"
         val payload = buildJsonObject {
             put("id", uid)
             put("username", metaName)
-            put("is_anonymous", user?.email.isNullOrBlank())
+            put("avatar_seed", avatarSeed)
+            put("is_anonymous", false)
         }
         return runCatching {
             client.from("profiles").insert(payload) { select() }.decodeSingle<ProfileDto>()
@@ -509,11 +522,19 @@ class ArcadeRepository(context: Context) {
 
     suspend fun fetchMyFollowingIds(): Set<String> {
         val uid = currentUserId() ?: return emptySet()
-        return runCatching {
-            fetchFollowList(userId = uid, direction = "following", limit = 100, offset = 0)
-                .map { it.userId }
-                .toSet()
-        }.getOrDefault(emptySet())
+        val result = mutableSetOf<String>()
+        val pageSize = 100
+        var offset = 0
+        while (true) {
+            val batch = runCatching {
+                fetchFollowList(userId = uid, direction = "following", limit = pageSize, offset = offset)
+            }.getOrNull().orEmpty()
+            if (batch.isEmpty()) break
+            result.addAll(batch.map { it.userId })
+            if (batch.size < pageSize) break
+            offset += pageSize
+        }
+        return result
     }
 
     suspend fun fetchGlobalLeaderboard(
