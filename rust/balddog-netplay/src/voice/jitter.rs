@@ -55,10 +55,14 @@ impl JitterBuffer {
             return;
         }
 
-        // Si ya estamos reproduciendo, descartar paquetes muy atrasados o saltos extremos
+        // Si ya estamos reproduciendo, descartar paquetes tardíos o saltos extremos
         if let Some(expected) = self.next_seq {
             let diff = seq_diff(seq, expected);
-            if diff < -4 {
+            if self.primed {
+                if diff < 0 {
+                    return;
+                }
+            } else if diff < -4 {
                 return;
             }
             if diff > 100 {
@@ -83,7 +87,10 @@ impl JitterBuffer {
 
         while self.packets.len() > self.max_frames {
             if let Some(dropped) = self.packets.pop_front() {
-                self.next_seq = Some(dropped.seq.wrapping_add(1));
+                let next = dropped.seq.wrapping_add(1);
+                if self.next_seq.map_or(true, |cur| seq_diff(next, cur) > 0) {
+                    self.next_seq = Some(next);
+                }
             }
         }
 
@@ -107,9 +114,14 @@ impl JitterBuffer {
             return JitterPop::Buffering;
         };
 
-        if let Some(front) = self.packets.front() {
+        while let Some(front) = self.packets.front() {
             let diff = seq_diff(front.seq, expected);
-            if diff <= 0 {
+            if diff < 0 {
+                // Paquete obsoleto ya superado por el cursor de reproducción
+                self.packets.pop_front();
+                continue;
+            }
+            if diff == 0 {
                 let pkt = self.packets.pop_front().unwrap();
                 self.next_seq = Some(pkt.seq.wrapping_add(1));
                 self.consecutive_empty = 0;
@@ -148,5 +160,48 @@ mod tests {
         assert_eq!(jb.pop(), JitterPop::Frame(vec![10]));
         assert_eq!(jb.pop(), JitterPop::Lost); // Falta seq 11
         assert_eq!(jb.pop(), JitterPop::Frame(vec![12]));
+    }
+
+    #[test]
+    fn drops_late_packets_without_rewinding_next_seq_after_primed() {
+        let mut jb = JitterBuffer::new(2, 8);
+        jb.push(10, vec![10]);
+        jb.push(11, vec![11]);
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![10]));
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![11]));
+
+        // Cursor is now at 12. Late packet seq=9 or seq=10 must be dropped without rewinding.
+        jb.push(10, vec![10]);
+        jb.push(12, vec![12]);
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![12]));
+    }
+
+    #[test]
+    fn handles_u16_seq_wraparound_from_65534_to_2() {
+        let mut jb = JitterBuffer::new(2, 8);
+        jb.push(65534, vec![1]);
+        jb.push(65535, vec![2]);
+        jb.push(0, vec![3]);
+        jb.push(2, vec![5]);
+
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![1]));
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![2]));
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![3]));
+        assert_eq!(jb.pop(), JitterPop::Lost); // seq 1 missing
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![5]));
+    }
+
+    #[test]
+    fn resets_on_large_forward_jump() {
+        let mut jb = JitterBuffer::new(2, 8);
+        jb.push(10, vec![10]);
+        jb.push(11, vec![11]);
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![10]));
+
+        jb.push(500, vec![20]);
+        assert_eq!(jb.pop(), JitterPop::Buffering);
+        jb.push(501, vec![21]);
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![20]));
+        assert_eq!(jb.pop(), JitterPop::Frame(vec![21]));
     }
 }

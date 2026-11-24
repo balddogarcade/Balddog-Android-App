@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
@@ -94,6 +94,28 @@ pub struct VoiceSession {
     thread: Option<JoinHandle<()>>,
 }
 
+pub(crate) fn filter_remote_peers(
+    local_handle: u8,
+    peers: &[VoicePeerEndpoint],
+) -> Vec<VoicePeerEndpoint> {
+    let mut seen = HashSet::new();
+    let mut filtered = Vec::with_capacity(peers.len());
+    for peer in peers {
+        if peer.player_handle == local_handle {
+            continue;
+        }
+        if seen.insert(peer.player_handle) {
+            filtered.push(peer.clone());
+        }
+    }
+    filtered
+}
+
+pub(crate) fn mix_scale_sample(acc: i32, vol_q15: i32) -> i16 {
+    let scaled = (i64::from(acc) * i64::from(vol_q15)) >> 15;
+    scaled.clamp(i64::from(i16::MIN), i64::from(i16::MAX)) as i16
+}
+
 impl VoiceSession {
     pub fn start(cfg: VoiceSessionConfig) -> Result<Self, NetplayError> {
         let socket = UdpSocket::bind(("0.0.0.0", cfg.local_port)).map_err(|e| {
@@ -111,15 +133,15 @@ impl VoiceSession {
         let started_at = Instant::now();
         let running = Arc::new(AtomicBool::new(true));
         let controls = Arc::new(SharedControls::default());
-        controls
-            .active_peers
-            .store(cfg.peers.len() as u8, Ordering::Relaxed);
+
+        let filtered_peers = filter_remote_peers(cfg.local_player_handle, &cfg.peers);
+        controls.active_peers.store(
+            filtered_peers.len().min(u8::MAX as usize) as u8,
+            Ordering::Relaxed,
+        );
 
         let mut remote_peers: HashMap<u8, RemotePeerState> = HashMap::new();
-        for peer in &cfg.peers {
-            if peer.player_handle == cfg.local_player_handle {
-                continue;
-            }
+        for peer in &filtered_peers {
             let decoder = Decoder::new(VOICE_SAMPLE_RATE, Channels::Mono).map_err(|e| {
                 NetplayError::Transport(format!("Error iniciando Opus decoder: {e}"))
             })?;
@@ -134,7 +156,7 @@ impl VoiceSession {
             );
         }
 
-        let peer_addrs = Arc::new(Mutex::new(cfg.peers));
+        let peer_addrs = Arc::new(Mutex::new(filtered_peers));
         let playback_queue = Arc::new(Mutex::new(VecDeque::with_capacity(
             MAX_PLAYBACK_QUEUE_SAMPLES,
         )));
@@ -191,7 +213,8 @@ impl VoiceSession {
             .listen_enabled
             .store(listen_enabled, Ordering::Release);
         self.controls.paused.store(paused, Ordering::Release);
-        let clamped = volume.clamp(0.0, 1.5);
+        let safe_volume = if volume.is_finite() { volume } else { 1.0 };
+        let clamped = safe_volume.clamp(0.0, 1.5);
         let q15 = (clamped * 32768.0) as i32;
         self.controls.volume_q15.store(q15, Ordering::Release);
 
@@ -219,10 +242,7 @@ impl VoiceSession {
         }
 
         let now_ms = self.started_at.elapsed().as_millis() as u64;
-        let encoded_len = {
-            let Ok(mut cap) = self.capture.lock() else {
-                return;
-            };
+        if let Ok(mut cap) = self.capture.lock() {
             let vad = cap.vad.process(samples);
             if !vad.active {
                 return;
@@ -251,9 +271,7 @@ impl VoiceSession {
                     let _ = self.socket.send_to(&cap_mut.packet_buf, peer.addr);
                 }
             }
-            len
-        };
-        let _ = encoded_len;
+        }
     }
 
     pub fn pull_playback_pcm(&self, max_samples: usize) -> Vec<i16> {
@@ -325,7 +343,7 @@ fn run_voice_loop(
     let mut mix_acc = [0i32; VOICE_FRAME_SAMPLES];
     let mut keepalive_seq: u16 = 0;
 
-    let mut last_keepalive = Instant::now() - KEEPALIVE_INTERVAL;
+    let mut last_keepalive: Option<Instant> = None;
     let mut next_mix_at = Instant::now() + MIX_TICK_INTERVAL;
 
     while running.load(Ordering::Acquire) {
@@ -362,8 +380,12 @@ fn run_voice_loop(
 
         // 2. Keepalive periódico para sostener NAT hole-punching
         let now = Instant::now();
-        if now.duration_since(last_keepalive) >= KEEPALIVE_INTERVAL {
-            last_keepalive = now;
+        let keepalive_due = match last_keepalive {
+            None => true,
+            Some(prev) => now.duration_since(prev) >= KEEPALIVE_INTERVAL,
+        };
+        if keepalive_due {
+            last_keepalive = Some(now);
             let hdr = VoicePacketHeader {
                 session_token,
                 msg_type: VoicePacketType::Keepalive,
@@ -436,14 +458,63 @@ fn run_voice_loop(
                         q.pop_front();
                     }
                     for &acc in mix_acc.iter() {
-                        let scaled = (acc * vol_q15) >> 15;
-                        let clamped = scaled.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
-                        q.push_back(clamped);
+                        q.push_back(mix_scale_sample(acc, vol_q15));
                     }
                 }
             }
         }
 
         thread::sleep(Duration::from_millis(4));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mix_scale_sample_avoids_i32_overflow_with_multiple_loud_peers() {
+        let vol_150_q15 = (1.5f32 * 32768.0) as i32; // 49152
+        // 3 loud peers at i16::MIN: -98304 * 49152 = -4.83e9 (would overflow i32)
+        let acc_min = 3 * i32::from(i16::MIN);
+        assert_eq!(mix_scale_sample(acc_min, vol_150_q15), i16::MIN);
+
+        let acc_max = 3 * i32::from(i16::MAX);
+        assert_eq!(mix_scale_sample(acc_max, vol_150_q15), i16::MAX);
+
+        // Unity gain single sample passes through
+        assert_eq!(mix_scale_sample(1234, 32768), 1234);
+    }
+
+    #[test]
+    fn filter_remote_peers_excludes_self_and_deduplicates() {
+        let addr1: SocketAddr = "192.0.2.1:5000".parse().unwrap();
+        let addr2: SocketAddr = "192.0.2.2:5001".parse().unwrap();
+        let addr3: SocketAddr = "192.0.2.3:5002".parse().unwrap();
+        let peers = vec![
+            VoicePeerEndpoint {
+                player_handle: 0,
+                addr: addr1,
+            },
+            VoicePeerEndpoint {
+                player_handle: 1,
+                addr: addr2,
+            },
+            VoicePeerEndpoint {
+                player_handle: 1,
+                addr: addr3,
+            },
+            VoicePeerEndpoint {
+                player_handle: 2,
+                addr: addr3,
+            },
+        ];
+
+        let filtered = filter_remote_peers(0, &peers);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].player_handle, 1);
+        assert_eq!(filtered[0].addr, addr2);
+        assert_eq!(filtered[1].player_handle, 2);
+        assert_eq!(filtered[1].addr, addr3);
     }
 }

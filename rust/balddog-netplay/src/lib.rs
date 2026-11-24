@@ -97,6 +97,46 @@ pub fn build_p2p_session(
         .map_err(|e| NetplayError::Transport(format!("Error iniciando sesión GGRS: {e}")))
 }
 
+const STUN_MAGIC_COOKIE: [u8; 4] = [0x21, 0x12, 0xA4, 0x42];
+const STUN_MAGIC_COOKIE_U16: u16 = 0x2112;
+
+fn build_stun_binding_request() -> ([u8; 12], [u8; 20]) {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TID_COUNTER: AtomicU64 = AtomicU64::new(1);
+    let seq = TID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0x1234_5678_9ABC_DEF0);
+
+    let mut h1 = RandomState::new().build_hasher();
+    h1.write_u64(seq);
+    h1.write_u128(nanos);
+    let p1 = h1.finish().to_le_bytes();
+
+    let mut h2 = RandomState::new().build_hasher();
+    h2.write_u64(seq.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    h2.write_u128(nanos.rotate_left(17));
+    let p2 = h2.finish().to_le_bytes();
+
+    let mut tid = [0u8; 12];
+    tid[..8].copy_from_slice(&p1);
+    tid[8..12].copy_from_slice(&p2[..4]);
+
+    // RFC 5389 Binding Request (20 bytes)
+    let mut req = [0u8; 20];
+    req[0] = 0x00;
+    req[1] = 0x01; // Binding Request
+    req[2] = 0x00;
+    req[3] = 0x00; // Length = 0
+    req[4..8].copy_from_slice(&STUN_MAGIC_COOKIE);
+    req[8..20].copy_from_slice(&tid);
+    (tid, req)
+}
+
 /// Realiza una petición STUN Binding Request (RFC 5389) para descubrir IP:puerto público.
 pub fn discover_stun_endpoint(local_port: u16) -> Result<String, NetplayError> {
     let socket = UdpSocket::bind(("0.0.0.0", local_port))
@@ -107,30 +147,20 @@ pub fn discover_stun_endpoint(local_port: u16) -> Result<String, NetplayError> {
 
     let stun_servers = ["stun.cloudflare.com:3478", "stun.l.google.com:19302"];
 
-    // RFC 5389 Binding Request (20 bytes)
-    let mut req = [0u8; 20];
-    req[0] = 0x00;
-    req[1] = 0x01; // Binding Request
-    req[2] = 0x00;
-    req[3] = 0x00; // Length = 0
-    // Magic cookie 0x2112A442
-    req[4..8].copy_from_slice(&[0x21, 0x12, 0xA4, 0x42]);
-    // Transaction ID (12 bytes pseudo-aleatorios)
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0x12345678);
-    let tid_bytes = nanos.to_le_bytes();
-    req[8..20].copy_from_slice(&tid_bytes[0..12]);
-
     let mut buf = [0u8; 256];
     for server in stun_servers {
+        let (tid, req) = build_stun_binding_request();
         if socket.send_to(&req, server).is_err() {
             continue;
         }
-        if let Ok((len, _)) = socket.recv_from(&mut buf) {
-            if let Some(addr) = parse_stun_xor_mapped(&buf[..len]) {
-                return Ok(addr.to_string());
+        for _ in 0..4 {
+            match socket.recv_from(&mut buf) {
+                Ok((len, _)) => {
+                    if let Some(addr) = parse_stun_xor_mapped(&buf[..len], &tid) {
+                        return Ok(addr.to_string());
+                    }
+                }
+                Err(_) => break,
             }
         }
     }
@@ -140,34 +170,151 @@ pub fn discover_stun_endpoint(local_port: u16) -> Result<String, NetplayError> {
     ))
 }
 
-fn parse_stun_xor_mapped(pkt: &[u8]) -> Option<SocketAddr> {
+fn parse_stun_xor_mapped(pkt: &[u8], expected_tid: &[u8; 12]) -> Option<SocketAddr> {
     if pkt.len() < 20 || pkt[0] != 0x01 || pkt[1] != 0x01 {
         return None;
     }
+    if pkt[4..8] != STUN_MAGIC_COOKIE || pkt[8..20] != *expected_tid {
+        return None;
+    }
     let msg_len = u16::from_be_bytes([pkt[2], pkt[3]]) as usize;
-    let end = (20 + msg_len).min(pkt.len());
+    let end = 20usize.checked_add(msg_len)?;
+    if end > pkt.len() {
+        return None;
+    }
     let mut pos = 20;
     while pos + 4 <= end {
         let attr_type = u16::from_be_bytes([pkt[pos], pkt[pos + 1]]);
         let attr_len = u16::from_be_bytes([pkt[pos + 2], pkt[pos + 3]]) as usize;
         let val_start = pos + 4;
-        let val_end = val_start + attr_len;
+        let val_end = val_start.checked_add(attr_len)?;
         if val_end > end {
             break;
         }
-        // 0x0020 = XOR-MAPPED-ADDRESS, IPv4 family = 0x01
-        if attr_type == 0x0020 && attr_len >= 8 && pkt[val_start + 1] == 0x01 {
-            let xport = u16::from_be_bytes([pkt[val_start + 2], pkt[val_start + 3]]) ^ 0x2112;
-            let ip = std::net::Ipv4Addr::new(
-                pkt[val_start + 4] ^ 0x21,
-                pkt[val_start + 5] ^ 0x12,
-                pkt[val_start + 6] ^ 0xA4,
-                pkt[val_start + 7] ^ 0x42,
-            );
-            return Some(SocketAddr::new(std::net::IpAddr::V4(ip), xport));
+        // 0x0020 = XOR-MAPPED-ADDRESS
+        if attr_type == 0x0020 && attr_len >= 4 {
+            let family = pkt[val_start + 1];
+            let xport = u16::from_be_bytes([pkt[val_start + 2], pkt[val_start + 3]])
+                ^ STUN_MAGIC_COOKIE_U16;
+            if family == 0x01 && attr_len >= 8 {
+                let ip = std::net::Ipv4Addr::new(
+                    pkt[val_start + 4] ^ STUN_MAGIC_COOKIE[0],
+                    pkt[val_start + 5] ^ STUN_MAGIC_COOKIE[1],
+                    pkt[val_start + 6] ^ STUN_MAGIC_COOKIE[2],
+                    pkt[val_start + 7] ^ STUN_MAGIC_COOKIE[3],
+                );
+                return Some(SocketAddr::new(std::net::IpAddr::V4(ip), xport));
+            }
+            if family == 0x02 && attr_len >= 20 {
+                let mut octets = [0u8; 16];
+                for i in 0..16 {
+                    octets[i] = pkt[val_start + 4 + i] ^ pkt[4 + i];
+                }
+                let ip = std::net::Ipv6Addr::from(octets);
+                return Some(SocketAddr::new(std::net::IpAddr::V6(ip), xport));
+            }
         }
         let padded = (attr_len + 3) & !3;
-        pos = val_start + padded;
+        pos = val_start.checked_add(padded)?;
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    fn make_stun_response(tid: &[u8; 12], attr: &[u8]) -> Vec<u8> {
+        let mut pkt = Vec::with_capacity(20 + attr.len());
+        pkt.extend_from_slice(&[0x01, 0x01]);
+        pkt.extend_from_slice(&(attr.len() as u16).to_be_bytes());
+        pkt.extend_from_slice(&STUN_MAGIC_COOKIE);
+        pkt.extend_from_slice(tid);
+        pkt.extend_from_slice(attr);
+        pkt
+    }
+
+    #[test]
+    fn build_stun_request_has_valid_header_and_distinct_tids() {
+        let (tid1, req1) = build_stun_binding_request();
+        let (tid2, req2) = build_stun_binding_request();
+        assert_eq!(&req1[0..4], &[0x00, 0x01, 0x00, 0x00]);
+        assert_eq!(&req1[4..8], &STUN_MAGIC_COOKIE);
+        assert_eq!(&req1[8..20], &tid1);
+        assert_ne!(tid1, tid2);
+        assert_ne!(req1, req2);
+    }
+
+    #[test]
+    fn parse_stun_parses_ipv4_xor_mapped_address() {
+        let tid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let port: u16 = 54321;
+        let ip = Ipv4Addr::new(203, 0, 113, 42);
+        let xport = (port ^ STUN_MAGIC_COOKIE_U16).to_be_bytes();
+        let oct = ip.octets();
+        let attr = [
+            0x00, 0x20, 0x00, 0x08, // XOR-MAPPED-ADDRESS, len 8
+            0x00, 0x01, xport[0], xport[1], // family IPv4
+            oct[0] ^ STUN_MAGIC_COOKIE[0],
+            oct[1] ^ STUN_MAGIC_COOKIE[1],
+            oct[2] ^ STUN_MAGIC_COOKIE[2],
+            oct[3] ^ STUN_MAGIC_COOKIE[3],
+        ];
+        let pkt = make_stun_response(&tid, &attr);
+        assert_eq!(
+            parse_stun_xor_mapped(&pkt, &tid),
+            Some(SocketAddr::new(IpAddr::V4(ip), port))
+        );
+    }
+
+    #[test]
+    fn parse_stun_parses_ipv6_xor_mapped_address() {
+        let tid = [0xAA, 0xBB, 0xCC, 0xDD, 1, 2, 3, 4, 5, 6, 7, 8];
+        let port: u16 = 40000;
+        let ip = Ipv6Addr::new(0x2001, 0x0db8, 0x85a3, 0, 0, 0x8a2e, 0x0370, 0x7334);
+        let xport = (port ^ STUN_MAGIC_COOKIE_U16).to_be_bytes();
+        let mut key = [0u8; 16];
+        key[..4].copy_from_slice(&STUN_MAGIC_COOKIE);
+        key[4..16].copy_from_slice(&tid);
+        let oct = ip.octets();
+        let mut attr = vec![0x00, 0x20, 0x00, 0x14, 0x00, 0x02, xport[0], xport[1]];
+        for i in 0..16 {
+            attr.push(oct[i] ^ key[i]);
+        }
+        let pkt = make_stun_response(&tid, &attr);
+        assert_eq!(
+            parse_stun_xor_mapped(&pkt, &tid),
+            Some(SocketAddr::new(IpAddr::V6(ip), port))
+        );
+    }
+
+    #[test]
+    fn parse_stun_rejects_bad_cookie_mismatched_tid_and_truncated_len() {
+        let tid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let xport = (12345u16 ^ STUN_MAGIC_COOKIE_U16).to_be_bytes();
+        let attr = [
+            0x00, 0x20, 0x00, 0x08, 0x00, 0x01, xport[0], xport[1],
+            1 ^ STUN_MAGIC_COOKIE[0],
+            2 ^ STUN_MAGIC_COOKIE[1],
+            3 ^ STUN_MAGIC_COOKIE[2],
+            4 ^ STUN_MAGIC_COOKIE[3],
+        ];
+        let valid = make_stun_response(&tid, &attr);
+
+        // Bad magic cookie
+        let mut bad_cookie = valid.clone();
+        bad_cookie[4] ^= 0xFF;
+        assert_eq!(parse_stun_xor_mapped(&bad_cookie, &tid), None);
+
+        // Mismatched TID
+        let wrong_tid = [9u8; 12];
+        assert_eq!(parse_stun_xor_mapped(&valid, &wrong_tid), None);
+
+        // Truncated message length (header claims more bytes than packet length)
+        let mut truncated = valid.clone();
+        truncated[2] = 0x00;
+        truncated[3] = 0x40;
+        assert_eq!(parse_stun_xor_mapped(&truncated, &tid), None);
+    }
 }
