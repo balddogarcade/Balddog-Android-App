@@ -14,7 +14,7 @@ use ggrs::{GgrsEvent, GgrsRequest, InputStatus, SessionState};
 
 use crate::audio::engine::AudioEngine;
 use crate::retro::core::LibretroCore;
-use crate::retro::leaderboard::LeaderboardEngine;
+use crate::retro::leaderboard::{LeaderboardEngine, LeaderboardFrameOutput};
 use crate::retro::replay::{ReplayPlayer, ReplayRecorder};
 use crate::video::renderer::WgpuRenderer;
 use crate::{record_log, CoreError};
@@ -195,6 +195,50 @@ impl SessionControl {
     }
 }
 
+fn initial_ranking_eligible(has_netplay: bool, is_replay_mode: bool, has_leaderboard: bool) -> bool {
+    !has_netplay && !is_replay_mode && has_leaderboard
+}
+
+fn apply_leaderboard_frame(
+    out: LeaderboardFrameOutput,
+    inputs: &[u16; 4],
+    coin_tracker: &mut CoinTracker,
+    stats: &SharedStats,
+) {
+    if !stats.ranking_eligible.load(Ordering::Acquire) {
+        return;
+    }
+    let credits_used = coin_tracker.observe_frame(out.active, inputs);
+    stats.credits_used.store(credits_used, Ordering::Release);
+    if credits_used > 1 {
+        stats.ranking_eligible.store(false, Ordering::Release);
+        record_log(
+            "INFO",
+            &format!(
+                "Continue detectado (credits_used={credits_used}): ranking deshabilitado y puntaje congelado"
+            ),
+        );
+        return;
+    }
+    if coin_tracker.has_player_started() {
+        stats
+            .current_score
+            .store(out.current_score, Ordering::Relaxed);
+        if out.current_score > 0 {
+            stats
+                .best_session_score
+                .fetch_max(out.current_score, Ordering::Relaxed);
+        }
+        if let Some(triggered) = out.triggered_score {
+            if triggered > 0 {
+                stats
+                    .pending_submit_score
+                    .fetch_max(triggered, Ordering::Release);
+            }
+        }
+    }
+}
+
 pub fn clear_deterministic_nvram(save_dir: &Path, rom_path: &Path) {
     let Some(stem) = rom_path.file_stem().and_then(|s| s.to_str()) else {
         return;
@@ -284,9 +328,7 @@ impl EmulationSession {
 
         let running = Arc::new(AtomicBool::new(true));
         let stats = Arc::new(SharedStats::default());
-        stats
-            .ranking_eligible
-            .store(netplay.is_none() && !is_replay_mode, Ordering::Release);
+        stats.ranking_eligible.store(false, Ordering::Release);
         stats.credits_used.store(1, Ordering::Release);
         stats.is_replay.store(is_replay_mode, Ordering::Release);
         stats.replay_speed.store(1, Ordering::Release);
@@ -355,6 +397,14 @@ impl EmulationSession {
                 } else {
                     None
                 };
+                stats_clone.ranking_eligible.store(
+                    initial_ranking_eligible(
+                        netplay.is_some(),
+                        is_replay_mode,
+                        leaderboard.is_some(),
+                    ),
+                    Ordering::Release,
+                );
                 let mut replay_player = initial_replay_player;
                 let mut recorder = if netplay.is_none() && replay_player.is_none() && leaderboard.is_some() {
                     Some(ReplayRecorder::new(0))
@@ -621,30 +671,15 @@ impl EmulationSession {
                         core.set_inputs(inputs);
                         core.run_frame();
                         if let Some(ref mut lb) = leaderboard {
-                            if stats_clone.ranking_eligible.load(Ordering::Relaxed) {
+                            if stats_clone.ranking_eligible.load(Ordering::Acquire) {
                                 if let Some(ram) = core.system_ram() {
                                     let out = lb.evaluate_frame(ram);
-                                    let credits_used = coin_tracker.observe_frame(out.active, &inputs);
-                                    stats_clone
-                                        .credits_used
-                                        .store(credits_used, Ordering::Release);
-                                    if coin_tracker.has_player_started() {
-                                        stats_clone
-                                            .current_score
-                                            .store(out.current_score, Ordering::Relaxed);
-                                        if out.current_score > 0 {
-                                            stats_clone
-                                                .best_session_score
-                                                .fetch_max(out.current_score, Ordering::Relaxed);
-                                        }
-                                        if let Some(triggered) = out.triggered_score {
-                                            if triggered > 0 {
-                                                stats_clone
-                                                    .pending_submit_score
-                                                    .fetch_max(triggered, Ordering::Release);
-                                            }
-                                        }
-                                    }
+                                    apply_leaderboard_frame(
+                                        out,
+                                        &inputs,
+                                        &mut coin_tracker,
+                                        &stats_clone,
+                                    );
                                 }
                             }
                         }
@@ -943,5 +978,123 @@ mod tests {
         });
         ctrl2.detach_surface_sync();
         worker2.join().unwrap();
+    }
+
+    #[test]
+    fn initial_ranking_eligible_requires_solo_live_and_leaderboard() {
+        assert!(super::initial_ranking_eligible(false, false, true));
+        assert!(!super::initial_ranking_eligible(false, false, false));
+        assert!(!super::initial_ranking_eligible(true, false, true));
+        assert!(!super::initial_ranking_eligible(false, true, true));
+        assert!(!super::initial_ranking_eligible(true, true, false));
+    }
+
+    #[test]
+    fn in_game_continue_coin_disqualifies_and_freezes_scores() {
+        use std::sync::atomic::Ordering;
+
+        let stats = super::SharedStats::default();
+        stats.ranking_eligible.store(true, Ordering::Release);
+        stats.credits_used.store(1, Ordering::Release);
+        let mut tracker = CoinTracker::new();
+
+        // Start game with 1 credit and score 12_500
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 12_500,
+                triggered_score: None,
+            },
+            &[RETRO_START_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert!(stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.credits_used.load(Ordering::Acquire), 1);
+        assert_eq!(stats.current_score.load(Ordering::Relaxed), 12_500);
+        assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 12_500);
+
+        // Insert 2nd coin while active -> immediate disqualification & score freeze
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 99_999,
+                triggered_score: Some(99_999),
+            },
+            &[RETRO_COIN_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert!(!stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.credits_used.load(Ordering::Acquire), 2);
+        assert_eq!(stats.current_score.load(Ordering::Relaxed), 12_500);
+        assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 12_500);
+        assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 0);
+
+        // Subsequent frames keep scores frozen
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 150_000,
+                triggered_score: Some(150_000),
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert_eq!(stats.current_score.load(Ordering::Relaxed), 12_500);
+        assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 12_500);
+        assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn preloaded_continue_after_game_over_disqualifies_and_freezes_scores() {
+        use std::sync::atomic::Ordering;
+
+        let stats = super::SharedStats::default();
+        stats.ranking_eligible.store(true, Ordering::Release);
+        stats.credits_used.store(1, Ordering::Release);
+        let mut tracker = CoinTracker::new();
+
+        // Run 1: start and earn 5_000, then Game Over triggers 5_000
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 5_000,
+                triggered_score: None,
+            },
+            &[RETRO_START_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 5_000,
+                triggered_score: Some(5_000),
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert!(stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 5_000);
+
+        // Run 2: continue using preloaded credit (active becomes true again)
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 80_000,
+                triggered_score: Some(80_000),
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert!(!stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.credits_used.load(Ordering::Acquire), 2);
+        assert_eq!(stats.current_score.load(Ordering::Relaxed), 5_000);
+        assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 5_000);
+        assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 5_000);
     }
 }
