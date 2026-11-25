@@ -13,26 +13,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dog.bald.arcade.BuildConfig
+import dog.bald.arcade.data.AppUpdateManager
+import dog.bald.arcade.data.AppUpdateState
 import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
@@ -111,6 +123,15 @@ fun ProfileScreen(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val updateManager = remember(context) { AppUpdateManager(context.applicationContext) }
+    val updateState by updateManager.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        if (updateState is AppUpdateState.Idle) {
+            updateManager.checkForUpdates()
+        }
+    }
     val cacheMb = cacheBytes / (1024.0 * 1024.0)
     val gamesById = remember(games) { games.associateBy { it.id } }
 
@@ -509,6 +530,221 @@ fun ProfileScreen(
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+        }
+
+        item(key = "app_update_section") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CarbonSurface, RectangleShape)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "VERSIÓN Y ACTUALIZACIONES",
+                        color = MutedGray,
+                        fontSize = 11.sp,
+                        fontFamily = JetBrainsMonoFamily,
+                        letterSpacing = 0.5.sp
+                    )
+                    if (updateState is AppUpdateState.Available) {
+                        val info = (updateState as AppUpdateState.Available).info
+                        Box(
+                            modifier = Modifier
+                                .background(ReadyGreen.copy(alpha = 0.2f), RectangleShape)
+                                .border(1.dp, ReadyGreenAccent, RectangleShape)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "NUEVA v${info.versionName}",
+                                color = ReadyGreenAccent,
+                                fontSize = 10.sp,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = SilverGray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "bald.dog ARCADE v${BuildConfig.VERSION_NAME}",
+                                color = PureWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Build ${BuildConfig.VERSION_CODE}",
+                                color = MutedGray,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFamily
+                            )
+                        }
+                    }
+
+                    val isBusy = updateState is AppUpdateState.Checking ||
+                        updateState is AppUpdateState.Downloading ||
+                        updateState is AppUpdateState.Verifying
+
+                    OutlinedButton(
+                        onClick = { scope.launch { updateManager.checkForUpdates() } },
+                        enabled = !isBusy,
+                        shape = RectangleShape,
+                        border = BorderStroke(1.dp, SteelBorder),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = SilverGray,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (updateState is AppUpdateState.Checking) "BUSCANDO..." else "BUSCAR",
+                            color = PureWhite,
+                            fontSize = 10.sp,
+                            fontFamily = JetBrainsMonoFamily
+                        )
+                    }
+                }
+
+                when (val st = updateState) {
+                    is AppUpdateState.UpToDate -> {
+                        Text(
+                            text = "Tienes la última versión instalada.",
+                            color = ReadyGreenAccent,
+                            fontSize = 11.sp,
+                            fontFamily = JetBrainsMonoFamily
+                        )
+                    }
+                    is AppUpdateState.Available -> {
+                        HorizontalDivider(color = CharcoalBorder)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(GraphiteSurface, RectangleShape)
+                                .border(1.dp, CharcoalBorder, RectangleShape)
+                                .padding(10.dp)
+                                .heightIn(max = 160.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "NOVEDADES v${st.info.versionName}",
+                                color = SilverGray,
+                                fontSize = 10.sp,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = st.info.changelog,
+                                color = PureWhite,
+                                fontSize = 11.sp
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { scope.launch { updateManager.downloadAndVerify(st.info) } },
+                            shape = RectangleShape,
+                            border = BorderStroke(1.dp, ReadyGreenAccent),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "ACTUALIZAR A v${st.info.versionName}",
+                                color = ReadyGreenAccent,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    is AppUpdateState.Downloading -> {
+                        val downloadedMb = st.downloadedBytes / (1024.0 * 1024.0)
+                        val totalMb = st.totalBytes / (1024.0 * 1024.0)
+                        val pct = (st.progress * 100).toInt()
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LinearProgressIndicator(
+                                progress = { st.progress },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = ReadyGreenAccent,
+                                trackColor = CharcoalBorder
+                            )
+                            Text(
+                                text = if (st.totalBytes > 0L) {
+                                    "Descargando: $pct% (${"%.1f".format(downloadedMb)} / ${"%.1f".format(totalMb)} MB)"
+                                } else {
+                                    "Descargando: ${"%.1f".format(downloadedMb)} MB"
+                                },
+                                color = SilverGray,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFamily
+                            )
+                        }
+                    }
+                    is AppUpdateState.Verifying -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = ReadyGreenAccent,
+                                trackColor = CharcoalBorder
+                            )
+                            Text(
+                                text = "Verificando integridad SHA-256...",
+                                color = SilverGray,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFamily
+                            )
+                        }
+                    }
+                    is AppUpdateState.ReadyToInstall -> {
+                        OutlinedButton(
+                            onClick = { updateManager.installApk(context, st.file) },
+                            shape = RectangleShape,
+                            border = BorderStroke(1.dp, ReadyGreenAccent),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "INSTALAR ACTUALIZACIÓN",
+                                color = ReadyGreenAccent,
+                                fontSize = 11.sp,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    is AppUpdateState.Error -> {
+                        Text(
+                            text = st.message,
+                            color = DangerRedBorder,
+                            fontSize = 11.sp,
+                            fontFamily = JetBrainsMonoFamily
+                        )
+                    }
+                    else -> Unit
                 }
             }
         }
