@@ -76,7 +76,9 @@ import dog.bald.arcade.ui.components.ProfileReplayRow
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.DangerRed
+import dog.bald.arcade.ui.theme.DangerRedBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
+import dog.bald.arcade.ui.theme.ReadyGreen
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
 import dog.bald.arcade.ui.theme.ObsidianBlack
