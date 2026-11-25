@@ -99,6 +99,7 @@ fun ProfileScreen(
     onUpdateUsername: suspend (String) -> Unit,
     onFlushPendingScores: suspend () -> Unit,
     onOpenLeaderboard: (GameDto) -> Unit,
+    replayLaunchState: ReplayLaunchState? = null,
     onWatchReplay: suspend (MyHighScoreDto, GameDto) -> Unit,
     onOpenDiagnostics: () -> Unit,
     onClearCache: () -> Unit,
@@ -264,17 +265,17 @@ fun ProfileScreen(
                 } else {
                     items(displayedReplays, key = { "rep_${it.gameId}" }) { record ->
                         val game = gamesById[record.gameId]
+                        val itemLaunchState = replayLaunchState?.takeIf { it.replayPath == record.replayPath }
                         ProfileReplayRow(
                             record = record,
                             game = game,
-                            loading = loadingReplayGameId == record.gameId,
+                            loading = itemLaunchState != null,
+                            launchState = itemLaunchState,
                             onWatchReplay = game?.let { g ->
                                 {
-                                    if (loadingReplayGameId == null) {
+                                    if (replayLaunchState == null) {
                                         scope.launch {
-                                            loadingReplayGameId = record.gameId
                                             runCatching { onWatchReplay(record, g) }
-                                            loadingReplayGameId = null
                                         }
                                     }
                                 }

@@ -145,6 +145,12 @@ private sealed interface AppOverlay {
     data object WikiHelp : AppOverlay
 }
 
+data class ReplayLaunchState(
+    val replayPath: String,
+    val stage: String,
+    val progress: Float
+)
+
 @Composable
 fun MainShellScreen(
     repo: ArcadeRepository,
@@ -172,6 +178,7 @@ fun MainShellScreen(
     var rankingSummaries by remember { mutableStateOf<Map<String, GameRankingSummaryDto>>(emptyMap()) }
     var myFollowingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var overlayStack by remember { mutableStateOf<List<AppOverlay>>(emptyList()) }
+    var replayLaunchState by remember { mutableStateOf<ReplayLaunchState?>(null) }
     var postMatchRecordBanner by remember { mutableStateOf<PostMatchRecordBannerData?>(null) }
     var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context, repo.currentUserId())) }
     var showDiagnosticsSheet by remember { mutableStateOf(false) }
@@ -738,15 +745,21 @@ fun MainShellScreen(
                         myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(myMatchHistory)
                     },
                     onOpenLeaderboard = { leaderboardGame = it },
+                    replayLaunchState = replayLaunchState,
                     onWatchReplay = { record, game ->
                         val rPath = record.replayPath
-                        if (!rPath.isNullOrBlank()) {
+                        if (!rPath.isNullOrBlank() && replayLaunchState == null) {
+                            replayLaunchState = ReplayLaunchState(rPath, "Verificando juego...", -1f)
                             runCatching {
-                                romManager.ensureGameReady(game, games, biosList) { _, _ -> }
+                                romManager.ensureGameReady(game, games, biosList) { stage, p ->
+                                    replayLaunchState = ReplayLaunchState(rPath, stage, p)
+                                }
+                                replayLaunchState = ReplayLaunchState(rPath, "Descargando replay...", -1f)
                                 val cacheName = rPath.trimStart('/').replace('/', '_')
                                 val dest = java.io.File(context.cacheDir, "replays/$cacheName")
                                 repo.downloadReplay(rPath, dest)
                             }.onSuccess { replayFile ->
+                                replayLaunchState = null
                                 val entry = LeaderboardEntryDto(
                                     rank = record.rank,
                                     userId = repo.currentUserId().orEmpty(),
@@ -757,6 +770,7 @@ fun MainShellScreen(
                                 )
                                 onLaunchReplay(game, replayFile, entry)
                             }.onFailure { err ->
+                                replayLaunchState = null
                                 android.widget.Toast.makeText(
                                     context,
                                     err.toUserMessage("No se pudo abrir el replay"),
@@ -844,16 +858,23 @@ fun MainShellScreen(
                         onOpenUserProfile = { uid ->
                             overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
                         },
+                        replayLaunchState = replayLaunchState,
                         onWatchReplay = { entry ->
                             val rPath = entry.replayPath ?: return@GameRankingScreen
+                            if (replayLaunchState != null) return@GameRankingScreen
                             val g = topOverlay.game
                             scope.launch {
+                                replayLaunchState = ReplayLaunchState(rPath, "Verificando juego...", -1f)
                                 runCatching {
-                                    romManager.ensureGameReady(g, games, biosList) { _, _ -> }
+                                    romManager.ensureGameReady(g, games, biosList) { stage, p ->
+                                        replayLaunchState = ReplayLaunchState(rPath, stage, p)
+                                    }
+                                    replayLaunchState = ReplayLaunchState(rPath, "Descargando replay...", -1f)
                                     val cacheName = rPath.trimStart('/').replace('/', '_')
                                     val dest = java.io.File(context.cacheDir, "replays/$cacheName")
                                     repo.downloadReplay(rPath, dest)
                                 }.onSuccess { replayFile ->
+                                    replayLaunchState = null
                                     val lbEntry = LeaderboardEntryDto(
                                         rank = entry.rank,
                                         userId = entry.userId,
@@ -865,6 +886,7 @@ fun MainShellScreen(
                                     )
                                     onLaunchReplay(g, replayFile, lbEntry)
                                 }.onFailure { err ->
+                                    replayLaunchState = null
                                     android.widget.Toast.makeText(
                                         context,
                                         err.toUserMessage("No se pudo abrir el replay"),
@@ -890,18 +912,26 @@ fun MainShellScreen(
                 leaderboardGame = null
                 overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
             },
+            replayLaunchState = replayLaunchState,
             onWatchReplay = { entry ->
                 val rPath = entry.replayPath ?: return@GameLeaderboardSheet
+                if (replayLaunchState != null) return@GameLeaderboardSheet
                 scope.launch {
+                    replayLaunchState = ReplayLaunchState(rPath, "Verificando juego...", -1f)
                     runCatching {
-                        romManager.ensureGameReady(game, games, biosList) { _, _ -> }
+                        romManager.ensureGameReady(game, games, biosList) { stage, p ->
+                            replayLaunchState = ReplayLaunchState(rPath, stage, p)
+                        }
+                        replayLaunchState = ReplayLaunchState(rPath, "Descargando replay...", -1f)
                         val cacheName = rPath.trimStart('/').replace('/', '_')
                         val dest = java.io.File(context.cacheDir, "replays/$cacheName")
                         repo.downloadReplay(rPath, dest)
                     }.onSuccess { replayFile ->
+                        replayLaunchState = null
                         leaderboardGame = null
                         onLaunchReplay(game, replayFile, entry)
                     }.onFailure { err ->
+                        replayLaunchState = null
                         android.widget.Toast.makeText(
                             context,
                             err.toUserMessage("No se pudo abrir el replay"),

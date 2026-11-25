@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -71,6 +72,7 @@ import java.util.Locale
 fun GameLeaderboardSheet(
     game: GameDto,
     repo: ArcadeRepository,
+    replayLaunchState: dog.bald.arcade.ui.screens.ReplayLaunchState? = null,
     onWatchReplay: (LeaderboardEntryDto) -> Unit = {},
     onOpenUserProfile: (String) -> Unit = {},
     onDismiss: () -> Unit
@@ -250,6 +252,7 @@ fun GameLeaderboardSheet(
                             .heightIn(max = 360.dp)
                     ) {
                         items(data.entries, key = { it.userId }) { entry ->
+                            val itemLaunchState = replayLaunchState?.takeIf { it.replayPath == entry.replayPath }
                             LeaderboardRow(
                                 entry = entry,
                                 isMe = entry.userId == currentUid,
@@ -257,11 +260,13 @@ fun GameLeaderboardSheet(
                                 onClick = { onOpenUserProfile(entry.userId) },
                                 onWatchReplay = if (!entry.replayPath.isNullOrBlank()) {
                                     {
-                                        loadingReplayUserId = entry.userId
-                                        onWatchReplay(entry)
+                                        if (replayLaunchState == null) {
+                                            onWatchReplay(entry)
+                                        }
                                     }
                                 } else null,
-                                replayLoading = loadingReplayUserId == entry.userId
+                                replayLoading = itemLaunchState != null,
+                                launchState = itemLaunchState
                             )
                         }
                     }
@@ -308,7 +313,8 @@ private fun LeaderboardRow(
     formattedScore: String,
     onClick: () -> Unit = {},
     onWatchReplay: (() -> Unit)? = null,
-    replayLoading: Boolean = false
+    replayLoading: Boolean = false,
+    launchState: dog.bald.arcade.ui.screens.ReplayLaunchState? = null
 ) {
     val bgColor = if (isMe) GraphiteSurface else CarbonSurface
     val borderColor = if (isMe || entry.rank <= 3L) SteelBorder else CharcoalBorder
@@ -319,13 +325,17 @@ private fun LeaderboardRow(
         else -> SilverGray
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(bgColor)
             .border(1.dp, borderColor, RectangleShape)
             .clickable(onClick = onClick)
+    ) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Text(
@@ -434,6 +444,37 @@ private fun LeaderboardRow(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = PureBlack
+                )
+            }
+        }
+    }
+        if (launchState != null) {
+            val pctText = if (launchState.progress >= 0f) " ${(launchState.progress * 100).toInt()}%" else ""
+            Text(
+                text = "${launchState.stage}$pctText",
+                color = SilverGray,
+                fontFamily = JetBrainsMonoFamily,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 6.dp)
+            )
+            if (launchState.progress >= 0f) {
+                LinearProgressIndicator(
+                    progress = { launchState.progress.coerceIn(0f, 1f) },
+                    color = PureWhite,
+                    trackColor = GraphiteSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                )
+            } else {
+                LinearProgressIndicator(
+                    color = PureWhite,
+                    trackColor = GraphiteSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
                 )
             }
         }

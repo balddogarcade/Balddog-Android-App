@@ -35,6 +35,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -873,20 +874,25 @@ fun ProfileReplayRow(
     game: GameDto?,
     loading: Boolean,
     onWatchReplay: (() -> Unit)?,
+    launchState: dog.bald.arcade.ui.screens.ReplayLaunchState? = null,
     modifier: Modifier = Modifier
 ) {
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
     val sizeKb = record.replaySizeBytes?.let { (it / 1024.0) }
 
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .background(CarbonSurface, RectangleShape)
             .border(1.dp, CharcoalBorder, RectangleShape)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
         GameCoverImage(
             slug = game?.slug ?: "",
             contentDescription = game?.title ?: record.gameId,
@@ -962,6 +968,37 @@ fun ProfileReplayRow(
                     fontSize = 10.sp,
                     fontFamily = JetBrainsMonoFamily,
                     fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+        if (launchState != null) {
+            val pctText = if (launchState.progress >= 0f) " ${(launchState.progress * 100).toInt()}%" else ""
+            Text(
+                text = "${launchState.stage}$pctText",
+                color = SilverGray,
+                fontFamily = JetBrainsMonoFamily,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 6.dp)
+            )
+            if (launchState.progress >= 0f) {
+                LinearProgressIndicator(
+                    progress = { launchState.progress.coerceIn(0f, 1f) },
+                    color = PureWhite,
+                    trackColor = GraphiteSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                )
+            } else {
+                LinearProgressIndicator(
+                    color = PureWhite,
+                    trackColor = GraphiteSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
                 )
             }
         }

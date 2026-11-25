@@ -78,6 +78,7 @@ fun GameRankingScreen(
     onBack: () -> Unit,
     onPlayOrDownload: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
+    replayLaunchState: ReplayLaunchState? = null,
     onWatchReplay: (GameLeaderboardV2EntryDto) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -371,12 +372,17 @@ fun GameRankingScreen(
                             3L -> Color(0xFFFFAB91)
                             else -> SilverGray
                         }
-                        Row(
+                        val itemLaunchState = replayLaunchState?.takeIf { it.replayPath == entry.replayPath }
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(if (isMe) GraphiteSurface else CarbonSurface, RectangleShape)
                                 .border(1.dp, if (isMe || entry.rank <= 3L) SteelBorder else CharcoalBorder, RectangleShape)
                                 .clickable { onOpenUserProfile(entry.userId) }
+                        ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
                                 .padding(horizontal = 10.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -431,13 +437,14 @@ fun GameRankingScreen(
                                 fontSize = 13.sp
                             )
                             if (mode == "1cc" && !entry.replayPath.isNullOrBlank()) {
-                                val isReplayLoading = loadingReplayUserId == entry.userId
+                                val isReplayLoading = itemLaunchState != null
                                 IconButton(
                                     onClick = {
-                                        loadingReplayUserId = entry.userId
-                                        onWatchReplay(entry)
+                                        if (replayLaunchState == null) {
+                                            onWatchReplay(entry)
+                                        }
                                     },
-                                    enabled = !isReplayLoading,
+                                    enabled = replayLaunchState == null,
                                     modifier = Modifier.size(32.dp)
                                 ) {
                                     if (isReplayLoading) {
@@ -456,6 +463,37 @@ fun GameRankingScreen(
                                     }
                                 }
                             }
+                        }
+                        if (itemLaunchState != null) {
+                            val pctText = if (itemLaunchState.progress >= 0f) " ${(itemLaunchState.progress * 100).toInt()}%" else ""
+                            Text(
+                                text = "${itemLaunchState.stage}$pctText",
+                                color = SilverGray,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 6.dp)
+                            )
+                            if (itemLaunchState.progress >= 0f) {
+                                LinearProgressIndicator(
+                                    progress = { itemLaunchState.progress.coerceIn(0f, 1f) },
+                                    color = PureWhite,
+                                    trackColor = GraphiteSurface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    color = PureWhite,
+                                    trackColor = GraphiteSurface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                )
+                            }
+                        }
                         }
                     }
 
