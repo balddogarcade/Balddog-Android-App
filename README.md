@@ -193,6 +193,13 @@ Generated artifacts are placed in:
 
 ---
 
+## Releases, Integrity & In-App Updates
+
+Releases are automated via `.github/workflows/release.yml` on `v*.*.*` tags:
+- **Integrity:** Every release publishes `app-release.apk.sha256` alongside SLSA build provenance (`actions/attest-build-provenance`) and an informative VirusTotal API v3 report link.
+- **In-App Updater:** The Android app checks GitHub Releases from **Profile -> Versión y Actualizaciones**, downloads the APK with progress tracking, verifies its `SHA-256` checksum locally before installation, and launches the native Android package installer.
+- **Guides:** See [docs/RELEASES_AND_UPDATES.md](docs/RELEASES_AND_UPDATES.md) and [docs/SECURITY_AND_SIGNING.md](docs/SECURITY_AND_SIGNING.md).
+
 ## License
 
 Check the repository files (Rust workspace licensed under `MIT`).

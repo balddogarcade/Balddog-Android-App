@@ -266,6 +266,20 @@ Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, 
    - Guía técnica completa: [docs/CRASHLYTICS_AND_DIAGNOSTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/CRASHLYTICS_AND_DIAGNOSTICS.md).
    - Runbook operativo (build de símbolos, `logcat` `balddog-panic`, consulta en Firebase): `.agents/skills/crashlytics-diagnostics/SKILL.md`.
 
+---
+
+## Protocolo Obligatorio: Versionamiento, Releases y Firma
+
+1. **Versionamiento SemVer y `CHANGELOG.md`:**
+   - Todo cambio relevante debe registrarse en `CHANGELOG.md` bajo `[Unreleased]` siguiendo *Keep a Changelog*.
+   - Al preparar un release `vX.Y.Z`, mueve los ítems de `[Unreleased]` a `[X.Y.Z] - YYYY-MM-DD` antes de crear el tag.
+2. **Firma de Release:**
+   - `app/build.gradle.kts` prioriza `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD` desde variables de entorno (CI) y hace fallback a `local.properties`.
+   - **NUNCA** hagas commit de archivos `.jks`/`.keystore`, `google-services.json`, `local.properties` ni de `VIRUSTOTAL_API_KEY`.
+3. **Referencia y consulta:**
+   - Guías técnicas: [docs/RELEASES_AND_UPDATES.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/RELEASES_AND_UPDATES.md) y [docs/SECURITY_AND_SIGNING.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/SECURITY_AND_SIGNING.md).
+   - Runbook operativo de releases: `.agents/skills/release-management/SKILL.md`.
+
 
 
 
