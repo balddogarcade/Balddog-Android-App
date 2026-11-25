@@ -148,7 +148,7 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.15.0@aar")
 
     // Supabase (Auth, Postgrest, Realtime) + Ktor OkHttp
-    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.2"))
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.9.0"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.github.jan-tennert.supabase:realtime-kt")
