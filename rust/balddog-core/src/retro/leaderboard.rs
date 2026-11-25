@@ -342,9 +342,48 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_dino_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
+        )
+        .expect("dino lboard válido");
+
+        let mut ram = vec![0u8; 0x10000];
+        // 1. Boot idle y selección de personaje: kStep=0x04, 0xB274=0
+        ram[0x84D1] = 0x04;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Stage 1 comienza: 0xB274=1, kStep=0x0C (12), Score=12,340 -> [0x01, 0x00, 0x40, 0x23]
+        ram[0xB274] = 1;
+        ram[0x84D1] = 0x0C;
+        ram[0xB374] = 0x01;
+        ram[0xB375] = 0x00;
+        ram[0xB376] = 0x40;
+        ram[0xB377] = 0x23;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 12340);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Combate / pérdida de vida intermedia: 0xB274=1 y kStep=0x0C se mantienen estables
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active, "No debe disparar SUB mientras siga en partida");
+        assert_eq!(out.current_score, 12340);
+        assert_eq!(out.triggered_score, None);
+
+        // 4. Game Over / Continue: kStep=0x10 (16)
+        ram[0x84D1] = 0x10;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(12340));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
-            "STA:0xHB345=1::CAN:0=1::SUB:0xHB345=0::VAL:A:b0x B374*10000_M:b0x B376",
+            "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
             "STA:0xH8568=1::CAN:0=1::SUB:0xH8568=0::VAL:A:b0x 85EC*10000_M:b0x 85EE",
             "STA:0xHAC54=1::CAN:0=1::SUB:0xHAC54=0::VAL:A:b0x AC8C*10000_M:b0x AC8E",
             "STA:0xH125A=1::CAN:0=1::SUB:0xH125A=0::VAL:A:b0x 12C2*10000_M:b0x 12C4",

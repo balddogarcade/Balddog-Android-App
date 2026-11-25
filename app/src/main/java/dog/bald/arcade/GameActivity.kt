@@ -1614,8 +1614,8 @@ internal object GameSessionPolicy {
         return when {
             isNetplay || isReplayMode -> null
             scoreDef == null -> "Ranking: Sin configuración para este juego"
-            !rankingEligible -> "Ranking: Desactivado (Save State)"
             creditsUsed > 1 -> "Ranking: Desactivado ($creditsUsed créditos)"
+            !rankingEligible -> "Ranking: Desactivado (Save State)"
             else -> "Ranking: 1 Crédito · Score $currentScore (Máx $bestSessionScore)"
         }
     }

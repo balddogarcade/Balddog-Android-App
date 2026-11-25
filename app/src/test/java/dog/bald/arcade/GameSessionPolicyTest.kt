@@ -242,6 +242,18 @@ class GameSessionPolicyTest {
             )
         )
         assertEquals(
+            "Ranking: Desactivado (2 créditos)",
+            GameSessionPolicy.scoreStatusLabel(
+                isNetplay = false,
+                isReplayMode = false,
+                scoreDef = """{"lboard":{}}""",
+                rankingEligible = false,
+                creditsUsed = 2,
+                currentScore = 5000,
+                bestSessionScore = 8000
+            )
+        )
+        assertEquals(
             "Ranking: Sin configuración para este juego",
             GameSessionPolicy.scoreStatusLabel(
                 isNetplay = false,
