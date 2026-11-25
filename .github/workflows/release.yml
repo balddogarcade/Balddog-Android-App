@@ -67,13 +67,10 @@ jobs:
 
       - name: Build FBNeo libretro core
         if: steps.cache-fbneo.outputs.cache-hit != 'true'
-        run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
-          ls -la "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
-          ./scripts/build-fbneo-android.sh
+        run: bash ./scripts/build-fbneo-android.sh
 
       - name: Build Rust native backend (release + strip)
-        run: ./scripts/build-rust.sh release
+        run: bash ./scripts/build-rust.sh release
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
