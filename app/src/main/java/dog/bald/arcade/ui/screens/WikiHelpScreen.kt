@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,11 +51,17 @@ import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
 
+private data class WikiLink(
+    val label: String,
+    val url: String
+)
+
 private data class WikiSection(
     val id: String,
     val title: String,
     val summary: String,
-    val bullets: List<String>
+    val bullets: List<String>,
+    val links: List<WikiLink> = emptyList()
 )
 
 private val wikiSections = listOf(
@@ -107,6 +115,20 @@ private val wikiSections = listOf(
             "En Perfil → EDITAR PERFIL puedes cambiar tu username, bio, país, generar un avatar pixel-art aleatorio y agregar tus redes sociales (URLs https:// o tag de Discord).",
             "El toggle 'Perfil privado' oculta tus redes, tiempo total e historial reciente en tu perfil público, manteniendo visibles tus récords 1CC y medallas."
         )
+    ),
+    WikiSection(
+        id = "community",
+        title = "6. COMUNIDAD Y REDES OFICIALES",
+        summary = "Canales oficiales de bald.dog ARCADE para soporte, código y novedades.",
+        bullets = listOf(
+            "Únete al Discord oficial para coordinar partidas Netplay, reportar bugs o proponer nuevos juegos.",
+            "Sigue el desarrollo en GitHub y entérate de actualizaciones y torneos en X (Twitter)."
+        ),
+        links = listOf(
+            WikiLink(label = "DISCORD", url = "https://discord.gg/wrN9KRvubj"),
+            WikiLink(label = "GITHUB", url = "https://github.com/balddogarcade/"),
+            WikiLink(label = "X / TWITTER", url = "https://x.com/BaldDogArcade")
+        )
     )
 )
 
@@ -119,6 +141,7 @@ fun WikiHelpScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var expandedId by remember { mutableStateOf<String?>(wikiSections.first().id) }
+    val uriHandler = LocalUriHandler.current
 
     val filtered = remember(searchQuery) {
         val q = searchQuery.trim()
@@ -126,7 +149,8 @@ fun WikiHelpScreen(
         else wikiSections.filter { sec ->
             sec.title.contains(q, ignoreCase = true) ||
                 sec.summary.contains(q, ignoreCase = true) ||
-                sec.bullets.any { it.contains(q, ignoreCase = true) }
+                sec.bullets.any { it.contains(q, ignoreCase = true) } ||
+                sec.links.any { it.label.contains(q, ignoreCase = true) || it.url.contains(q, ignoreCase = true) }
         }
     }
 
@@ -267,6 +291,40 @@ fun WikiHelpScreen(
                                     fontSize = 12.sp,
                                     lineHeight = 17.sp
                                 )
+                            }
+                            section.links.forEach { link ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(CarbonSurface, RectangleShape)
+                                        .border(1.dp, SteelBorder, RectangleShape)
+                                        .clickable { uriHandler.openUri(link.url) }
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = link.label,
+                                            color = PureWhite,
+                                            fontFamily = JetBrainsMonoFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = link.url,
+                                            color = MutedGray,
+                                            fontFamily = JetBrainsMonoFamily,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                        contentDescription = link.label,
+                                        tint = PureWhite,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
