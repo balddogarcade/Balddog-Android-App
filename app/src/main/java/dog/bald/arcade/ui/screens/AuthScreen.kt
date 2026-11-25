@@ -62,11 +62,14 @@ fun AuthScreen(
 ) {
     val scope = rememberCoroutineScope()
     var isRegister by remember { mutableStateOf(false) }
+    var isRecovery by remember { mutableStateOf(false) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var infoMsg by remember { mutableStateOf<String?>(null) }
+    var needsEmailVerification by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -108,7 +111,11 @@ fun AuthScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = if (isRegister) "CREAR CUENTA" else "INSERT COIN · LOGIN",
+                    text = when {
+                        isRecovery -> "RECUPERAR CONTRASEÑA"
+                        isRegister -> "CREAR CUENTA"
+                        else -> "INSERT COIN · LOGIN"
+                    },
                     color = PureWhite,
                     fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
@@ -144,15 +151,25 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("Contraseña") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (!isRecovery) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Contraseña") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        colors = fieldColors,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                if (infoMsg != null) {
+                    Text(
+                        text = infoMsg ?: "",
+                        color = PureWhite,
+                        fontSize = 12.sp
+                    )
+                }
 
                 if (errorMsg != null) {
                     Text(
@@ -174,21 +191,32 @@ fun AuthScreen(
                 }
 
                 Button(
-                    enabled = !loading && email.isNotBlank() && password.length >= 6 && usernameValid,
+                    enabled = !loading && email.isNotBlank() && (isRecovery || (password.length >= 6 && usernameValid)),
                     shape = RectangleShape,
                     onClick = {
                         scope.launch {
                             loading = true
                             errorMsg = null
+                            infoMsg = null
                             try {
-                                if (isRegister) {
+                                if (isRecovery) {
+                                    repo.resetPasswordForEmail(email)
+                                    infoMsg = "Te enviamos un enlace a tu correo para restablecer la contraseña."
+                                } else if (isRegister) {
                                     repo.signUpWithEmail(email, password, trimmedUsername)
+                                    onAuthenticated()
                                 } else {
                                     repo.signInWithEmail(email, password)
+                                    onAuthenticated()
                                 }
-                                onAuthenticated()
                             } catch (t: Throwable) {
-                                errorMsg = t.toUserMessage("Error de autenticación")
+                                val msg = t.toUserMessage("Error de autenticación")
+                                if (isRegister && msg.contains("verifica tu correo", ignoreCase = true)) {
+                                    needsEmailVerification = true
+                                    infoMsg = msg
+                                } else {
+                                    errorMsg = msg
+                                }
                             } finally {
                                 loading = false
                             }
@@ -204,22 +232,101 @@ fun AuthScreen(
                         CircularProgressIndicator(color = PureBlack, strokeWidth = 2.dp)
                     } else {
                         Text(
-                            if (isRegister) "REGISTRARME" else "ENTRAR",
+                            when {
+                                isRecovery -> "ENVIAR ENLACE"
+                                isRegister -> "REGISTRARME"
+                                else -> "ENTRAR"
+                            },
                             fontFamily = SpaceGroteskFamily,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
+                if (needsEmailVerification) {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                loading = true
+                                errorMsg = null
+                                try {
+                                    repo.resendVerificationEmail(email)
+                                    infoMsg = "Correo de verificación reenviado."
+                                } catch (t: Throwable) {
+                                    errorMsg = t.toUserMessage("No se pudo reenviar el correo")
+                                } finally {
+                                    loading = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("Reenviar correo de verificación", color = PureWhite, fontSize = 12.sp)
+                    }
+                }
+
+                if (!isRecovery) {
+                    OutlinedButton(
+                        enabled = !loading,
+                        shape = RectangleShape,
+                        border = BorderStroke(1.dp, SteelBorder),
+                        onClick = {
+                            scope.launch {
+                                loading = true
+                                errorMsg = null
+                                infoMsg = null
+                                try {
+                                    repo.signInWithGoogle()
+                                    onAuthenticated()
+                                } catch (t: Throwable) {
+                                    errorMsg = t.toUserMessage("Error al iniciar con Google")
+                                } finally {
+                                    loading = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "CONTINUAR CON GOOGLE",
+                            color = PureWhite,
+                            fontFamily = SpaceGroteskFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                if (!isRegister && !isRecovery) {
+                    TextButton(
+                        onClick = {
+                            isRecovery = true
+                            errorMsg = null
+                            infoMsg = null
+                        },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("¿Olvidaste tu contraseña?", color = MutedGray, fontSize = 12.sp)
+                    }
+                }
+
                 TextButton(
                     onClick = {
-                        isRegister = !isRegister
+                        if (isRecovery) {
+                            isRecovery = false
+                        } else {
+                            isRegister = !isRegister
+                        }
                         errorMsg = null
+                        infoMsg = null
                     },
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 ) {
                     Text(
-                        text = if (isRegister) "¿Ya tienes cuenta? Inicia sesión" else "¿Nuevo aquí? Crea una cuenta",
+                        text = when {
+                            isRecovery -> "Volver al login"
+                            isRegister -> "¿Ya tienes cuenta? Inicia sesión"
+                            else -> "¿Nuevo aquí? Crea una cuenta"
+                        },
                         color = MutedGray,
                         fontSize = 12.sp
                     )

@@ -1,5 +1,7 @@
 package dog.bald.arcade.data
 
+import io.github.jan.supabase.auth.handleDeeplinks
+
 import android.content.Context
 import dog.bald.arcade.BuildConfig
 import io.github.jan.supabase.auth.auth
@@ -41,6 +43,34 @@ class ArcadeRepository(context: Context) {
             this.email = email.trim()
             this.password = password
         }
+    }
+
+    suspend fun signInWithGoogle() {
+        client.auth.signInWith(io.github.jan.supabase.auth.providers.Google)
+    }
+
+    suspend fun resetPasswordForEmail(email: String) {
+        client.auth.resetPasswordForEmail(
+            email = email.trim(),
+            redirectUrl = "dog.bald.arcade://reset-password"
+        )
+    }
+
+    suspend fun updatePassword(newPassword: String) {
+        client.auth.updateUser {
+            password = newPassword
+        }
+    }
+
+    suspend fun resendVerificationEmail(email: String) {
+        client.auth.resendEmail(
+            type = io.github.jan.supabase.auth.OtpType.Email.SIGNUP,
+            email = email.trim()
+        )
+    }
+
+    fun handleAuthDeeplink(intent: android.content.Intent) {
+        client.handleDeeplinks(intent)
     }
 
     suspend fun signUpWithEmail(email: String, password: String, username: String) {

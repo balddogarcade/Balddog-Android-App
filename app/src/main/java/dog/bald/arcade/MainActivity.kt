@@ -44,6 +44,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        ArcadeRepository(applicationContext).handleAuthDeeplink(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -52,6 +58,8 @@ class MainActivity : ComponentActivity() {
         )
 
         val repo = ArcadeRepository(applicationContext)
+        repo.handleAuthDeeplink(intent)
+        val isResetPasswordLink = intent?.data?.host == "reset-password"
         val romManager = IpfsRomManager(applicationContext)
         val lanNsd = LanNsdManager(applicationContext)
         val nativeLibDir = applicationInfo.nativeLibraryDir

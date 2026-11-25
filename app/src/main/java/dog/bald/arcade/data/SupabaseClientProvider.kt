@@ -70,6 +70,8 @@ object SupabaseClientProvider {
                 supabaseKey = BuildConfig.SUPABASE_ANON_KEY
             ) {
                 install(Auth) {
+                    scheme = "dog.bald.arcade"
+                    host = "login-callback"
                     sessionManager = EncryptedSessionManager(context.applicationContext)
                 }
                 install(Postgrest)
