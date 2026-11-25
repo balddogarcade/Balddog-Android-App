@@ -20,6 +20,22 @@ fun propOrEnv(key: String): String {
     return (localProps.getProperty(key) ?: System.getenv(key) ?: "").trim()
 }
 
+fun envOrProp(envKey: String, propKey: String = envKey): String {
+    return (System.getenv(envKey) ?: localProps.getProperty(propKey) ?: "").trim()
+}
+
+fun resolveVersionName(): String {
+    val gradleProp = (project.findProperty("versionName") as? String)?.trim()
+    val envVal = System.getenv("VERSION_NAME")?.trim()
+    return listOfNotNull(gradleProp, envVal).firstOrNull { it.isNotBlank() } ?: "0.1.0"
+}
+
+fun resolveVersionCode(): Int {
+    val gradleProp = (project.findProperty("versionCode") as? String)?.trim()?.toIntOrNull()
+    val envVal = System.getenv("VERSION_CODE")?.trim()?.toIntOrNull()
+    return gradleProp ?: envVal ?: 1
+}
+
 android {
     namespace = "dog.bald.arcade"
     compileSdk = 36
@@ -28,8 +44,8 @@ android {
         applicationId = "dog.bald.arcade"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = resolveVersionCode()
+        versionName = resolveVersionName()
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -44,14 +60,22 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
+    val releaseKeystorePath = envOrProp("ANDROID_KEYSTORE_PATH")
+        .ifBlank { envOrProp("BALDDOG_KEYSTORE_PATH") }
+
     signingConfigs {
         create("release") {
-            val keystorePath = propOrEnv("BALDDOG_KEYSTORE_PATH")
-            if (keystorePath.isNotBlank()) {
-                storeFile = file(keystorePath)
-                storePassword = propOrEnv("BALDDOG_KEYSTORE_PASSWORD")
-                keyAlias = propOrEnv("BALDDOG_KEY_ALIAS")
-                keyPassword = propOrEnv("BALDDOG_KEY_PASSWORD")
+            if (releaseKeystorePath.isNotBlank()) {
+                storeFile = file(releaseKeystorePath)
+                storePassword = envOrProp("ANDROID_KEYSTORE_PASSWORD")
+                    .ifBlank { envOrProp("BALDDOG_KEYSTORE_PASSWORD") }
+                keyAlias = envOrProp("ANDROID_KEYSTORE_ALIAS")
+                    .ifBlank { envOrProp("BALDDOG_KEY_ALIAS") }
+                keyPassword = envOrProp("ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_PASSWORD")
+                    .let {
+                        envOrProp("ANDROID_KEY_PASSWORD")
+                            .ifBlank { envOrProp("BALDDOG_KEY_PASSWORD") }
+                    }
             }
         }
     }
@@ -68,11 +92,10 @@ android {
                 nativeSymbolUploadEnabled = true
                 unstrippedNativeLibsDir = file("${rootProject.projectDir}/.cache/unstripped-jniLibs")
             }
-            val keystorePath = propOrEnv("BALDDOG_KEYSTORE_PATH")
-            signingConfig = if (keystorePath.isNotBlank()) {
+            signingConfig = if (releaseKeystorePath.isNotBlank()) {
                 signingConfigs.getByName("release")
             } else {
-                logger.warn("WARNING: BALDDOG_KEYSTORE_PATH not configured; falling back to debug signing for release build")
+                logger.warn("WARNING: ANDROID_KEYSTORE_PATH not configured; falling back to debug signing for release build")
                 signingConfigs.getByName("debug")
             }
         }

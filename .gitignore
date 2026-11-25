@@ -21,6 +21,7 @@ captures/
 *.apk
 *.aab
 *.ap_
+*.sha256
 
 # Python artifacts
 __pycache__/
