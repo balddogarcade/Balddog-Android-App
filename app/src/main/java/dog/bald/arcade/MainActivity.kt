@@ -132,6 +132,9 @@ class MainActivity : ComponentActivity() {
                             onLaunchNetplayMatch = { game, room, mySlot, localPort, voiceLocalPort ->
                                 val romFile = File(romsDir, game.romFilename)
                                 // Mapear slots ocupados en orden ascendente a handles contiguos (0..N-1) para GGRS y Libretro
+                                val mySlotEndpoint = room.slotsJson[mySlot.toString()]?.endpoint
+                                val myPublicIp = mySlotEndpoint?.substringBefore('|')?.substringBefore(':')
+
                                 val seatedEntries = room.slotsJson.entries
                                     .mapNotNull { entry -> entry.key.toIntOrNull()?.let { slotIdx -> slotIdx to entry.value } }
                                     .sortedBy { it.first }
@@ -143,7 +146,11 @@ class MainActivity : ComponentActivity() {
                                 seatedEntries.forEachIndexed { handle, (_, slotInfo) ->
                                     if (handle != myPlayerIndex) {
                                         peerHandles.add(handle)
-                                        peerAddrs.add(slotInfo.endpoint)
+                                        val effectiveEp = dog.bald.arcade.net.NetplayEndpointResolver.resolveEffectiveEndpoint(
+                                            slotInfo.endpoint,
+                                            myPublicIp
+                                        )
+                                        peerAddrs.add(effectiveEp)
                                     }
                                 }
 
@@ -152,9 +159,18 @@ class MainActivity : ComponentActivity() {
                                 seatedEntries.forEachIndexed { handle, (_, slotInfo) ->
                                     if (handle != myPlayerIndex && !slotInfo.voiceEndpoint.isNullOrBlank()) {
                                         voicePeerHandles.add(handle)
-                                        voicePeerAddrs.add(slotInfo.voiceEndpoint!!)
+                                        val effectiveVoiceEp = dog.bald.arcade.net.NetplayEndpointResolver.resolveEffectiveEndpoint(
+                                            slotInfo.voiceEndpoint!!,
+                                            myPublicIp
+                                        )
+                                        voicePeerAddrs.add(effectiveVoiceEp)
                                     }
                                 }
+
+                                android.util.Log.i(
+                                    "BaldDogNetplay",
+                                    "onLaunchNetplayMatch: room=${room.id}, mode=${room.mode}, mySlot=$mySlot, myPlayerIndex=$myPlayerIndex, totalPlayers=$totalPlayers, peerHandles=$peerHandles, peerAddrs=$peerAddrs, localPort=$localPort"
+                                )
 
                                 val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
                                     putExtra(GameActivity.EXTRA_GAME_ID, game.id)

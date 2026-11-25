@@ -200,12 +200,17 @@ fun MainShellScreen(
         return if (mode == "lan") {
             "${localIp ?: "127.0.0.1"}:$port"
         } else {
-            withContext(Dispatchers.IO) {
+            val publicEp = withContext(Dispatchers.IO) {
                 runCatching { discoverPublicUdpEndpoint(port.toUShort()) }
                     .onFailure { t ->
                         logFromAndroid("WARN", "STUN no respondió en puerto $port: ${t.message}. Usando fallback local.")
                     }
-                    .getOrElse { "${localIp ?: "127.0.0.1"}:$port" }
+                    .getOrNull()
+            }
+            if (publicEp != null) {
+                dog.bald.arcade.net.NetplayEndpointResolver.formatCandidateEndpoint(publicEp, localIp, port)
+            } else {
+                "${localIp ?: "127.0.0.1"}:$port"
             }
         }
     }

@@ -446,8 +446,18 @@ impl EmulationSession {
 
                 let mut ggrs_session = match netplay.as_ref() {
                     Some(cfg) => match build_p2p_session(cfg) {
-                        Ok(s) => Some((s, cfg.local_player_handle)),
+                        Ok(s) => {
+                            record_log(
+                                "INFO",
+                                &format!(
+                                    "GGRS sesión iniciada: local_port={}, local_handle={}, num_players={}, peers={:?}",
+                                    cfg.local_port, cfg.local_player_handle, cfg.num_players, cfg.peers
+                                ),
+                            );
+                            Some((s, cfg.local_player_handle))
+                        }
                         Err(e) => {
+                            record_log("ERROR", &format!("GGRS build_p2p_session falló: {e}"));
                             let _ = init_tx.send(Err(CoreError::Init(e.to_string())));
                             return;
                         }
@@ -517,6 +527,8 @@ impl EmulationSession {
                 let mut fps_window_start = Instant::now();
                 let mut frames_in_window: u32 = 0;
                 let mut disconnect_started: Option<(Instant, Duration)> = None;
+                let mut last_sync_log = Instant::now();
+                let mut first_frame_rendered = false;
 
                 while running_clone.load(Ordering::Relaxed) {
                     while let Ok(cmd) = cmd_rx.try_recv() {
@@ -733,19 +745,36 @@ impl EmulationSession {
 
                         for ev in p2p.events() {
                             match ev {
+                                GgrsEvent::Synchronizing { addr, total, count } => {
+                                    record_log(
+                                        "INFO",
+                                        &format!("GGRS Synchronizing {addr}: {count}/{total}"),
+                                    );
+                                }
+                                GgrsEvent::Synchronized { addr } => {
+                                    record_log(
+                                        "INFO",
+                                        &format!("GGRS Synchronized con par {addr}! Partida iniciando simulación"),
+                                    );
+                                    disconnect_started = None;
+                                    stats_clone.reconnecting.store(false, Ordering::Release);
+                                    stats_clone.reconnect_secs_left.store(0, Ordering::Release);
+                                }
                                 GgrsEvent::NetworkInterrupted { disconnect_timeout, .. } => {
+                                    record_log("WARN", "GGRS NetworkInterrupted: conexión P2P interrumpida");
                                     let ms = disconnect_timeout.min(u64::MAX as u128) as u64;
                                     disconnect_started
                                         .get_or_insert_with(|| (Instant::now(), Duration::from_millis(ms)));
                                     stats_clone.reconnecting.store(true, Ordering::Release);
                                 }
-                                GgrsEvent::NetworkResumed { .. } | GgrsEvent::Synchronized { .. } => {
+                                GgrsEvent::NetworkResumed { .. } => {
+                                    record_log("INFO", "GGRS NetworkResumed: conexión P2P reanudada");
                                     disconnect_started = None;
                                     stats_clone.reconnecting.store(false, Ordering::Release);
                                     stats_clone.reconnect_secs_left.store(0, Ordering::Release);
                                 }
                                 GgrsEvent::Disconnected { .. } => {
-                                    record_log("WARN", "Par remoto desconectado definitivamente");
+                                    record_log("WARN", "GGRS Disconnected: Par remoto desconectado definitivamente");
                                     stats_clone.reconnecting.store(false, Ordering::Release);
                                     stats_clone.session_ended.store(true, Ordering::Release);
                                     running_clone.store(false, Ordering::Release);
@@ -757,6 +786,19 @@ impl EmulationSession {
                         if let Some((started, budget)) = disconnect_started {
                             let left = compute_reconnect_secs_left(budget, started.elapsed());
                             stats_clone.reconnect_secs_left.store(left, Ordering::Relaxed);
+                        }
+
+                        if p2p.current_state() == SessionState::Synchronizing {
+                            if last_sync_log.elapsed() >= Duration::from_secs(2) {
+                                record_log(
+                                    "INFO",
+                                    &format!(
+                                        "GGRS esperando sincronización P2P... local_handle={local_handle}, estado={:?}",
+                                        p2p.current_state()
+                                    ),
+                                );
+                                last_sync_log = Instant::now();
+                            }
                         }
 
                         if p2p.current_state() == SessionState::Running {
@@ -892,6 +934,10 @@ impl EmulationSession {
 
                     let rot = core.rotation();
                     core.take_video_frame(|w, h, rgba| {
+                        if !first_frame_rendered {
+                            first_frame_rendered = true;
+                            record_log("INFO", &format!("Primer frame de emulación renderizado: {w}x{h}"));
+                        }
                         last_frame_rgba.update(w, h, rot, rgba);
                         renderer.render_frame(w, h, rgba, rot);
                     });

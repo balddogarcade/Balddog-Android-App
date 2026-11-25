@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -334,6 +335,10 @@ class GameActivity : ComponentActivity() {
                 val peerAddrs = intent.getStringArrayListExtra(EXTRA_PEER_ADDRS) ?: arrayListOf()
                 netplayPeerAddrs = peerAddrs
                 val inputDelay = intent.getIntExtra(EXTRA_INPUT_DELAY, 2)
+                logFromAndroid(
+                    "INFO",
+                    "startNetplayGame: localPort=$localPort, localHandle=$localHandle, numPlayers=$numPlayers, peerHandles=${peerHandles.toList()}, peerAddrs=$peerAddrs"
+                )
                 startNetplayGame(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
                     romPath = romPath,
@@ -390,12 +395,31 @@ class GameActivity : ComponentActivity() {
         setContent {
             BaldDogArcadeTheme {
                 var netplaySynchronized by remember { mutableStateOf(false) }
+                var syncSecondsElapsed by remember { mutableIntStateOf(0) }
+                var syncTimedOut by remember { mutableStateOf(false) }
+
+                LaunchedEffect(isNetplay, netplaySynchronized) {
+                    if (isNetplay && !netplaySynchronized) {
+                        while (!netplaySynchronized && !syncTimedOut) {
+                            delay(1000)
+                            syncSecondsElapsed++
+                            if (syncSecondsElapsed >= 25) {
+                                syncTimedOut = true
+                                logFromAndroid("WARN", "Netplay timeout de 25s alcanzado sin sincronización P2P")
+                            }
+                        }
+                    }
+                }
+
                 LaunchedEffect(showMenu) {
                     while (true) {
                         currentFps = getCurrentFps()
                         if (isNetplay) {
                             netplayHud = getNetplayHudStats()
-                            if (netplayHud.pingMs > 0u || currentFps > 5.0) {
+                            if (netplayHud.pingMs > 0u) {
+                                if (!netplaySynchronized) {
+                                    logFromAndroid("INFO", "Netplay sincronizado exitosamente! Ping=${netplayHud.pingMs}ms")
+                                }
                                 netplaySynchronized = true
                             }
                             if (netplayHud.sessionEnded && netplayEndReason == null) {
@@ -836,35 +860,65 @@ class GameActivity : ComponentActivity() {
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
                                 modifier = Modifier.padding(24.dp)
                             ) {
-                                CircularProgressIndicator(
-                                    color = PureWhite,
-                                    strokeWidth = 3.dp,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Text(
-                                    text = "CONECTANDO Y SINCRONIZANDO SALA...",
-                                    color = PureWhite,
-                                    fontFamily = SpaceGroteskFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                                val targetDetail = if (netplayPeerAddrs.isNotEmpty()) {
-                                    "Conectando a: ${netplayPeerAddrs.joinToString(", ")}"
+                                if (syncTimedOut) {
+                                    Text(
+                                        text = "TIEMPO DE ESPERA AGOTADO",
+                                        color = PureWhite,
+                                        fontFamily = SpaceGroteskFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "No se pudo establecer la conexión P2P con el otro jugador tras 25 segundos.\nVerifica que ambos dispositivos estén conectados a internet y reintenta.",
+                                        color = SilverGray,
+                                        fontSize = 12.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            stopGame()
+                                            finish()
+                                        },
+                                        shape = RectangleShape,
+                                        border = BorderStroke(1.dp, SteelBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                                    ) {
+                                        Text("VOLVER A LA SALA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 } else {
-                                    "Estableciendo conexión P2P entre jugadores..."
-                                }
-                                Text(
-                                    text = targetDetail,
-                                    color = SilverGray,
-                                    fontSize = 11.sp
-                                )
-                                OutlinedButton(
-                                    onClick = { finish() },
-                                    shape = RectangleShape,
-                                    border = BorderStroke(1.dp, SteelBorder),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
-                                ) {
-                                    Text("CANCELAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    CircularProgressIndicator(
+                                        color = PureWhite,
+                                        strokeWidth = 3.dp,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Text(
+                                        text = "CONECTANDO Y SINCRONIZANDO SALA (${syncSecondsElapsed}s)...",
+                                        color = PureWhite,
+                                        fontFamily = SpaceGroteskFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    val targetDetail = if (netplayPeerAddrs.isNotEmpty()) {
+                                        "Conectando a: ${netplayPeerAddrs.joinToString(", ")}"
+                                    } else {
+                                        "Estableciendo conexión P2P entre jugadores..."
+                                    }
+                                    Text(
+                                        text = targetDetail,
+                                        color = SilverGray,
+                                        fontSize = 11.sp
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            stopGame()
+                                            finish()
+                                        },
+                                        shape = RectangleShape,
+                                        border = BorderStroke(1.dp, SteelBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                                    ) {
+                                        Text("CANCELAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }

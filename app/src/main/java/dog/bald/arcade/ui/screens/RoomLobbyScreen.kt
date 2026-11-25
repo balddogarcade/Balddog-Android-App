@@ -177,8 +177,15 @@ fun RoomLobbyScreen(
 
     val discoveredEndpoint by latencyMonitor.publicEndpoint.collectAsState()
     LaunchedEffect(discoveredEndpoint, mySlot) {
-        val ep = discoveredEndpoint ?: return@LaunchedEffect
+        val rawEp = discoveredEndpoint ?: return@LaunchedEffect
         val slot = mySlot ?: return@LaunchedEffect
+        val localIp = lanNsd.getLocalIpv4Address()
+        val ep = dog.bald.arcade.net.NetplayEndpointResolver.formatCandidateEndpoint(rawEp, localIp, myUdpPort)
+        val voicePort = myVoiceEndpoint.substringBefore('|').substringAfterLast(':').toIntOrNull() ?: (myUdpPort + 1000)
+        val voiceEp = if (myVoiceEndpoint.isNotBlank()) {
+            val rawVoice = myVoiceEndpoint.substringBefore('|').trim()
+            dog.bald.arcade.net.NetplayEndpointResolver.formatCandidateEndpoint(rawVoice, localIp, voicePort)
+        } else null
         val currentSlotEp = room.slotsJson[slot.toString()]?.endpoint
         if (room.mode != "lan" && ep.isNotBlank() && currentSlotEp != ep) {
             val isCurrentPrivate = currentSlotEp == null || isPrivateIp(currentSlotEp)
@@ -189,7 +196,7 @@ fun RoomLobbyScreen(
                         action = "claim",
                         slotIndex = slot,
                         endpoint = ep,
-                        voiceEndpoint = myVoiceEndpoint.ifBlank { null }
+                        voiceEndpoint = voiceEp
                     )
                     room = updated
                 }
@@ -1267,13 +1274,5 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 private fun isPrivateIp(endpoint: String): Boolean {
-    val host = endpoint.substringBefore(':').trim().removeSurrounding("[", "]")
-    if (host == "127.0.0.1" || host == "localhost" || host == "::1") return true
-    if (host.startsWith("192.168.")) return true
-    if (host.startsWith("10.")) return true
-    if (host.startsWith("172.")) {
-        val second = host.substringAfter('.').substringBefore('.').toIntOrNull()
-        if (second != null && second in 16..31) return true
-    }
-    return false
+    return dog.bald.arcade.net.NetplayEndpointResolver.isPrivateEndpoint(endpoint)
 }

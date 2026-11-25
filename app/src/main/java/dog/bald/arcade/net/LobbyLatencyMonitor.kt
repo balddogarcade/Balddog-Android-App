@@ -145,9 +145,11 @@ class LobbyLatencyMonitor(
                             }
                         }
                     }
+                    val myPubIp = _publicEndpoint.value?.substringBefore('|')?.substringBefore(':')
                     for (peer in peers) {
                         if (peer.userId == myUserId) continue
-                        val addr = parseEndpoint(peer.endpoint) ?: continue
+                        val effectiveEp = NetplayEndpointResolver.resolveEffectiveEndpoint(peer.endpoint, myPubIp)
+                        val addr = parseEndpoint(effectiveEp) ?: continue
                         val payload = "BDPING|$myUserId|${peer.userId}|$now".toByteArray(Charsets.UTF_8)
                         runCatching {
                             sock.send(DatagramPacket(payload, payload.size, addr))
