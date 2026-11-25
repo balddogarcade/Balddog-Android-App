@@ -14,7 +14,8 @@
 -keep class dog.bald.arcade.engine.NativeSurfaceBridge { *; }
 
 # Kotlinx Serialization DTOs
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
+-keep class dog.bald.arcade.** { *; }
 -keepclassmembers class * {
     @kotlinx.serialization.Serializable <fields>;
     @kotlinx.serialization.SerialName <fields>;

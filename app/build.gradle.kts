@@ -5,6 +5,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 val localProps = Properties().apply {
@@ -62,6 +64,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                nativeSymbolUploadEnabled = true
+                unstrippedNativeLibsDir = file("${rootProject.projectDir}/.cache/unstripped-jniLibs")
+            }
             val keystorePath = propOrEnv("BALDDOG_KEYSTORE_PATH")
             signingConfig = if (keystorePath.isNotBlank()) {
                 signingConfigs.getByName("release")
@@ -127,6 +133,12 @@ dependencies {
 
     // Almacenamiento cifrado de tokens (Android Keystore)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Firebase Crashlytics + NDK + Analytics
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-crashlytics-ndk")
+    implementation("com.google.firebase:firebase-analytics")
 
     testImplementation("junit:junit:4.13.2")
 }
