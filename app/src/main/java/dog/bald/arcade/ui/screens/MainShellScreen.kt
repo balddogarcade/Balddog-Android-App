@@ -28,6 +28,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
@@ -171,6 +173,20 @@ fun MainShellScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(MainTab.CATALOG.ordinal) }
+    val pagerState = rememberPagerState(
+        initialPage = MainTab.CATALOG.ordinal,
+        pageCount = { MainTab.entries.size }
+    )
+    LaunchedEffect(pagerState.currentPage) {
+        if (selectedTab != pagerState.currentPage) {
+            selectedTab = pagerState.currentPage
+        }
+    }
+    LaunchedEffect(selectedTab) {
+        if (pagerState.currentPage != selectedTab) {
+            pagerState.animateScrollToPage(selectedTab)
+        }
+    }
     var isInitialLoading by remember { mutableStateOf(true) }
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
@@ -610,7 +626,11 @@ fun MainShellScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            when (MainTab.entries[selectedTab]) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+            when (MainTab.entries[page]) {
                 MainTab.CATALOG -> CatalogTab(
                     games = games,
                     downloadedFiles = downloadedFiles,
@@ -797,6 +817,7 @@ fun MainShellScreen(
                         performSignOut()
                     }
                 )
+            }
             }
         }
         }
