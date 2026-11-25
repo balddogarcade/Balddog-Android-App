@@ -15,6 +15,9 @@ Esta guía documenta en profundidad y paso a paso el procedimiento técnico esta
    - [Mapeo de memoria y Word-Swapping en FBNeo](#mapeo-de-memoria-y-word-swapping-en-fbneo)
    - [Detección de `P1_ACTIVE`, `CREDITS` y `SCORE`](#detección-de-p1_active-credits-y-score)
    - [Sintaxis de Expresiones `rcheevos`](#sintaxis-de-expresiones-rcheevos)
+   - [Prevención de Falsos Positivos de Continue (CoinTracker)](#64-prevención-de-falsos-positivos-de-continue-cointracker-y-validación-de-ciclo-de-vida-completo)
+   - [Caso de Estudio: Cadillacs and Dinosaurs](#65-caso-de-estudio-cadillacs-and-dinosaurs-dino)
+   - [Script de Diagnóstico para Auditar ROMs](#66-script-de-diagnóstico-para-auditar-el-ciclo-de-vida-de-cualquier-rom)
 7. [Paso 5: Pruebas Unitarias del Motor Rust (`balddog-core`)](#paso-5-pruebas-unitarias-del-motor-rust-balddog-core)
 8. [Paso 6: Compilación y Verificación en la App Android](#paso-6-compilación-y-verificación-en-la-app-android)
 9. [Matriz de Solución de Problemas Comunes](#9-matriz-de-solución-de-problemas-comunes)
@@ -262,7 +265,71 @@ El estándar RetroAchievements (`rcheevos`) adoptado por bald.dog utiliza cadena
   - **Byte simple BCD**:
     `VAL:b0xH<OFFSET>`
 
-### 6.4 Ejemplo Real: Sunset Riders (`ssriders`)
+### 6.4 Prevención de Falsos Positivos de Continue (CoinTracker) y Validación de Ciclo de Vida Completo
+
+> [!CAUTION]
+> **Peligro del escaneo estático de un solo frame (`0 -> 0 -> 1`):**
+> Al iniciar partida, docenas de bytes en RAM transicionan a `1` (temporizadores de sprites, animaciones iniciales, punteros de interfaz, selección de personajes). Si configuras `STA` o `SUB` con un byte que no sea la bandera maestra del ciclo de vida, **el ranking 1CC se descalificará falsamente**.
+
+#### ¿Cómo opera el detector 1CC (`CoinTracker`)?
+En `rust/balddog-core/src/session.rs`, el monitor `CoinTracker` vigila las transiciones de la bandera `active` reportada por `rcheevos`:
+- Cuando el jugador pulsa START por primera vez, `CoinTracker` inicializa `runs_started = 1` y `credits_used = 1`.
+- Si durante la partida la condición de `rcheevos` cae brevemente a `0` (disparando `SUB`) y luego vuelve a `1` (disparando `STA`), `CoinTracker` detecta la transición `false -> true` y asume que el jugador **ha iniciado una 2ª partida o ha usado un Continue con fichas precargadas** (`runs_started += 1`).
+- En consecuencia, `credits_used` pasa a ser 2, el ranking se congela y la sesión queda descalificada de inmediato sin que el jugador haya insertado ninguna moneda.
+
+#### Requisitos para elegir la condición `STA` y `SUB`
+1. **Inactividad en Boot / Attract / Menú de Selección:** La condición `STA` **no debe cumplirse** mientras el core esté en demo o en la pantalla de selección de personajes.
+2. **Estabilidad absoluta en juego:** Una vez iniciada la Fase 1, la condición debe permanecer activa ininterrumpidamente durante golpes, caídas al suelo, ataques especiales, recogida de armas y transiciones entre fases.
+3. **Disparo exclusivo en Game Over:** `SUB` debe activarse **únicamente** cuando se pierde la última vida y el juego pasa a la pantalla de Continue o Game Over.
+4. **Priorizar variables de estado de máquina (`kStep` / Master State):**
+   - En placas Capcom (CPS-1, CPS-2): Usar la variable maestra de estado del juego (`kStep`, en M68K `0xFF84D0`, que en FBNeo word-swapped corresponde a `0x84D1`). Por ejemplo, en CPS-1: `0x04` = selección de personaje, `0x0C` (12) = jugando, `0x10` (16) = Game Over / Continue.
+   - En otras placas (NeoGeo, Konami, Irem): Combinar el flag de jugador en partida (`kInPlay`) con el contador de vidas o el registro de modo del juego.
+
+---
+
+### 6.5 Caso de Estudio: Cadillacs and Dinosaurs (`dino`)
+
+En la integración de *Cadillacs and Dinosaurs*, se observaron dos fallos consecutivos antes de llegar a la solución definitiva:
+1. **Fallo con `0xB345` (offset `+0xD0` en P1):**
+   `0xB345` era una variable interna de animación del sprite. Al recibir un golpe fuerte o realizar un ataque especial, caía a `0`, disparando `SUB` a mitad de la fase y reiniciando `CoinTracker` a 2 créditos.
+2. **Fallo con `0xB275` (offset `+0x00` en P1):**
+   Aunque `0xB275` parecía el flag de `InPlay`, la traza frame a frame reveló que en la pantalla de selección de personajes oscilaba:
+   - Frame 1455: `0xB275 = 01` (se activa `STA`).
+   - Frame 1460 (5 frames después): `0xB275 = 00` (se activa `SUB`).
+   - Frame 1623 (al confirmar personaje): `0xB275 = 01` (se reactiva `STA`, disparando `runs_started = 2`).
+3. **Solución definitiva con `0xB274` + `kStep` (`0x84D1`):**
+   - `0xB274` permanece en `00` durante boot y selección de personaje, y pasa a `01` continuo al comenzar la Fase 1.
+   - `0x84D1` (`kStep`) vale `12` (`0x0C`) únicamente durante la partida activa, y cambia a `16` (`0x10`) en Game Over.
+   - Expresión final certificada:
+     ```
+     STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376
+     ```
+
+---
+
+### 6.6 Script de Diagnóstico para Auditar el Ciclo de Vida de Cualquier ROM
+
+Para certificar cualquier juego del catálogo sin depender de pruebas manuales a ciegas en el celular, utiliza este script de Python con `ctypes` contra `/tmp/fbneo-linux/src/burner/libretro/fbneo_libretro.so`:
+
+```python
+import ctypes, os
+
+core = ctypes.CDLL("/tmp/fbneo-linux/src/burner/libretro/fbneo_libretro.so")
+# Configurar callbacks de libretro (environment, video, audio, input)...
+# Cargar la ROM con retro_load_game y obtener puntero con retro_get_memory_data(2)
+
+# Ejecutar frames simulando botones:
+# 1. 1400 frames de boot / attract
+# 2. Pulsar COIN (BTN_SELECT) y START
+# 3. Avanzar frames en selección de personaje y observar si los bytes candidatos oscilan
+# 4. Iniciar nivel 1, ejecutar ataques/movimientos y confirmar estabilidad del flag
+# 5. Dejar que los enemigos maten al personaje hasta la pantalla de Game Over / Continue
+# 6. Constatar qué byte cambia de forma unívoca de 'jugando' a 'Game Over'
+```
+
+---
+
+### 6.7 Ejemplo Real: Sunset Riders (`ssriders`)
 - RAM total: 39,040 bytes.
 - P1 activo al iniciar: `0x004C` (`0 -> 1`).
 - Score BCD word-swapped en `0x0206` (HI) y `0x0208` (LO) mostrando `$300` en pantalla (`raw=[00, 00, 00, 03]`).

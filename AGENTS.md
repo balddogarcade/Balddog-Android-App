@@ -158,7 +158,16 @@ Para integrar y certificar nuevos juegos arcade en el catálogo de bald.dog ARCA
 - **Herramientas de Diagnóstico:**
   - `rust/balddog-core/examples/ram_probe.rs` para inspeccionar `RETRO_MEMORY_SYSTEM_RAM` con `--scan [out.ppm]` y `--scan find:<score>`.
   - Core nativo de diagnóstico para Linux: `/tmp/fbneo-linux/src/burner/libretro/fbneo_libretro.so`.
-- **Regla de Integridad de Leaderboards:** **NUNCA** inventes ni asumas direcciones de memoria de puntaje o banderas `P1_ACTIVE`. Toda expresión `rcheevos` debe ser verificada empíricamente contra capturas HUD reales en `ram_probe`, incorporada en los tests unitarios de `rust/balddog-core/src/retro/leaderboard.rs`, y sembrada en Supabase mediante una migración SQL numerada.
+- **Regla de Integridad de Leaderboards y Ciclo de Vida 1CC:** **NUNCA** inventes ni asumas direcciones de memoria de puntaje o banderas `P1_ACTIVE`, ni utilices directamente candidatos de un escaneo de un solo frame (`ram_probe --scan`) sin verificar su ciclo de vida completo:
+  - **Mecanismo de CoinTracker:** Si el flag monitoreado por `STA`/`SUB` parpadea a `0` durante la selección de personaje, cinemáticas, animaciones de daño o transiciones de fase, `rcheevos` se desactivará y reactivará, provocando que `CoinTracker` interprete falsamente que inició una 2ª partida (`credits_used = 2`) e invalidando el ranking.
+  - **Verificación obligatoria de ciclo de vida:** Todo juego nuevo o auditado debe validarse a lo largo de:
+    1. Attract / Boot (`active == false`)
+    2. Selección de personaje / intro (`active == false`)
+    3. Fase activa de juego (`active == true` continuo y estable)
+    4. Combates, golpes, ataques especiales y pérdida de vidas intermedias (`active` debe mantenerse `true` ininterrumpidamente)
+    5. Game Over / Continue screen (`active` pasa a `false` disparando `SUB` exactamente al expirar la última vida).
+  - **Prioridad de variables:** Preferir siempre variables de máquina o loop principal (ej. `kStep` en CPS: `0x0C` jugando, `0x10` Game Over) combinadas con el flag maestro de jugador en partida (`kInPlay`), en lugar de registros internos o animaciones del jugador.
+  - Toda expresión `rcheevos` final debe incorporarse en los tests unitarios de `rust/balddog-core/src/retro/leaderboard.rs` simulando este ciclo, y sembrarse en Supabase mediante una migración SQL numerada ejecutada y verificada de inmediato.
 
 ---
 
