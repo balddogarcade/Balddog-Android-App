@@ -3,7 +3,7 @@ mod jni_surface;
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
 use balddog_core::audio::engine::set_global_ducking;
 use balddog_core::retro::core::{rotate_rgba, LibretroCore};
@@ -126,8 +126,53 @@ pub struct ReplayHudInfo {
     pub finished: bool,
 }
 
+static PANIC_HOOK_INIT: Once = Once::new();
+
+#[cfg(target_os = "android")]
+fn write_android_panic_log(msg: &str) {
+    use std::ffi::CString;
+    extern "C" {
+        fn __android_log_write(
+            prio: std::os::raw::c_int,
+            tag: *const std::os::raw::c_char,
+            text: *const std::os::raw::c_char,
+        ) -> std::os::raw::c_int;
+    }
+    const ANDROID_LOG_FATAL: std::os::raw::c_int = 7;
+    if let (Ok(tag), Ok(text)) = (CString::new("balddog-panic"), CString::new(msg)) {
+        unsafe {
+            __android_log_write(ANDROID_LOG_FATAL, tag.as_ptr(), text.as_ptr());
+        }
+    }
+}
+
+#[uniffi::export]
+pub fn init_native_crash_reporting() {
+    PANIC_HOOK_INIT.call_once(|| {
+        std::panic::set_hook(Box::new(|info| {
+            let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = info.payload().downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic payload".to_string()
+            };
+            let location = info
+                .location()
+                .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+                .unwrap_or_else(|| "unknown location".to_string());
+            let msg = format!("RUST PANIC at {location}: {payload}");
+            record_log("ERROR", &msg);
+            #[cfg(target_os = "android")]
+            write_android_panic_log(&msg);
+            std::process::abort();
+        }));
+    });
+}
+
 #[uniffi::export]
 pub fn ping_engine(native_lib_dir: String) -> Result<EngineStatus, EngineBridgeError> {
+    init_native_crash_reporting();
     let info = engine_info(&native_lib_dir)?;
     Ok(EngineStatus {
         engine_version: info.engine_version,

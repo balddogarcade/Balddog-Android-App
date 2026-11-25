@@ -43,13 +43,15 @@ make -C "$FBNEO_DIR/src/burner/libretro" -j"$NPROC" \
   CC="$CC_BIN" \
   CXX="$CXX_BIN" \
   AR="$AR_BIN" \
-  PLATFORM_DEFINES="-DANDROID -march=armv8-a -fno-fast-math -ffp-contract=off" \
+  PLATFORM_DEFINES="-DANDROID -march=armv8-a -fno-fast-math -ffp-contract=off -gline-tables-only" \
   USE_CYCLONE=0 \
   HAVE_NEON=0 \
   EXTERNAL_ZLIB=0 \
   LDFLAGS="-shared -Wl,-no-undefined -Wl,-z,max-page-size=16384 -Wl,--version-script=$FBNEO_DIR/src/burner/libretro/link.T -lm -llog -static-libstdc++"
 
-mkdir -p "$OUT_DIR"
+UNSTRIPPED_DIR="$APP_ROOT/.cache/unstripped-jniLibs/arm64-v8a"
+mkdir -p "$OUT_DIR" "$UNSTRIPPED_DIR"
+cp "$FBNEO_DIR/src/burner/libretro/fbneo_libretro.so" "$UNSTRIPPED_DIR/libfbneo_libretro.so"
 cp "$FBNEO_DIR/src/burner/libretro/fbneo_libretro.so" "$OUT_SO"
 "$STRIP_BIN" --strip-unneeded "$OUT_SO"
 

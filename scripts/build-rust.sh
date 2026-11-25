@@ -34,6 +34,17 @@ if [ ! -f "$SO_PATH" ]; then
   exit 1
 fi
 
+UNSTRIPPED_DIR="$APP_ROOT/.cache/unstripped-jniLibs/arm64-v8a"
+mkdir -p "$UNSTRIPPED_DIR"
+cp "$SO_PATH" "$UNSTRIPPED_DIR/libbalddog_android.so"
+
+if [ "$PROFILE" = "release" ]; then
+  STRIP_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+  if [ -x "$STRIP_BIN" ]; then
+    "$STRIP_BIN" --strip-all "$APP_ROOT/app/src/main/jniLibs/arm64-v8a/libbalddog_android.so"
+  fi
+fi
+
 echo "=== [2/2] Generando bindings Kotlin con UniFFI ==="
 cargo run -p balddog-android --bin uniffi-bindgen -- generate \
   --library "$SO_PATH" \
