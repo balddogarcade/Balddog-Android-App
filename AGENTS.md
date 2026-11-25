@@ -277,7 +277,9 @@ Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, 
 ## Protocolo Obligatorio: Versionamiento, Releases y Firma
 
 1. **Versionamiento SemVer y `CHANGELOG.md`:**
-   - Todo cambio relevante debe registrarse en `CHANGELOG.md` bajo `[Unreleased]` siguiendo *Keep a Changelog*.
+   - Todo cambio relevante para el usuario/app debe registrarse en `CHANGELOG.md` bajo `## [Unreleased]` siguiendo *Keep a Changelog*, **sin crear tags** hasta publicar un release.
+   - Los cambios puramente internos (documentación en `docs/`, `AGENTS.md`, `.agents/skills/`) no requieren entrada en `CHANGELOG.md` (quedan registrados en `git log`).
+   - **NUNCA** crees tags `vX.Y.Z` para cambios internos sin intención de publicar: cualquier tag `v*.*.*` dispara `.github/workflows/release.yml` y publica un nuevo GitHub Release + APK.
    - Al preparar un release `vX.Y.Z`, mueve los ítems de `[Unreleased]` a `[X.Y.Z] - YYYY-MM-DD` antes de crear el tag.
 2. **Firma de Release:**
    - `app/build.gradle.kts` prioriza `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD` desde variables de entorno (CI) y hace fallback a `local.properties`.

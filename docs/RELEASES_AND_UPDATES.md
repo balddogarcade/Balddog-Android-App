@@ -13,6 +13,8 @@ Este documento describe la arquitectura de versionamiento, publicación automati
   - Fallback local por defecto: `versionName = "0.1.0"`, `versionCode = 1`
 - Ambos valores se exponen en Kotlin mediante `BuildConfig.VERSION_NAME` y `BuildConfig.VERSION_CODE`.
 - `CHANGELOG.md` sigue el estándar **Keep a Changelog** (`[Unreleased]`, `[X.Y.Z] - YYYY-MM-DD`, secciones `Added`, `Changed`, `Fixed`, `Security`).
+  - Los cambios pequeños o incrementales para la app se acumulan bajo `## [Unreleased]` sin crear tags; cualquier tag `v*.*.*` dispara automáticamente `.github/workflows/release.yml` y publica un release.
+  - Los cambios puramente internos (`docs/`, `AGENTS.md`, `.agents/skills/`) no se registran en `CHANGELOG.md` (quedan en `git log`).
 
 ---
 
