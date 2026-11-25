@@ -780,6 +780,8 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
 // A JNA Library to expose the extern-C FFI definitions.
 // This is an implementation detail which will be called internally by the public API.
 
@@ -827,6 +829,8 @@ internal interface UniffiLib : Library {
     ): RustBuffer.ByValue
     fun uniffi_balddog_android_fn_func_get_voice_hud_state(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    fun uniffi_balddog_android_fn_func_init_native_crash_reporting(uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
     fun uniffi_balddog_android_fn_func_load_game_state(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     fun uniffi_balddog_android_fn_func_log_from_android(`level`: RustBuffer.ByValue,`message`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1001,6 +1005,8 @@ internal interface UniffiLib : Library {
     ): Short
     fun uniffi_balddog_android_checksum_func_get_voice_hud_state(
     ): Short
+    fun uniffi_balddog_android_checksum_func_init_native_crash_reporting(
+    ): Short
     fun uniffi_balddog_android_checksum_func_load_game_state(
     ): Short
     fun uniffi_balddog_android_checksum_func_log_from_android(
@@ -1092,6 +1098,9 @@ private fun uniffiCheckApiChecksums(lib: UniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_get_voice_hud_state() != 39802.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_balddog_android_checksum_func_init_native_crash_reporting() != 33523.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_balddog_android_checksum_func_load_game_state() != 1487.toShort()) {
@@ -2341,6 +2350,14 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
 }
     )
     }
+    
+ fun `initNativeCrashReporting`()
+        = 
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_balddog_android_fn_func_init_native_crash_reporting(
+        _status)
+}
+    
     
 
     @Throws(EngineBridgeException::class) fun `loadGameState`(`path`: kotlin.String)
