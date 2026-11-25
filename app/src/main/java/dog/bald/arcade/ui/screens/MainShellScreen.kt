@@ -172,21 +172,10 @@ fun MainShellScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(MainTab.CATALOG.ordinal) }
     val pagerState = rememberPagerState(
         initialPage = MainTab.CATALOG.ordinal,
         pageCount = { MainTab.entries.size }
     )
-    LaunchedEffect(pagerState.currentPage) {
-        if (selectedTab != pagerState.currentPage) {
-            selectedTab = pagerState.currentPage
-        }
-    }
-    LaunchedEffect(selectedTab) {
-        if (pagerState.currentPage != selectedTab) {
-            pagerState.animateScrollToPage(selectedTab)
-        }
-    }
     var isInitialLoading by remember { mutableStateOf(true) }
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
@@ -389,13 +378,13 @@ fun MainShellScreen(
     }
 
     // Auto-refrescar salas cada 3s mientras el usuario está en la pestaña Salas
-    LaunchedEffect(selectedTab, activeRoom) {
-        if (MainTab.entries[selectedTab] == MainTab.ROOMS && activeRoom == null) {
+    LaunchedEffect(pagerState.currentPage, activeRoom) {
+        if (MainTab.entries[pagerState.currentPage] == MainTab.ROOMS && activeRoom == null) {
             while (true) {
                 runCatching { rooms = repo.fetchOpenRooms() }
                 delay(3000)
             }
-        } else if (MainTab.entries[selectedTab] == MainTab.PROFILE) {
+        } else if (MainTab.entries[pagerState.currentPage] == MainTab.PROFILE) {
             runCatching {
                 PendingScoreQueue.flushAll(context, repo)
                 PendingMatchHistoryQueue.flushAll(context, repo)
@@ -442,7 +431,7 @@ fun MainShellScreen(
                 onLeave = { reason ->
                     overlayStack = emptyList()
                     activeRoom = null
-                    selectedTab = MainTab.ROOMS.ordinal
+                    scope.launch { pagerState.animateScrollToPage(MainTab.ROOMS.ordinal) }
                     if (reason != null) {
                         roomNoticeMsg = reason
                     }
@@ -484,8 +473,8 @@ fun MainShellScreen(
             NavigationBar(containerColor = CarbonSurface) {
                 MainTab.entries.forEachIndexed { idx, tab ->
                     NavigationBarItem(
-                        selected = selectedTab == idx,
-                        onClick = { selectedTab = idx },
+                        selected = pagerState.targetPage == idx,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(idx) } },
                         icon = { Icon(tab.icon, contentDescription = tab.label) },
                         label = { Text(tab.label, fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
@@ -595,7 +584,7 @@ fun MainShellScreen(
                             text = { Text("Perfil", color = PureWhite, fontSize = 13.sp) },
                             onClick = {
                                 userMenuExpanded = false
-                                selectedTab = MainTab.PROFILE.ordinal
+                                scope.launch { pagerState.animateScrollToPage(MainTab.PROFILE.ordinal) }
                             }
                         )
                         DropdownMenuItem(
@@ -664,7 +653,7 @@ fun MainShellScreen(
                     followingIds = myFollowingIds,
                     roomNoticeMsg = roomNoticeMsg,
                     onDismissRoomNotice = { roomNoticeMsg = null },
-                    onGoToCatalog = { selectedTab = MainTab.CATALOG.ordinal },
+                    onGoToCatalog = { scope.launch { pagerState.animateScrollToPage(MainTab.CATALOG.ordinal) } },
                     onRefresh = { refreshAll() },
                     onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
                     onCreateRoom = { game, mode, isPrivate ->
