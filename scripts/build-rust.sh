@@ -4,7 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUST_DIR="$APP_ROOT/rust"
-source "$SCRIPT_DIR/env.sh"
+if [ -f "$SCRIPT_DIR/env.sh" ]; then
+  source "$SCRIPT_DIR/env.sh"
+fi
 export CMAKE_POLICY_VERSION_MINIMUM="${CMAKE_POLICY_VERSION_MINIMUM:-3.5}"
 
 PROFILE="${1:-debug}"

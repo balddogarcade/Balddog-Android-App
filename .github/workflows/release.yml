@@ -1,0 +1,198 @@
+name: Release APK
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Version name (SemVer without v, e.g. 0.1.1)'
+        required: false
+        type: string
+      version_code:
+        description: 'Version code (integer)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-release:
+    name: Build, Sign, Attest & Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK & Build-Tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - name: Set up Rust toolchain (aarch64-linux-android)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust & Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Cache FBNeo core
+        id: cache-fbneo
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/jniLibs/arm64-v8a/libfbneo_libretro.so
+            .cache/unstripped-jniLibs/arm64-v8a/libfbneo_libretro.so
+          key: fbneo-5f6bdff9451d5c3dedd3d992d7412660eb202cf4-arm64
+
+      - name: Build FBNeo libretro core
+        if: steps.cache-fbneo.outputs.cache-hit != 'true'
+        run: ./scripts/build-fbneo-android.sh
+
+      - name: Build Rust native backend (release + strip)
+        run: ./scripts/build-rust.sh release
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Resolve version metadata
+        id: version
+        run: |
+          if [ -n "${{ inputs.version_name }}" ]; then
+            V_NAME="${{ inputs.version_name }}"
+          else
+            V_NAME="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -n "${{ inputs.version_code }}" ]; then
+            V_CODE="${{ inputs.version_code }}"
+          else
+            V_CODE="${{ github.run_number }}"
+          fi
+          echo "version_name=${V_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${V_CODE}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${V_NAME} (code ${V_CODE})"
+
+      - name: Decode signing keystore & Firebase config
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > /tmp/release.keystore
+            echo "ANDROID_KEYSTORE_PATH=/tmp/release.keystore" >> "$GITHUB_ENV"
+          fi
+          if [ -n "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
+          fi
+
+      - name: Build Release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          ./gradlew --no-daemon assembleRelease \
+            -PversionName="${{ steps.version.outputs.version_name }}" \
+            -PversionCode="${{ steps.version.outputs.version_code }}"
+
+      - name: Verify APK signature
+        run: |
+          "${ANDROID_HOME}/build-tools/36.0.0/apksigner" verify --verbose \
+            app/build/outputs/apk/release/app-release.apk
+
+      - name: Generate SHA-256 checksum
+        id: checksum
+        run: |
+          cd app/build/outputs/apk/release
+          sha256sum app-release.apk > app-release.apk.sha256
+          SHA256_HEX="$(cut -d' ' -f1 app-release.apk.sha256)"
+          echo "sha256=${SHA256_HEX}" >> "$GITHUB_OUTPUT"
+          cat app-release.apk.sha256
+
+      - name: Attest Build Provenance (SLSA)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: app/build/outputs/apk/release/app-release.apk
+
+      - name: Scan APK with VirusTotal API v3 (Informative)
+        id: virustotal
+        continue-on-error: true
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          APK_SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then
+            echo "VIRUSTOTAL_API_KEY not configured; skipping scan."
+            echo "vt_url=https://www.virustotal.com/gui/file/${APK_SHA256}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          curl -sS -X POST "https://www.virustotal.com/api/v3/files" \
+            -H "x-apikey: ${VT_API_KEY}" \
+            -F "file=@app/build/outputs/apk/release/app-release.apk" \
+            -o /tmp/vt-response.json
+          echo "vt_url=https://www.virustotal.com/gui/file/${APK_SHA256}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from CHANGELOG.md
+        id: changelog
+        run: |
+          python3 - <<'PY' > /tmp/release_notes.md
+          import re, os
+
+          version = "${{ steps.version.outputs.version_name }}"
+          sha256 = "${{ steps.checksum.outputs.sha256 }}"
+          vt_url = "${{ steps.virustotal.outputs.vt_url }}"
+
+          notes = ""
+          with open("CHANGELOG.md", "r", encoding="utf-8") as f:
+              content = f.read()
+
+          pattern = rf"^## \[{re.escape(version)}\].*?\n(.*?)(?=^## \[|\Z)"
+          m = re.search(pattern, content, flags=re.MULTILINE | re.DOTALL)
+          if m:
+              notes = m.group(1).strip()
+          else:
+              notes = f"Release v{version}"
+
+          print(notes)
+          print("\n---")
+          print("### Verificación de Integridad y Seguridad")
+          print(f"- **SHA-256 (`app-release.apk`):** `{sha256}`")
+          print(f"- **VirusTotal Report:** {vt_url}")
+          print("- **Build Provenance (SLSA):** Atestación verificable en la pestaña *Attestations* del repositorio.")
+          PY
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version_name }}
+          name: bald.dog ARCADE v${{ steps.version.outputs.version_name }}
+          body_path: /tmp/release_notes.md
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/release/app-release.apk.sha256
+
+      - name: Cleanup temporary secrets
+        if: always()
+        run: |
+          rm -f /tmp/release.keystore app/google-services.json /tmp/vt-response.json /tmp/release_notes.md

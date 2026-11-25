@@ -3,7 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-source "$SCRIPT_DIR/env.sh"
+if [ -f "$SCRIPT_DIR/env.sh" ]; then
+  source "$SCRIPT_DIR/env.sh"
+fi
 
 FBNEO_COMMIT="5f6bdff9451d5c3dedd3d992d7412660eb202cf4"
 FBNEO_DIR="$APP_ROOT/.cache/FBNeo"
