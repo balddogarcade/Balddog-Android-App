@@ -131,7 +131,7 @@ jobs:
           cat app-release.apk.sha256
 
       - name: Attest Build Provenance (SLSA)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: app/build/outputs/apk/release/app-release.apk
 
