@@ -72,6 +72,7 @@ import dog.bald.arcade.data.PendingMatchHistoryEntry
 import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.PendingScoreSubmission
+import dog.bald.arcade.diagnostics.CrashlyticsHelper
 import kotlinx.serialization.json.Json
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
@@ -314,6 +315,25 @@ class GameActivity : ComponentActivity() {
         replayPlayerName = intent.getStringExtra(EXTRA_REPLAY_PLAYER_NAME).orEmpty()
         replayTargetScore = intent.getLongExtra(EXTRA_REPLAY_TARGET_SCORE, 0L)
 
+        val crashNetplayMode = when {
+            isReplayMode -> "replay"
+            isNetplay && isNetplayHost -> "host"
+            isNetplay -> "client"
+            else -> "offline"
+        }
+        CrashlyticsHelper.setGameContext(
+            gameId = gameId,
+            gameTitle = gameTitle,
+            romSlug = romSlug,
+            romSha256 = romSha256,
+            netplayMode = crashNetplayMode
+        )
+        CrashlyticsHelper.setNetplayState(
+            state = if (isNetplay) "synchronizing" else "running",
+            roomId = netplayRoomId
+        )
+        CrashlyticsHelper.log("GameActivity start: mode=$crashNetplayMode gameId=$gameId rom=$romSlug")
+
         try {
             if (romPath.isBlank()) {
                 engineError = "No se especificó ruta de ROM"
@@ -389,6 +409,7 @@ class GameActivity : ComponentActivity() {
                 )
             }
         } catch (t: Throwable) {
+            CrashlyticsHelper.recordNonFatal(t)
             engineError = t.message ?: "Error iniciando emulador"
         }
 
@@ -419,10 +440,13 @@ class GameActivity : ComponentActivity() {
                             if (netplayHud.pingMs > 0u) {
                                 if (!netplaySynchronized) {
                                     logFromAndroid("INFO", "Netplay sincronizado exitosamente! Ping=${netplayHud.pingMs}ms")
+                                    CrashlyticsHelper.setNetplayState("running", netplayRoomId, netplayHud.pingMs)
+                                    CrashlyticsHelper.log("GGRS synchronized ping=${netplayHud.pingMs}ms")
                                 }
                                 netplaySynchronized = true
                             }
                             if (netplayHud.sessionEnded && netplayEndReason == null) {
+                                CrashlyticsHelper.setNetplayState("ended", netplayRoomId, netplayHud.pingMs)
                                 netplayEndReason = "El otro jugador se desconectó de la partida."
                             }
                         }
