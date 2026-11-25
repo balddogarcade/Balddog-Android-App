@@ -181,6 +181,8 @@ This step generates `app/src/main/jniLibs/arm64-v8a/libbalddog_android.so`, copi
 ./gradlew assembleDebug
 ```
 
+> **Note:** `assembleDebug` / `installDebug` require `app/google-services.json` to include the `dog.bald.arcade.debug` client. If your `google-services.json` only registers `dog.bald.arcade`, use `./gradlew installRelease` or `./scripts/build-release.sh` (Gradle falls back to debug signing when no release keystore is configured).
+
 **Release (APK + AAB):**
 
 ```bash

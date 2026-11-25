@@ -14,8 +14,9 @@ Sigue este procedimiento cuando el usuario solicite preparar o publicar un nuevo
 
 ## 2. Validar Tests Localmente
 ```bash
-source scripts/env.sh && ./gradlew testDebugUnitTest
+source scripts/env.sh && unset GRADLE_USER_HOME && ./gradlew testReleaseUnitTest --offline
 ```
+*(Nota: `testDebugUnitTest` falla en `:app:processDebugGoogleServices` mientras `app/google-services.json` solo registre `dog.bald.arcade` sin el cliente `.debug`).*
 
 ## 3. Commit y Tag SemVer
 1. Haz commit de `CHANGELOG.md` en inglés con autoría exclusiva `cjbaezilla` (sin `Co-authored-by`).
@@ -26,7 +27,7 @@ git push origin main --tags
 ```
 
 ## 4. Monitorear GitHub Actions y Verificar Seguridad
-1. Monitorea el workflow `.github/workflows/release.yml` en GitHub (`Actions > Release APK`).
+1. Monitorea el workflow `.github/workflows/release.yml` en GitHub (`Actions > Release APK`) o mediante el skill `gh` (`gh run list --workflow release.yml`, `gh run view <ID> --log-failed`, `gh run rerun <ID> --failed`).
 2. Verifica que el Release publicado incluya:
    - `app-release.apk` y `app-release.apk.sha256`
    - Enlace al reporte de **VirusTotal**

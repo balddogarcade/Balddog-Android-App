@@ -71,23 +71,29 @@ Cuando el usuario pida probar, correr, instalar o abrir la app en su celular con
      source scripts/env.sh && ./scripts/build-fbneo-android.sh
      ```
 
-3. **Compilar e instalar el APK debug en el celular:**
+3. **Compilar e instalar el APK en el celular:**
    Ejecuta directamente:
    ```bash
-   source scripts/env.sh && ./gradlew installDebug
+   source scripts/env.sh && unset GRADLE_USER_HOME && ./gradlew installDebug
    ```
-   - Si falla por errores de compilación Kotlin/Gradle, corrige el error puntual y vuelve a ejecutar `./gradlew installDebug`.
+   - Si falla en `:app:processDebugGoogleServices` porque `app/google-services.json` solo registra `dog.bald.arcade` (sin `.debug`), instala la variante Release (hace fallback a firma debug si no hay keystore configurado):
+     ```bash
+     source scripts/env.sh && unset GRADLE_USER_HOME && ./gradlew installRelease
+     ```
+   - Si falla por errores de compilación Kotlin/Gradle, corrige el error puntual y vuelve a ejecutar.
 
 4. **Abrir la aplicación en el celular:**
-   Ejecuta:
+   Ejecuta (según la variante instalada):
    ```bash
    adb shell am start -n dog.bald.arcade.debug/dog.bald.arcade.MainActivity
+   # o para release:
+   adb shell am start -n dog.bald.arcade/dog.bald.arcade.MainActivity
    ```
 
 5. **Confirmar que arrancó sin crash inmediato:**
    Ejecuta una verificación rápida:
    ```bash
-   adb shell pidof dog.bald.arcade.debug
+   adb shell pidof dog.bald.arcade.debug || adb shell pidof dog.bald.arcade
    ```
    - Si devuelve un PID, confirma al usuario que la app quedó instalada y abierta en el celular.
    - Si no devuelve PID o la app se cerró, revisa el error con:

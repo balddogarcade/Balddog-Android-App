@@ -41,3 +41,13 @@ Ubicado en `app/src/main/java/dog/bald/arcade/data/AppUpdateManager.kt` e integr
 - **Instalación:**
   - Verifica `packageManager.canRequestPackageInstalls()`. Si falta el permiso, abre `Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES`.
   - Expone el APK mediante `FileProvider` (`${applicationId}.fileprovider` + `res/xml/file_paths.xml`) y lanza `Intent.ACTION_VIEW` con `FLAG_GRANT_READ_URI_PERMISSION`.
+
+---
+
+## 4. Troubleshooting de CI y Validación Local
+
+- **Fallo en `:app:packageRelease` (`PackageAndroidArtifact$IncrementalSplitterRunnable`) en GitHub Actions:**
+  - Si toda la compilación (`compileReleaseKotlin`, `minifyReleaseWithR8`, `lintVitalRelease`) pasó y falla en `packageRelease` con caché restaurada (`GRADLE_BUILD_ACTION_CACHE_RESTORED: true`), suele ser un problema transitorio de caché incremental en el runner.
+  - Relanza los jobs fallidos con `gh run rerun <RUN_ID> --failed` (ver skill `gh`).
+- **Fallo en `:app:processDebugGoogleServices` al compilar/testear localmente:**
+  - `app/google-services.json` registra únicamente el paquete release `dog.bald.arcade`. Mientras no incluya `dog.bald.arcade.debug`, usa las tareas `Release` (`testReleaseUnitTest`, `compileReleaseKotlin`, `installRelease`) pasando `unset GRADLE_USER_HOME` tras cargar `scripts/env.sh`.
