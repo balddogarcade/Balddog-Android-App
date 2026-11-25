@@ -1,5 +1,10 @@
 package dog.bald.arcade.ui.screens
 
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
+
 import dog.bald.arcade.data.toUserMessage
 
 import androidx.compose.foundation.BorderStroke
@@ -1021,6 +1026,13 @@ private fun GameDto.matchesQuery(query: String): Boolean {
         slug.contains(q, ignoreCase = true)
 }
 
+private enum class CatalogSortOption {
+    NAME,
+    RECENT,
+    MOST_DOWNLOADED,
+    MOST_PLAYED
+}
+
 @Composable
 private fun CatalogTab(
     games: List<GameDto>,
@@ -1036,9 +1048,25 @@ private fun CatalogTab(
     onDeleteClick: (GameDto) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var selectedSort by remember { mutableStateOf(CatalogSortOption.NAME) }
+    var downloadedOnly by remember { mutableStateOf(false) }
 
-    val filtered = remember(games, searchQuery) {
-        games.filter { it.matchesQuery(searchQuery) }
+    val filtered = remember(games, searchQuery, selectedSort, downloadedOnly, downloadedFiles) {
+        val comparator = when (selectedSort) {
+            CatalogSortOption.NAME -> compareBy<GameDto> { it.title.lowercase() }
+            CatalogSortOption.RECENT -> compareByDescending<GameDto> { it.createdAt.orEmpty() }
+                .thenBy { it.title.lowercase() }
+            CatalogSortOption.MOST_DOWNLOADED -> compareByDescending<GameDto> { it.downloadCount }
+                .thenBy { it.title.lowercase() }
+            CatalogSortOption.MOST_PLAYED -> compareByDescending<GameDto> { it.totalPlaySeconds }
+                .thenBy { it.title.lowercase() }
+        }
+        games
+            .asSequence()
+            .filter { it.matchesQuery(searchQuery) }
+            .filter { !downloadedOnly || downloadedFiles.contains(it.romFilename) }
+            .sortedWith(comparator)
+            .toList()
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
@@ -1048,7 +1076,98 @@ private fun CatalogTab(
             placeholder = "Buscar en catálogo..."
         )
 
-        if (filtered.isEmpty() && searchQuery.isNotBlank()) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            item {
+                val isSelected = selectedSort == CatalogSortOption.RECENT
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        selectedSort = if (isSelected) CatalogSortOption.NAME else CatalogSortOption.RECENT
+                    },
+                    label = { Text("Más reciente", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = CarbonSurface,
+                        labelColor = MutedGray,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                        selectedLabelColor = PureWhite
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = CharcoalBorder,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+            item {
+                val isSelected = selectedSort == CatalogSortOption.MOST_DOWNLOADED
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        selectedSort = if (isSelected) CatalogSortOption.NAME else CatalogSortOption.MOST_DOWNLOADED
+                    },
+                    label = { Text("Más descargados", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = CarbonSurface,
+                        labelColor = MutedGray,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                        selectedLabelColor = PureWhite
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = CharcoalBorder,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+            item {
+                val isSelected = selectedSort == CatalogSortOption.MOST_PLAYED
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        selectedSort = if (isSelected) CatalogSortOption.NAME else CatalogSortOption.MOST_PLAYED
+                    },
+                    label = { Text("Más jugados", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = CarbonSurface,
+                        labelColor = MutedGray,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                        selectedLabelColor = PureWhite
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = CharcoalBorder,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+            item {
+                FilterChip(
+                    selected = downloadedOnly,
+                    onClick = { downloadedOnly = !downloadedOnly },
+                    label = { Text("Descargados", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = CarbonSurface,
+                        labelColor = MutedGray,
+                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                        selectedLabelColor = PureWhite
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = downloadedOnly,
+                        borderColor = CharcoalBorder,
+                        selectedBorderColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+        }
+
+        if (filtered.isEmpty() && (searchQuery.isNotBlank() || downloadedOnly)) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = CarbonSurface),
                 border = BorderStroke(1.dp, CharcoalBorder),
@@ -1056,18 +1175,24 @@ private fun CatalogTab(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Sin resultados para \"${searchQuery.trim()}\"",
+                        if (searchQuery.isNotBlank()) "Sin resultados para \"${searchQuery.trim()}\"" else "No hay juegos descargados",
                         color = PureWhite,
                         fontFamily = SpaceGroteskFamily,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        "Prueba con otro término o limpia el buscador.",
+                        if (searchQuery.isNotBlank()) "Prueba con otro término o limpia los filtros." else "Descarga juegos del catálogo para verlos aquí.",
                         color = MutedGray,
                         fontSize = 13.sp
                     )
-                    OutlinedButton(onClick = { searchQuery = "" }, border = BorderStroke(1.dp, SteelBorder)) {
-                        Text("LIMPIAR BÚSQUEDA", color = PureWhite, fontSize = 12.sp)
+                    OutlinedButton(
+                        onClick = {
+                            searchQuery = ""
+                            downloadedOnly = false
+                        },
+                        border = BorderStroke(1.dp, SteelBorder)
+                    ) {
+                        Text("LIMPIAR FILTROS", color = PureWhite, fontSize = 12.sp)
                     }
                 }
             }

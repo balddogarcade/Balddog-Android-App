@@ -33,7 +33,8 @@ data class GameDto(
     @SerialName("download_count") val downloadCount: Long = 0L,
     @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
     @SerialName("max_valid_score") val maxValidScore: Long? = null,
-    @SerialName("score_config") val scoreConfig: ScoreConfigDto? = null
+    @SerialName("score_config") val scoreConfig: ScoreConfigDto? = null,
+    @SerialName("created_at") val createdAt: String? = null
 )
 
 @Serializable
