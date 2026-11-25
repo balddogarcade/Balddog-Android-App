@@ -2,6 +2,14 @@
 
 Este archivo define reglas obligatorias que todo agente de IA debe respetar al trabajar en este repositorio.
 
+## Reglas de Comunicación
+
+1. **Idioma obligatorio — Comunicación siempre en español:**
+   - **SIEMPRE** comunícate con el usuario en **español** (respuestas, explicaciones, preguntas, reportes de estado y mensajes de error).
+   - *(Esta regla aplica a toda la comunicación con el usuario; los mensajes de commit en Git deben seguir redactándose en inglés según la regla correspondiente más abajo).*
+
+---
+
 ## Reglas Críticas de Git y Commits
 
 1. **Autoría exclusiva (`cjbaezilla`) — Prohibido co-autorear commits:**
@@ -239,6 +247,25 @@ Al trabajar en la capa de red, señalización en Supabase, sockets UDP o el moto
 - Recordar que `core.take_video_frame()` de Libretro y el pipeline de renderizado solo se ejecutan cuando GGRS alcanza `SessionState::Running`.
 - Si la pantalla queda en negro o en sincronización perpetua, el fallo es 100% de conectividad UDP en la fase `SessionState::Synchronizing` (verificar eventos con `adb logcat | grep GGRS`).
 - Consultar la guía exhaustiva, diagramas y herramientas de diagnóstico en [docs/NETPLAY_ARCHITECTURE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/NETPLAY_ARCHITECTURE.md).
+
+---
+
+## Protocolo Obligatorio: Crashlytics y Diagnóstico (Kotlin + Rust + NDK)
+
+Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, replays o código nativo (`rust/`, FBNeo):
+
+1. **Instrumentación automática con `CrashlyticsHelper`:**
+   - Usa `dog.bald.arcade.diagnostics.CrashlyticsHelper` (`setCustomKey` vía helpers dedicados, `log()` para breadcrumbs de transiciones de estado, y `recordNonFatal(t)` en `catch` críticos o fallos recuperables).
+   - **NUNCA** envíes credenciales, tokens, contraseñas ni PII en logs o Custom Keys.
+2. **Invariante de símbolos nativos (`unstripped` vs `stripped`):**
+   - Mantén `debug = "line-tables-only"` y `panic = "unwind"` en `rust/Cargo.toml` (`[profile.release]`) y `-gline-tables-only` en `scripts/build-fbneo-android.sh`.
+   - Toda compilación nativa debe conservar la copia *unstripped* en `.cache/unstripped-jniLibs/arm64-v8a/` y empaquetar solo la versión *stripped* en `app/src/main/jniLibs/arm64-v8a/`.
+3. **Credenciales Firebase:**
+   - `app/google-services.json` está ignorado en `.gitignore`; **NUNCA** lo agregues al repositorio.
+4. **Referencia y consulta:**
+   - Guía técnica completa: [docs/CRASHLYTICS_AND_DIAGNOSTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/CRASHLYTICS_AND_DIAGNOSTICS.md).
+   - Runbook operativo (build de símbolos, `logcat` `balddog-panic`, consulta en Firebase): `.agents/skills/crashlytics-diagnostics/SKILL.md`.
+
 
 
 
