@@ -110,24 +110,20 @@ fun InGameQuickMenu(
                 )
             }
 
-            if (!isNetplay && !isReplayMode) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Button(
-                        onClick = onSaveState,
-                        colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
-                        border = BorderStroke(1.dp, SteelBorder),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("SAVE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                    Button(
-                        onClick = onLoadState,
-                        colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
-                        border = BorderStroke(1.dp, SteelBorder),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("LOAD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onResume,
+                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("REANUDAR", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
+                }
+                OutlinedButton(
+                    onClick = onExit,
+                    border = BorderStroke(1.dp, SteelBorder),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("SALIR", color = SilverGray, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
                 }
             }
 
@@ -200,20 +196,25 @@ fun InGameQuickMenu(
                 }
             }
 
-            Button(
-                onClick = onResume,
-                colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("REANUDAR", fontWeight = FontWeight.Bold)
-            }
-
-            OutlinedButton(
-                onClick = onExit,
-                border = BorderStroke(1.dp, SteelBorder),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("SALIR DE PARTIDA", color = SilverGray, fontWeight = FontWeight.Bold)
+            if (!isNetplay && !isReplayMode) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onSaveState,
+                        colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                        border = BorderStroke(1.dp, SteelBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("SAVE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = onLoadState,
+                        colors = ButtonDefaults.buttonColors(containerColor = GraphiteSurface, contentColor = PureWhite),
+                        border = BorderStroke(1.dp, SteelBorder),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("LOAD", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
             }
         }
     }
