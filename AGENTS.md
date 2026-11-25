@@ -221,4 +221,24 @@ Inmediatamente tras la ejecución, lanza una consulta de verificación contra la
 - **Para tablas/columnas:** Consultar `information_schema.columns` verificando que `column_name` exista.
 - **Para seeds de juegos o configuraciones:** Consultar la fila en `public.games` verificando el nuevo valor.
 
+---
+
+## Protocolo Obligatorio: Netplay P2P y Resolución de Red
+
+Al trabajar en la capa de red, señalización en Supabase, sockets UDP o el motor de sincronización GGRS (`rust/balddog-netplay`, `rust/balddog-core`, `app/.../net`):
+
+### 1. Regla de Candidatos Duales (Invariante de Formato)
+- Todo endpoint de juego y de voz anunciado en `public.rooms.slots_json` DEBE mantener el formato de candidato dual `public_ip:port|lan_ip:port` generado por `NetplayEndpointResolver.formatCandidateEndpoint()`.
+- **NUNCA** asumir que STUN WAN es suficiente: los routers hogareños típicamente carecen de soporte para **NAT Hairpinning / Loopback** y descartan silenciosamente paquetes UDP dirigidos a su propia IP pública cuando dos jugadores están en la misma red Wi-Fi.
+
+### 2. Resolución de Pares Obligatoria
+- Antes de pasar las direcciones remotas (`peerAddrs` o `voicePeerAddrs`) a Rust o a los sockets de audio/ping, SIEMPRE resolver mediante `NetplayEndpointResolver.resolveEffectiveEndpoint(peerEndpoint, myPublicIp)`.
+- Si ambos pares comparten la misma IP pública WAN (misma red local), el tráfico DEBE dirigirse a la IP LAN directa (`192.168.0.x:puerto`).
+
+### 3. Ciclo de Vida de GGRS y Emulación de Video
+- Recordar que `core.take_video_frame()` de Libretro y el pipeline de renderizado solo se ejecutan cuando GGRS alcanza `SessionState::Running`.
+- Si la pantalla queda en negro o en sincronización perpetua, el fallo es 100% de conectividad UDP en la fase `SessionState::Synchronizing` (verificar eventos con `adb logcat | grep GGRS`).
+- Consultar la guía exhaustiva, diagramas y herramientas de diagnóstico en [docs/NETPLAY_ARCHITECTURE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/NETPLAY_ARCHITECTURE.md).
+
+
 
