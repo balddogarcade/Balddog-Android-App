@@ -117,7 +117,11 @@ jobs:
           chmod +x ./gradlew
           ./gradlew --no-daemon assembleRelease \
             -PversionName="${{ steps.version.outputs.version_name }}" \
-            -PversionCode="${{ steps.version.outputs.version_code }}"
+            -PversionCode="${{ steps.version.outputs.version_code }}" \
+            -Pandroid.injected.signing.store.file="/tmp/release.keystore" \
+            -Pandroid.injected.signing.store.password="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.ANDROID_KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.ANDROID_KEY_PASSWORD }}"
 
       - name: Verify APK signature
         run: |
