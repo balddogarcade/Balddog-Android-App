@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Centralized `AnalyticsHelper` (`dog.bald.arcade.diagnostics.AnalyticsHelper`) wrapping Google Analytics for Firebase (`firebase-analytics`) without PII, initialized in `BalddogApplication` and tracking `game_launch` and `game_session_end` in `GameActivity`.
+
 ### Security
 - Added `LICENSE` (MIT) and `cargo test` execution in `.github/workflows/quality.yml` (resolving OpenSSF Scorecard `License` and `CI-Tests`).
 - Pinned all GitHub Actions in `.github/workflows/*.yml` to full commit SHAs (resolving OpenSSF Scorecard `Pinned-Dependencies`).
