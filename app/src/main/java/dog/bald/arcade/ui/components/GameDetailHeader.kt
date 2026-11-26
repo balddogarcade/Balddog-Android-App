@@ -26,21 +26,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import dog.bald.arcade.data.GameDto
-import java.net.URL
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 internal fun RemoteImage(
@@ -49,17 +42,16 @@ internal fun RemoteImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    var bitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(url) {
+    val context = LocalContext.current
+    val bitmap by produceState<ImageBitmap?>(
+        initialValue = url?.takeIf { it.isNotBlank() }?.let { RemoteImageCache.getFromMemory(it) },
+        url
+    ) {
         if (url.isNullOrBlank()) {
-            bitmap = null
-            return@LaunchedEffect
+            value = null
+            return@produceState
         }
-        bitmap = withContext(Dispatchers.IO) {
-            runCatching {
-                URL(url).openStream().use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
-            }.getOrNull()
-        }
+        value = RemoteImageCache.load(context, url)
     }
     val img = bitmap
     if (img != null) {

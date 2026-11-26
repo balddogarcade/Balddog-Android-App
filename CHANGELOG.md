@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Migrated all game cover images (`cover_url`) from bundled `assets/covers/*.webp` to Pinata IPFS (`public.games.cover_url`), refactored `GameCoverImage` and `RemoteImage` to share a unified memory + disk cache (`RemoteImageCache`), and removed local cover assets from the APK.
+
 ### Added
 - Added `GameDetailScreen` (`GameDetailHeader`, `GameDetailGallery`, `GameDetailSpecsCard`, `GameDetailHistoryCard`) in Android to display full Arcade Database metadata, IPFS image gallery, hardware specs, history, and YouTube gameplay links, instrumented with `AnalyticsHelper`, `CrashlyticsHelper`, and `PerformanceHelper`.
 - Expanded `GameDto` with 22 Arcade Database metadata and IPFS media fields (`manufacturer`, `year`, `genre`, `serie`, `players`, `nplayers`, `input_controls`, `input_buttons`, `buttons_colors`, `history`, `youtube_video_id`, and IPFS gallery URLs) plus `AnalyticsHelper` / `CrashlyticsHelper` instrumentation for ROM detail views.

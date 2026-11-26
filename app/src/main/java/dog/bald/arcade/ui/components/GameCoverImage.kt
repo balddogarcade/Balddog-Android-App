@@ -1,12 +1,12 @@
 package dog.bald.arcade.ui.components
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.Icon
@@ -18,22 +18,70 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.MutedGray
+import java.io.File
+import java.net.URL
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private object CoverCache {
-    private val cache = LruCache<String, ImageBitmap>(48)
-    fun get(slug: String): ImageBitmap? = cache.get(slug)
-    fun put(slug: String, bmp: ImageBitmap) {
-        cache.put(slug, bmp)
+internal object CoverUrlRegistry {
+    private val urlsBySlug = ConcurrentHashMap<String, String>()
+
+    fun registerAll(games: List<GameDto>) {
+        for (game in games) {
+            val url = game.coverUrl ?: game.urlImageTitle ?: game.urlIcon
+            if (!url.isNullOrBlank()) {
+                urlsBySlug[game.slug] = url
+            }
+        }
+    }
+
+    fun resolve(slug: String?): String? = slug?.let { urlsBySlug[it] }
+}
+
+internal object RemoteImageCache {
+    private val memoryCache = LruCache<String, ImageBitmap>(64)
+
+    fun getFromMemory(url: String): ImageBitmap? = memoryCache.get(url)
+
+    suspend fun load(context: Context, url: String): ImageBitmap? {
+        memoryCache.get(url)?.let { return it }
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val cacheDir = File(context.cacheDir, "image_cache").apply { mkdirs() }
+                val cacheFile = File(cacheDir, sha256(url))
+
+                if (cacheFile.exists() && cacheFile.length() > 0L) {
+                    BitmapFactory.decodeFile(cacheFile.absolutePath)?.asImageBitmap()?.also { bmp ->
+                        memoryCache.put(url, bmp)
+                        return@runCatching bmp
+                    }
+                }
+
+                val bytes = URL(url).openStream().use { it.readBytes() }
+                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                    ?: return@runCatching null
+                runCatching { cacheFile.writeBytes(bytes) }
+                memoryCache.put(url, bmp)
+                bmp
+            }.getOrNull()
+        }
+    }
+
+    private fun sha256(input: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
     }
 }
 
@@ -42,32 +90,24 @@ fun GameCoverImage(
     slug: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
+    coverUrl: String? = null,
     contentScale: ContentScale = ContentScale.Crop,
     shape: Shape = RectangleShape,
     backgroundColor: Color = GraphiteSurface,
     showBorder: Boolean = true
 ) {
     val context = LocalContext.current
+    val resolvedUrl = coverUrl?.takeIf { it.isNotBlank() } ?: CoverUrlRegistry.resolve(slug)
 
-    val bitmap by produceState<ImageBitmap?>(initialValue = slug?.let { CoverCache.get(it) }, slug) {
-        if (slug.isNullOrBlank()) {
+    val bitmap by produceState<ImageBitmap?>(
+        initialValue = resolvedUrl?.let { RemoteImageCache.getFromMemory(it) },
+        resolvedUrl
+    ) {
+        if (resolvedUrl.isNullOrBlank()) {
             value = null
             return@produceState
         }
-        val cached = CoverCache.get(slug)
-        if (cached != null) {
-            value = cached
-            return@produceState
-        }
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                context.assets.open("covers/$slug.webp").use { stream ->
-                    BitmapFactory.decodeStream(stream)?.asImageBitmap()?.also { bmp ->
-                        CoverCache.put(slug, bmp)
-                    }
-                }
-            }.getOrNull()
-        }
+        value = RemoteImageCache.load(context, resolvedUrl)
     }
 
     Box(

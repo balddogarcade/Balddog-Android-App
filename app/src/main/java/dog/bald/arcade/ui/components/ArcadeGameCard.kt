@@ -92,6 +92,7 @@ fun ArcadeGameCard(
             ) {
                 GameCoverImage(
                     slug = game.slug,
+                    coverUrl = game.coverUrl ?: game.urlImageTitle ?: game.urlIcon,
                     contentDescription = game.title,
                     contentScale = ContentScale.Fit,
                     shape = RectangleShape,

@@ -112,7 +112,9 @@ class ArcadeRepository(context: Context) {
     }
 
     suspend fun fetchGames(): List<GameDto> {
-        return client.from("games").select().decodeList<GameDto>()
+        return client.from("games").select().decodeList<GameDto>().also {
+            dog.bald.arcade.ui.components.CoverUrlRegistry.registerAll(it)
+        }
     }
 
     suspend fun fetchBios(): List<GameBiosDto> {
