@@ -43,7 +43,7 @@
             android:name=".GameActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation" />
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|keyboardHidden|keyboard|navigation" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

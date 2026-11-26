@@ -437,12 +437,12 @@ class GameActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(showMenu) {
+                LaunchedEffect(Unit) {
                     while (true) {
                         currentFps = getCurrentFps()
                         if (isNetplay) {
                             netplayHud = getNetplayHudStats()
-                            if (netplayHud.pingMs > 0u) {
+                            if (netplayHud.synchronized || netplayHud.pingMs > 0u) {
                                 if (!netplaySynchronized) {
                                     logFromAndroid("INFO", "Netplay sincronizado exitosamente! Ping=${netplayHud.pingMs}ms")
                                     CrashlyticsHelper.setNetplayState("running", netplayRoomId, netplayHud.pingMs)
@@ -501,9 +501,21 @@ class GameActivity : ComponentActivity() {
                 LaunchedEffect(isNetplay, netplayRoomId) {
                     if (isNetplay && netplayRoomId.isNotBlank()) {
                         val repo = ArcadeRepository(applicationContext)
+                        var consecutiveErrors = 0
                         while (netplayEndReason == null) {
                             delay(2000)
-                            val r = runCatching { repo.fetchRoomById(netplayRoomId) }.getOrNull()
+                            val result = runCatching { repo.fetchRoomById(netplayRoomId) }
+                            if (result.isFailure) {
+                                consecutiveErrors++
+                                if (consecutiveErrors >= 5) {
+                                    netplayEndReason = "Se perdió la conexión con el servidor de salas."
+                                    stopGame()
+                                    break
+                                }
+                                continue
+                            }
+                            consecutiveErrors = 0
+                            val r = result.getOrNull()
                             if (r == null || r.status == "closed") {
                                 netplayEndReason = "El anfitrión se fue de la sala."
                                 stopGame()
@@ -562,7 +574,9 @@ class GameActivity : ComponentActivity() {
 
                                         override fun surfaceDestroyed(holder: SurfaceHolder) {
                                             attached = false
-                                            NativeSurfaceBridge.detachSurface()
+                                            startupTrace?.stop()
+        startupTrace = null
+        NativeSurfaceBridge.detachSurface()
                                         }
                                     })
                                 }
@@ -1107,6 +1121,8 @@ class GameActivity : ComponentActivity() {
         voiceAudioManager = null
         stopVoiceSession()
         focusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+        startupTrace?.stop()
+        startupTrace = null
         NativeSurfaceBridge.detachSurface()
         if (exportsToAwait.isEmpty()) {
             stopGame()
