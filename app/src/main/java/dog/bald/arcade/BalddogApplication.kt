@@ -2,10 +2,12 @@ package dog.bald.arcade
 
 import android.app.Application
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import dog.bald.arcade.diagnostics.AnalyticsHelper
 
 class BalddogApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        AnalyticsHelper.init(this)
         runCatching {
             val crashlytics = FirebaseCrashlytics.getInstance()
             crashlytics.setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)

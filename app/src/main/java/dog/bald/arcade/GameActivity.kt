@@ -72,6 +72,7 @@ import dog.bald.arcade.data.PendingMatchHistoryEntry
 import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.PendingScoreSubmission
+import dog.bald.arcade.diagnostics.AnalyticsHelper
 import dog.bald.arcade.diagnostics.CrashlyticsHelper
 import kotlinx.serialization.json.Json
 import dog.bald.arcade.engine.NativeSurfaceBridge
@@ -333,6 +334,7 @@ class GameActivity : ComponentActivity() {
             roomId = netplayRoomId
         )
         CrashlyticsHelper.log("GameActivity start: mode=$crashNetplayMode gameId=$gameId rom=$romSlug")
+        AnalyticsHelper.logGameLaunch(gameId = gameId, romSlug = romSlug, mode = crashNetplayMode)
 
         try {
             if (romPath.isBlank()) {
@@ -1065,6 +1067,14 @@ class GameActivity : ComponentActivity() {
         if (!isReplayMode) {
             pausePlayTimer()
             flushPlayTime(force = true)
+            if (isFinishing) {
+                val mode = if (isNetplay) if (isNetplayHost) "host" else "client" else "offline"
+                AnalyticsHelper.logGameSessionEnd(
+                    romSlug = romSlug,
+                    durationSec = 0L,
+                    mode = mode
+                )
+            }
         }
     }
 
@@ -1073,6 +1083,14 @@ class GameActivity : ComponentActivity() {
         if (!isReplayMode) {
             pausePlayTimer()
             flushPlayTime(force = true)
+            if (isFinishing) {
+                val mode = if (isNetplay) if (isNetplayHost) "host" else "client" else "offline"
+                AnalyticsHelper.logGameSessionEnd(
+                    romSlug = romSlug,
+                    durationSec = 0L,
+                    mode = mode
+                )
+            }
         }
         if (isFinishing && isNetplay && isNetplayHost && netplayRoomId.isNotBlank()) {
             val roomIdToClose = netplayRoomId
