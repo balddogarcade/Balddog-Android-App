@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic idempotent welcome email delivery (`send-welcome-email` Edge Function via Resend) triggered on first profile load for newly registered users (email sign-up and Google OAuth), tracked with `public.profiles.welcome_email_sent` (`029_welcome_email_sent_flag.sql`).
 - Public read-only Supabase RPC `get_public_arcade_stats()` for aggregated landing page metrics and Top 6 game rankings (`028_public_web_stats_rpc.sql`).
 
+### Fixed
+- Reactive Supabase `SessionStatus` observation in `MainActivity` with `ProfileCache` persistence and neutral `ArcadeAvatarOrPlaceholder` fallback, preventing wrong avatars or lost user data when minimizing/reopening the app.
+- Google OAuth flow in `AuthScreen` now waits for the `dog.bald.arcade://login-callback` deeplink instead of navigating prematurely to the catalog without an active session.
+- `NewRecordDialog` now triggers only when returning from `GameActivity` (`ActivityResultContracts.StartActivityForResult`) with initial scores loaded, preventing false-positive record modals on Google login or app resume.
+
 ## [0.2.0] - 2026-11-25
 
 ### Added
