@@ -22,7 +22,7 @@ fi
 cd "$RUST_DIR"
 
 echo "=== [1/2] Compilando balddog-android ($PROFILE, arm64-v8a) ==="
-RUSTFLAGS="${RUSTFLAGS:-} -l c++_shared" \
+RUSTFLAGS="${RUSTFLAGS:-} -l c++_shared -C link-arg=-Wl,-z,max-page-size=16384" \
   cargo ndk -t arm64-v8a --platform 26 -o "$APP_ROOT/app/src/main/jniLibs" build -p balddog-android "${CARGO_FLAGS[@]}"
 
 LIBCXX_SO="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so"

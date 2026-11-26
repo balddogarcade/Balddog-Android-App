@@ -57,6 +57,7 @@ pub struct NetplayHudStats {
     pub reconnecting: bool,
     pub reconnect_secs_left: u32,
     pub session_ended: bool,
+    pub synchronized: bool,
 }
 
 pub const DISCONNECT_NOTIFY_DELAY_SECS: u64 = 3;

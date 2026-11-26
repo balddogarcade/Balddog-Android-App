@@ -1834,7 +1834,8 @@ data class NetplayHudInfo (
     var `rollbackFrames`: kotlin.UInt, 
     var `reconnecting`: kotlin.Boolean, 
     var `reconnectSecsLeft`: kotlin.UInt, 
-    var `sessionEnded`: kotlin.Boolean
+    var `sessionEnded`: kotlin.Boolean, 
+    var `synchronized`: kotlin.Boolean
 ) {
     
     companion object
@@ -1851,6 +1852,7 @@ public object FfiConverterTypeNetplayHudInfo: FfiConverterRustBuffer<NetplayHudI
             FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -1859,7 +1861,8 @@ public object FfiConverterTypeNetplayHudInfo: FfiConverterRustBuffer<NetplayHudI
             FfiConverterUInt.allocationSize(value.`rollbackFrames`) +
             FfiConverterBoolean.allocationSize(value.`reconnecting`) +
             FfiConverterUInt.allocationSize(value.`reconnectSecsLeft`) +
-            FfiConverterBoolean.allocationSize(value.`sessionEnded`)
+            FfiConverterBoolean.allocationSize(value.`sessionEnded`) +
+            FfiConverterBoolean.allocationSize(value.`synchronized`)
     )
 
     override fun write(value: NetplayHudInfo, buf: ByteBuffer) {
@@ -1868,6 +1871,7 @@ public object FfiConverterTypeNetplayHudInfo: FfiConverterRustBuffer<NetplayHudI
             FfiConverterBoolean.write(value.`reconnecting`, buf)
             FfiConverterUInt.write(value.`reconnectSecsLeft`, buf)
             FfiConverterBoolean.write(value.`sessionEnded`, buf)
+            FfiConverterBoolean.write(value.`synchronized`, buf)
     }
 }
 

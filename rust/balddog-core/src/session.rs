@@ -167,6 +167,7 @@ struct SharedStats {
     ping_ms: AtomicU32,
     rollback_frames: AtomicU32,
     reconnecting: AtomicBool,
+    netplay_synchronized: AtomicBool,
     reconnect_secs_left: AtomicU32,
     session_ended: AtomicBool,
     ranking_eligible: AtomicBool,
@@ -783,6 +784,7 @@ impl EmulationSession {
                                         &format!("GGRS Synchronized con par {addr}! Partida iniciando simulación"),
                                     );
                                     disconnect_started = None;
+                                    stats_clone.netplay_synchronized.store(true, Ordering::Release);
                                     stats_clone.reconnecting.store(false, Ordering::Release);
                                     stats_clone.reconnect_secs_left.store(0, Ordering::Release);
                                 }
@@ -1168,6 +1170,7 @@ impl EmulationSession {
             reconnecting: self.stats.reconnecting.load(Ordering::Acquire),
             reconnect_secs_left: self.stats.reconnect_secs_left.load(Ordering::Relaxed),
             session_ended: self.stats.session_ended.load(Ordering::Acquire),
+            synchronized: self.stats.netplay_synchronized.load(Ordering::Acquire),
         }
     }
 

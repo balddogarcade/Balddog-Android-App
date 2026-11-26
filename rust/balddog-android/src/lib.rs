@@ -96,6 +96,7 @@ pub struct NetplayHudInfo {
     pub reconnecting: bool,
     pub reconnect_secs_left: u32,
     pub session_ended: bool,
+    pub synchronized: bool,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -354,6 +355,7 @@ pub fn get_netplay_hud_stats() -> NetplayHudInfo {
             reconnecting: st.reconnecting,
             reconnect_secs_left: st.reconnect_secs_left,
             session_ended: st.session_ended,
+            synchronized: st.synchronized,
         }
     })
     .unwrap_or(NetplayHudInfo {
@@ -362,6 +364,7 @@ pub fn get_netplay_hud_stats() -> NetplayHudInfo {
         reconnecting: false,
         reconnect_secs_left: 0,
         session_ended: false,
+        synchronized: false,
     })
 }
 

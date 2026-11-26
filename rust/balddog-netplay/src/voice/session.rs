@@ -418,36 +418,38 @@ fn run_voice_loop(
             let mut any_audio = false;
             let mut speaking_mask: u8 = 0;
 
-            for (&handle, peer) in remote_peers.iter_mut() {
-                match peer.jitter.pop() {
-                    JitterPop::Frame(opus_pkt) => {
-                        if let Ok(decoded) = peer.decoder.decode(&opus_pkt, &mut decode_buf, false)
-                        {
-                            let n = decoded.min(VOICE_FRAME_SAMPLES);
-                            for i in 0..n {
-                                mix_acc[i] += i32::from(decode_buf[i]);
+            if listen_on {
+                for (&handle, peer) in remote_peers.iter_mut() {
+                    match peer.jitter.pop() {
+                        JitterPop::Frame(opus_pkt) => {
+                            if let Ok(decoded) = peer.decoder.decode(&opus_pkt, &mut decode_buf, false)
+                            {
+                                let n = decoded.min(VOICE_FRAME_SAMPLES);
+                                for i in 0..n {
+                                    mix_acc[i] += i32::from(decode_buf[i]);
+                                }
+                                any_audio = true;
+                                peer.last_speaking_ms = now_ms;
                             }
-                            any_audio = true;
-                            peer.last_speaking_ms = now_ms;
                         }
-                    }
-                    JitterPop::Lost => {
-                        if let Ok(decoded) = peer.decoder.decode(&[], &mut decode_buf, false) {
-                            let n = decoded.min(VOICE_FRAME_SAMPLES);
-                            for i in 0..n {
-                                mix_acc[i] += i32::from(decode_buf[i]);
+                        JitterPop::Lost => {
+                            if let Ok(decoded) = peer.decoder.decode(&[], &mut decode_buf, false) {
+                                let n = decoded.min(VOICE_FRAME_SAMPLES);
+                                for i in 0..n {
+                                    mix_acc[i] += i32::from(decode_buf[i]);
+                                }
+                                any_audio = true;
                             }
-                            any_audio = true;
                         }
+                        JitterPop::Buffering => {}
                     }
-                    JitterPop::Buffering => {}
-                }
 
-                if now_ms.saturating_sub(peer.last_speaking_ms) <= SPEAKING_HOLD_MS
-                    && peer.last_speaking_ms > 0
-                    && handle < 8
-                {
-                    speaking_mask |= 1 << handle;
+                    if now_ms.saturating_sub(peer.last_speaking_ms) <= SPEAKING_HOLD_MS
+                        && peer.last_speaking_ms > 0
+                        && handle < 8
+                    {
+                        speaking_mask |= 1 << handle;
+                    }
                 }
             }
 
