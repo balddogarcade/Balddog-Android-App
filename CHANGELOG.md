@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
 ### Changed
 - Upgraded Android toolchain and SDK BOMs: Gradle Wrapper `9.9.2`, Android Gradle Plugin `9.5.3` (with built-in Kotlin and `compileSdk` `37.2`), Kotlin plugins `2.4.21`, Jetpack Compose BOM `2026.11.01`, Supabase BOM `3.9.0` (migrating `EncryptedSessionManager` to `loadSession()` / `loadSessionOrNull()`), and Firebase BOM `35.2.0`.
 - Updated Rust dependencies in `rust/balddog-core/Cargo.toml` (`png` 0.18.1, `libloading` 0.9.1, `pollster` 1.0.3, `ringbuf` 0.6.0) with all unit tests passing.
