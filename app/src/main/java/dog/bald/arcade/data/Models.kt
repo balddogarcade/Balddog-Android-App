@@ -66,7 +66,8 @@ data class ProfileDto(
     @SerialName("social_links") val socialLinks: SocialLinksDto = SocialLinksDto(),
     @SerialName("total_plays") val totalPlays: Int = 0,
     @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
-    @SerialName("is_anonymous") val isAnonymous: Boolean = false
+    @SerialName("is_anonymous") val isAnonymous: Boolean = false,
+    @SerialName("welcome_email_sent") val welcomeEmailSent: Boolean = false
 )
 
 @Serializable

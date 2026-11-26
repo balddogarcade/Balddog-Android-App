@@ -1,6 +1,7 @@
 package dog.bald.arcade.data
 
 import io.github.jan.supabase.auth.handleDeeplinks
+import kotlinx.coroutines.launch
 
 import android.content.Context
 import dog.bald.arcade.BuildConfig
@@ -375,7 +376,12 @@ class ArcadeRepository(context: Context) {
                 eq("id", uid)
             }
         }.decodeSingleOrNull<ProfileDto>()
-        if (existing != null) return existing
+        if (existing != null) {
+            if (shouldTriggerWelcomeEmail(existing)) {
+                triggerWelcomeEmailAsync()
+            }
+            return existing
+        }
 
         val user = client.auth.currentUserOrNull()
         val rawMetaName = user?.userMetadata?.get("username")?.toString()?.trim('"')
@@ -393,9 +399,46 @@ class ArcadeRepository(context: Context) {
             put("avatar_seed", avatarSeed)
             put("is_anonymous", false)
         }
-        return runCatching {
+        val created = runCatching {
             client.from("profiles").insert(payload) { select() }.decodeSingle<ProfileDto>()
         }.getOrNull()
+        if (shouldTriggerWelcomeEmail(created)) {
+            triggerWelcomeEmailAsync()
+        }
+        return created
+    }
+
+    private fun triggerWelcomeEmailAsync() {
+        val accessToken = client.auth.currentSessionOrNull()?.accessToken ?: return
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching {
+                val url = java.net.URL("${dog.bald.arcade.BuildConfig.SUPABASE_URL}/functions/v1/send-welcome-email")
+                val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10_000
+                    readTimeout = 10_000
+                    doOutput = true
+                    setRequestProperty("Authorization", "Bearer $accessToken")
+                    setRequestProperty("apikey", dog.bald.arcade.BuildConfig.SUPABASE_ANON_KEY)
+                    setRequestProperty("Content-Type", "application/json")
+                }
+                conn.outputStream.use { it.write("{}".toByteArray(Charsets.UTF_8)) }
+                val code = conn.responseCode
+                conn.disconnect()
+                if (code !in 200..299) {
+                    dog.bald.arcade.diagnostics.CrashlyticsHelper.recordNonFatal(
+                        IllegalStateException("send-welcome-email HTTP $code")
+                    )
+                }
+            }.onFailure { t ->
+                dog.bald.arcade.diagnostics.CrashlyticsHelper.recordNonFatal(t)
+            }
+        }
+    }
+
+    companion object {
+        internal fun shouldTriggerWelcomeEmail(profile: ProfileDto?): Boolean =
+            profile != null && !profile.welcomeEmailSent
     }
 
     suspend fun incrementGameDownload(gameId: String) {
