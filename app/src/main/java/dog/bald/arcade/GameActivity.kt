@@ -1067,14 +1067,6 @@ class GameActivity : ComponentActivity() {
         if (!isReplayMode) {
             pausePlayTimer()
             flushPlayTime(force = true)
-            if (isFinishing) {
-                val mode = if (isNetplay) if (isNetplayHost) "host" else "client" else "offline"
-                AnalyticsHelper.logGameSessionEnd(
-                    romSlug = romSlug,
-                    durationSec = 0L,
-                    mode = mode
-                )
-            }
         }
     }
 
@@ -1086,7 +1078,7 @@ class GameActivity : ComponentActivity() {
             if (isFinishing) {
                 val mode = if (isNetplay) if (isNetplayHost) "host" else "client" else "offline"
                 AnalyticsHelper.logGameSessionEnd(
-                    romSlug = romSlug,
+                    romSlug = gameId,
                     durationSec = 0L,
                     mode = mode
                 )
