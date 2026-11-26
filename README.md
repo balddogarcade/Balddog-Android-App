@@ -38,6 +38,9 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
 - **Authentication & Security**:
   - Email sign-in with **Supabase Auth** (registered accounts only; guest/anonymous login prohibited).
   - Encrypted token storage via `androidx.security:security-crypto` with automatic Keystore corruption recovery.
+- **CI Security & Code Quality**:
+  - Automated security auditing with **Gitleaks**, **cargo-audit**, **cargo-deny**, **Trivy**, **OpenSSF Scorecard**, and **CodeQL** (`.github/workflows/security.yml`).
+  - Automated code quality checks with **rustfmt**, **Clippy**, **Detekt**, **ktlint**, **JetBrains Qodana**, and **SonarCloud** (`.github/workflows/quality.yml`). See [docs/CI_QUALITY_AND_SECURITY.md](docs/CI_QUALITY_AND_SECURITY.md).
 
 ---
 
@@ -74,7 +77,7 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
 - **Operating System**: Linux (for toolchain and native build scripts).
 - **Android**:
   - `minSdk`: 26 (Android 8.0)
-  - `targetSdk` / `compileSdk`: 36
+  - `compileSdk`: 37.2 / `targetSdk`: 36
   - Supported architecture: `arm64-v8a`
   - Android NDK `27.2.12479018`
   - JDK 17 or 21

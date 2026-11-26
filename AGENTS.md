@@ -301,3 +301,22 @@ Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, 
 
 
 
+
+
+---
+
+## Protocolo Obligatorio: Calidad de Código, Seguridad y Toolchain CI
+
+Al modificar workflows de CI, dependencias Gradle/Rust o código Kotlin/Rust:
+
+1. **Toolchain Android (Gradle 9.9.2 + AGP 9.5.3):**
+   - AGP 9 usa **built-in Kotlin**: **NUNCA** agregues `id("org.jetbrains.kotlin.android")` ni bloques `kotlinOptions {}` en `app/build.gradle.kts`.
+   - Mantén los plugins de Kotlin (`compose` y `serialization`) alineados (`2.4.21`) y `compileSdk = 37.2` (`targetSdk = 36`).
+2. **Invariantes de Seguridad (`.github/workflows/security.yml`):**
+   - **OpenSSF Scorecard:** Mantén `permissions: read-all` a nivel global del workflow; `security-events: write` va únicamente en los jobs individuales que suben SARIF.
+   - **`cargo-deny`:** Los crates internos del workspace (`balddog-core`, `balddog-netplay`, `balddog-android`) deben mantener `publish = false` en sus `Cargo.toml`.
+   - **Cero secretos en CI:** No uses `secrets.*` en `jobs.<id>.if` (inválido en GitHub Actions). `SONAR_TOKEN` vive en `local.properties` (ignorado) y GitHub Secrets.
+3. **Invariantes de Calidad (`.github/workflows/quality.yml`):**
+   - **Detekt / ktlint / Qodana / SonarCloud:** Excluyen `app/src/main/java/uniffi/**` (bindings autogenerados).
+   - Antes de pushear cambios en Rust, ejecuta `cargo fmt --manifest-path rust/Cargo.toml --all -- --check` y `cargo clippy --manifest-path rust/Cargo.toml --all-targets`.
+4. **Referencia:** Consultar [docs/CI_QUALITY_AND_SECURITY.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/CI_QUALITY_AND_SECURITY.md).
