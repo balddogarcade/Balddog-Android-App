@@ -1,16 +1,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "bald.dog ARCADE <noreply@bald.dog>";
-
-interface WelcomePayload {
-  email?: string;
-  username?: string;
-  record?: {
-    email?: string;
-    raw_user_meta_data?: { username?: string };
-  };
-}
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 function buildWelcomeHtml(username: string): string {
   return `<!DOCTYPE html>
@@ -67,22 +61,53 @@ serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
   }
-  if (!RESEND_API_KEY) {
-    return new Response(JSON.stringify({ error: "RESEND_API_KEY not configured" }), { status: 500 });
+  if (!RESEND_API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response(JSON.stringify({ error: "Server email configuration missing" }), { status: 500 });
   }
 
   try {
-    const payload: WelcomePayload = await req.json();
-    const email = payload.email ?? payload.record?.email;
-    const username =
-      payload.username ??
-      payload.record?.raw_user_meta_data?.username ??
-      email?.split("@")[0] ??
-      "Jugador";
-
-    if (!email) {
-      return new Response(JSON.stringify({ error: "Missing email" }), { status: 400 });
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!jwt) {
+      return new Response(JSON.stringify({ error: "Missing authorization token" }), { status: 401 });
     }
+
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
+    const { data: userData, error: userError } = await admin.auth.getUser(jwt);
+    if (userError || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Invalid user token" }), { status: 401 });
+    }
+
+    const user = userData.user;
+    const email = user.email;
+    if (!email) {
+      return new Response(JSON.stringify({ error: "User has no email" }), { status: 400 });
+    }
+
+    const { data: profile, error: profileError } = await admin
+      .from("profiles")
+      .select("username, welcome_email_sent")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      return new Response(JSON.stringify({ error: profileError.message }), { status: 500 });
+    }
+    if (profile?.welcome_email_sent) {
+      return new Response(JSON.stringify({ skipped: true, reason: "already_sent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const username =
+      profile?.username ??
+      (user.user_metadata?.username as string | undefined) ??
+      email.split("@")[0] ??
+      "Jugador";
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -99,6 +124,13 @@ serve(async (req: Request) => {
     });
 
     const data = await res.json();
+    if (res.ok) {
+      await admin
+        .from("profiles")
+        .update({ welcome_email_sent: true })
+        .eq("id", user.id);
+    }
+
     return new Response(JSON.stringify(data), {
       status: res.ok ? 200 : res.status,
       headers: { "Content-Type": "application/json" },
