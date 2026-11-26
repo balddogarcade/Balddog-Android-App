@@ -45,3 +45,24 @@ Para cada juego se contrasta:
 | 28 | `uccops` | Undercover Cops | Irem | Sí | DISCREPANCIA | Reporta `max_score=85848382` y `flickers=1` durante intro sin HUD. |
 | 29 | `viostorm` | Violent Storm | Konami | Sí | OK | `active=false` (en intro), `flickers=0`. |
 | 30 | `wwfwfestu` | WWF WrestleFest | Technos Japan | No | SIN_SCORE_CONFIG | - |
+
+## Hallazgos Principales
+- **Juegos verificados OK (puntaje pantalla = memoria `rcheevos`, `flickers=0`):**
+  - `robocop` (`1000` = `1000`)
+  - `simpsons` (`1` = `1`)
+  - `mslug` (`500` = `500`)
+  - `powerins` (`300` = `300`)
+  - `punisher` (`4200` = `4200`)
+  - `ssriders` (`100` = `100`)
+  - `tumblep` (`100` = `100`)
+- **Juegos con `active=true` estable (`flickers=0`) pero `score=0` en ventana corta:**
+  - `captcomm`, `dino`, `dbz2`, `ddtod`, `ffight`, `knights`, `kod`, `ghouls`, `nbbatman`, `viostorm`.
+- **Discrepancias detectadas (requieren ajuste de expresión `rcheevos`):**
+  - `mslug3`: pantalla `100` vs memoria `200` (dirección desplazada; candidato `bcd4_be @ 0xED16`).
+  - `snowbros`: pantalla `70` vs memoria `15728778` (`0x03FC` incorrecta; candidato `bcd4_be @ 0x1403`, `score=80` verificado).
+  - `uccops`: `max_score=85848382` y `flickers=1` durante intro sin HUD.
+- **Advertencias de estabilidad (`flickers > 0`):**
+  - `altbeast`: puntaje `500` coincide, pero `flickers=10` durante boot/attract.
+  - `ddragon2`: `flickers=8` durante boot/intro.
+- **Juegos sin `score_config` en Supabase (8):**
+  - `btoads`, `nbajam`, `pbobble`, `snowbro2`, `spidman`, `tmnt`, `tmnt2`, `wwfwfestu`.
