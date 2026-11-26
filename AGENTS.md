@@ -190,6 +190,7 @@ Para integrar y certificar nuevos juegos arcade en el catálogo de bald.dog ARCA
 Cada vez que se **cree** o **modifique** una migración SQL en `supabase/migrations/` (ej. `025_add_avatar_seed_to_room_slots.sql`):
 
 ### 1. Regla Mandatoria
+- **Cero cuentas anónimas / visitantes:** Todos los usuarios en la plataforma deben estar registrados (`is_anonymous = false`). Prohibido reintroducir flujos de invitados o lectura pública de `public.profiles`; la web pública consume únicamente agregados vía `get_public_arcade_stats()`.
 - **NUNCA** dejar una migración solo como archivo SQL local esperando ejecución manual.
 - **SIEMPRE** ejecutar la migración inmediatamente contra la base de datos de Supabase.
 - **SIEMPRE** verificar que los cambios (funciones, tablas, columnas, índices, triggers o filas actualizadas) hayan tomado efecto real en la base de datos antes de dar la tarea por concluida.
