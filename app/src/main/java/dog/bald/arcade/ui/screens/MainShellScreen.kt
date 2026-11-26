@@ -152,6 +152,7 @@ private sealed interface AppOverlay {
     data class PublicProfile(val userId: String) : AppOverlay
     data class FollowList(val userId: String, val direction: String, val username: String) : AppOverlay
     data class GameRanking(val game: GameDto) : AppOverlay
+    data class GameDetail(val game: GameDto) : AppOverlay
     data object WikiHelp : AppOverlay
 }
 
@@ -898,6 +899,20 @@ fun MainShellScreen(
                                     runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
                                 }
                             }
+                        }
+                    )
+                    is AppOverlay.GameDetail -> GameDetailScreen(
+                        game = topOverlay.game,
+                        onBack = { overlayStack = overlayStack.dropLast(1) },
+                        onPlayClick = { game ->
+                            if (downloadedFiles.contains(game.romFilename)) {
+                                onLaunchLocalRom(game)
+                            } else {
+                                downloadOnly(game, launchAfter = true)
+                            }
+                        },
+                        onRankingClick = { game ->
+                            overlayStack = overlayStack + AppOverlay.GameRanking(game)
                         }
                     )
                     is AppOverlay.GameRanking -> GameRankingScreen(

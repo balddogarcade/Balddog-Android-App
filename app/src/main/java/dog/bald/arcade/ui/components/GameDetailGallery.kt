@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import dog.bald.arcade.data.GameDto
 
 data class GalleryImageItem(val type: String, val label: String, val url: String)
@@ -57,8 +56,8 @@ fun GameDetailGallery(
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(images, key = { it.type }) { item ->
-                AsyncImage(
-                    model = item.url,
+                RemoteImage(
+                    url = item.url,
                     contentDescription = "${game.title} ${item.label}",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -83,8 +82,8 @@ fun GameDetailGallery(
             },
             title = { Text("${game.title} — ${item.label}") },
             text = {
-                AsyncImage(
-                    model = item.url,
+                RemoteImage(
+                    url = item.url,
                     contentDescription = item.label,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier

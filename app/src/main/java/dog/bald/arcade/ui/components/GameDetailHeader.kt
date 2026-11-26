@@ -26,8 +26,53 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import dog.bald.arcade.data.GameDto
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+@Composable
+internal fun RemoteImage(
+    url: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop
+) {
+    var bitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(url) {
+        if (url.isNullOrBlank()) {
+            bitmap = null
+            return@LaunchedEffect
+        }
+        bitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                URL(url).openStream().use { BitmapFactory.decodeStream(it)?.asImageBitmap() }
+            }.getOrNull()
+        }
+    }
+    val img = bitmap
+    if (img != null) {
+        Image(
+            bitmap = img,
+            contentDescription = contentDescription,
+            contentScale = contentScale,
+            modifier = modifier
+        )
+    } else {
+        Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
+    }
+}
 
 @Composable
 fun GameDetailHeader(
@@ -38,8 +83,8 @@ fun GameDetailHeader(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (!game.urlImageMarquee.isNullOrBlank()) {
-            AsyncImage(
-                model = game.urlImageMarquee,
+            RemoteImage(
+                url = game.urlImageMarquee,
                 contentDescription = "${game.title} marquee",
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier
@@ -54,8 +99,8 @@ fun GameDetailHeader(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = game.coverUrl ?: game.urlImageTitle ?: game.urlIcon,
+            RemoteImage(
+                url = game.coverUrl ?: game.urlImageTitle ?: game.urlIcon,
                 contentDescription = game.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
