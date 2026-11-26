@@ -28,11 +28,15 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -67,9 +71,22 @@ fun AuthScreen(
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
+    var awaitingGoogleOAuth by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var infoMsg by remember { mutableStateOf<String?>(null) }
     var needsEmailVerification by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && awaitingGoogleOAuth) {
+                awaitingGoogleOAuth = false
+                loading = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         modifier = modifier
@@ -273,15 +290,16 @@ fun AuthScreen(
                         onClick = {
                             scope.launch {
                                 loading = true
+                                awaitingGoogleOAuth = true
                                 errorMsg = null
-                                infoMsg = null
+                                infoMsg = "Completa el inicio de sesión en Google..."
                                 try {
                                     repo.signInWithGoogle()
-                                    onAuthenticated()
                                 } catch (t: Throwable) {
-                                    errorMsg = t.toUserMessage("Error al iniciar con Google")
-                                } finally {
+                                    awaitingGoogleOAuth = false
                                     loading = false
+                                    infoMsg = null
+                                    errorMsg = t.toUserMessage("Error al iniciar con Google")
                                 }
                             }
                         },

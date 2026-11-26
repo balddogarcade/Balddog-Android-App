@@ -7,10 +7,12 @@ import android.content.Context
 import dog.bald.arcade.BuildConfig
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
@@ -24,7 +26,11 @@ import java.util.UUID
 import kotlin.random.Random
 
 class ArcadeRepository(context: Context) {
-    private val client = SupabaseClientProvider.get(context)
+    private val appContext = context.applicationContext
+    private val client = SupabaseClientProvider.get(appContext)
+
+    val sessionStatus: StateFlow<SessionStatus>
+        get() = client.auth.sessionStatus
 
     fun isLoggedIn(): Boolean = client.auth.currentSessionOrNull() != null
 
@@ -37,6 +43,12 @@ class ArcadeRepository(context: Context) {
             client.auth.loadFromStorage()
             client.auth.currentSessionOrNull() != null
         }.getOrDefault(false)
+    }
+
+    suspend fun refreshSessionIfNeeded() {
+        if (client.auth.sessionStatus.value is SessionStatus.RefreshFailure) {
+            runCatching { client.auth.refreshCurrentSession() }
+        }
     }
 
     suspend fun signInWithEmail(email: String, password: String) {
@@ -95,6 +107,7 @@ class ArcadeRepository(context: Context) {
     }
 
     suspend fun signOut() {
+        ProfileCache.clear(appContext)
         client.auth.signOut()
     }
 
@@ -377,6 +390,7 @@ class ArcadeRepository(context: Context) {
             }
         }.decodeSingleOrNull<ProfileDto>()
         if (existing != null) {
+            ProfileCache.save(appContext, uid, existing)
             if (shouldTriggerWelcomeEmail(existing)) {
                 triggerWelcomeEmailAsync()
             }
@@ -402,6 +416,9 @@ class ArcadeRepository(context: Context) {
         val created = runCatching {
             client.from("profiles").insert(payload) { select() }.decodeSingle<ProfileDto>()
         }.getOrNull()
+        if (created != null) {
+            ProfileCache.save(appContext, uid, created)
+        }
         if (shouldTriggerWelcomeEmail(created)) {
             triggerWelcomeEmailAsync()
         }
@@ -555,7 +572,9 @@ class ArcadeRepository(context: Context) {
             put("p_is_private", isPrivate)
             put("p_social_links", linksJson)
         }
-        return client.postgrest.rpc("update_my_profile", params).decodeAs<ProfileDto>()
+        val updated = client.postgrest.rpc("update_my_profile", params).decodeAs<ProfileDto>()
+        ProfileCache.save(appContext, currentUserId(), updated)
+        return updated
     }
 
     suspend fun fetchPublicProfile(userId: String): PublicProfileDto? {

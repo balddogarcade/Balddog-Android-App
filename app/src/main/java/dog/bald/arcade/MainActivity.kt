@@ -4,13 +4,19 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import io.github.jan.supabase.auth.status.SessionStatus
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.PendingMatchHistoryQueue
@@ -69,56 +75,81 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BaldDogArcadeTheme {
-                var checkingSession by remember { mutableStateOf(true) }
-                var isAuthenticated by remember { mutableStateOf(false) }
+                val sessionStatus by repo.sessionStatus.collectAsState()
+                var lastAuthenticatedUserId by remember { mutableStateOf<String?>(null) }
+                var gameReturnCounter by remember { mutableIntStateOf(0) }
 
-                LaunchedEffect(Unit) {
-                    isAuthenticated = repo.restoreSession()
-                    checkingSession = false
+                val gameActivityLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.StartActivityForResult()
+                ) {
+                    gameReturnCounter++
                 }
 
-                LaunchedEffect(isAuthenticated) {
-                    if (isAuthenticated) {
-                        PendingScoreQueue.flushAll(this@MainActivity, repo)
-                        PendingMatchHistoryQueue.flushAll(this@MainActivity, repo)
+                LaunchedEffect(sessionStatus) {
+                    when (val status = sessionStatus) {
+                        is SessionStatus.Authenticated -> {
+                            val uid = status.session.user?.id ?: repo.currentUserId()
+                            if (!uid.isNullOrBlank()) {
+                                lastAuthenticatedUserId = uid
+                            }
+                            PendingScoreQueue.flushAll(this@MainActivity, repo)
+                            PendingMatchHistoryQueue.flushAll(this@MainActivity, repo)
+                        }
+                        is SessionStatus.NotAuthenticated -> {
+                            lastAuthenticatedUserId = null
+                        }
+                        else -> Unit
                     }
+                }
+
+                val activeUserId = when (val status = sessionStatus) {
+                    is SessionStatus.Authenticated -> status.session.user?.id ?: repo.currentUserId() ?: lastAuthenticatedUserId
+                    is SessionStatus.RefreshFailure -> lastAuthenticatedUserId ?: repo.currentUserId()
+                    else -> null
                 }
 
                 when {
-                    checkingSession -> {
+                    sessionStatus is SessionStatus.Initializing -> {
                         AppPreloadScreen(message = "Iniciando Bald Dog...")
                     }
 
-                    !isAuthenticated -> {
+                    activeUserId == null -> {
                         AuthScreen(
                             repo = repo,
-                            onAuthenticated = { isAuthenticated = true }
+                            onAuthenticated = {
+                                repo.currentUserId()?.let { uid ->
+                                    lastAuthenticatedUserId = uid
+                                }
+                            }
                         )
                     }
 
                     else -> {
-                        MainShellScreen(
-                            repo = repo,
-                            romManager = romManager,
-                            lanNsd = lanNsd,
-                            nativeLibDir = nativeLibDir,
-                            onActiveHostRoomChanged = { roomId -> activeHostRoomId = roomId },
-                            onSignedOut = { isAuthenticated = false },
-                            onLaunchLocalRom = { game ->
-                                val romFile = File(romsDir, game.romFilename)
-                                val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
-                                    putExtra(GameActivity.EXTRA_GAME_ID, game.id)
-                                    putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
-                                    putExtra(GameActivity.EXTRA_SYSTEM_DIR, systemDir.absolutePath)
-                                    putExtra(GameActivity.EXTRA_SAVE_DIR, saveDir.absolutePath)
-                                    putExtra(GameActivity.EXTRA_GAME_TITLE, game.title)
-                                    putExtra(GameActivity.EXTRA_ROM_SHA256, game.sha256)
-                                    game.scoreConfig?.lboard?.takeIf { it.isNotBlank() }?.let { lboard ->
-                                        putExtra(GameActivity.EXTRA_SCORE_DEF, lboard)
+                        key(activeUserId) {
+                            MainShellScreen(
+                                repo = repo,
+                                romManager = romManager,
+                                lanNsd = lanNsd,
+                                nativeLibDir = nativeLibDir,
+                                currentUserId = activeUserId,
+                                gameReturnCounter = gameReturnCounter,
+                                onActiveHostRoomChanged = { roomId -> activeHostRoomId = roomId },
+                                onSignedOut = { lastAuthenticatedUserId = null },
+                                onLaunchLocalRom = { game ->
+                                    val romFile = File(romsDir, game.romFilename)
+                                    val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
+                                        putExtra(GameActivity.EXTRA_GAME_ID, game.id)
+                                        putExtra(GameActivity.EXTRA_ROM_PATH, romFile.absolutePath)
+                                        putExtra(GameActivity.EXTRA_SYSTEM_DIR, systemDir.absolutePath)
+                                        putExtra(GameActivity.EXTRA_SAVE_DIR, saveDir.absolutePath)
+                                        putExtra(GameActivity.EXTRA_GAME_TITLE, game.title)
+                                        putExtra(GameActivity.EXTRA_ROM_SHA256, game.sha256)
+                                        game.scoreConfig?.lboard?.takeIf { it.isNotBlank() }?.let { lboard ->
+                                            putExtra(GameActivity.EXTRA_SCORE_DEF, lboard)
+                                        }
                                     }
-                                }
-                                startActivity(intent)
-                            },
+                                    gameActivityLauncher.launch(intent)
+                                },
                             onLaunchReplay = { game, replayFile, entry ->
                                 val romFile = File(romsDir, game.romFilename)
                                 val intent = Intent(this@MainActivity, GameActivity::class.java).apply {
@@ -135,7 +166,7 @@ class MainActivity : ComponentActivity() {
                                         putExtra(GameActivity.EXTRA_SCORE_DEF, lboard)
                                     }
                                 }
-                                startActivity(intent)
+                                gameActivityLauncher.launch(intent)
                             },
                             onLaunchNetplayMatch = { game, room, mySlot, localPort, voiceLocalPort ->
                                 val romFile = File(romsDir, game.romFilename)
@@ -215,9 +246,10 @@ class MainActivity : ComponentActivity() {
                                     putExtra(GameActivity.EXTRA_VOICE_PEER_HANDLES, voicePeerHandles.toIntArray())
                                     putStringArrayListExtra(GameActivity.EXTRA_VOICE_PEER_ADDRS, voicePeerAddrs)
                                 }
-                                startActivity(intent)
+                                gameActivityLauncher.launch(intent)
                             }
                         )
+                        }
                     }
                 }
             }
