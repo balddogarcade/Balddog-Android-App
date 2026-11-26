@@ -63,6 +63,26 @@ object AnalyticsHelper {
         }
     }
 
+    fun logGameDetailViewed(gameId: String, romSlug: String) {
+        logEvent("game_detail_viewed") {
+            putString("game_id", gameId.ifBlank { "unknown" })
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+        }
+    }
+
+    fun logGameGalleryOpened(romSlug: String, imageType: String) {
+        logEvent("game_gallery_opened") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+            putString("image_type", imageType.ifBlank { "unknown" })
+        }
+    }
+
+    fun logGameTrailerOpened(romSlug: String) {
+        logEvent("game_trailer_opened") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+        }
+    }
+
     private inline fun logEvent(name: String, block: Bundle.() -> Unit) {
         runCatching {
             val bundle = Bundle().apply(block)

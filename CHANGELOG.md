@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Expanded `GameDto` with 22 Arcade Database metadata and IPFS media fields (`manufacturer`, `year`, `genre`, `serie`, `players`, `nplayers`, `input_controls`, `input_buttons`, `buttons_colors`, `history`, `youtube_video_id`, and IPFS gallery URLs) plus `AnalyticsHelper` / `CrashlyticsHelper` instrumentation for ROM detail views.
 - Centralized `PerformanceHelper` (`dog.bald.arcade.diagnostics.PerformanceHelper`) wrapping Firebase Performance Monitoring (`firebase-perf`) with custom traces (`rom_startup_trace`, `netplay_sync_trace`) in `GameActivity`.
 - Centralized `AnalyticsHelper` (`dog.bald.arcade.diagnostics.AnalyticsHelper`) wrapping Google Analytics for Firebase (`firebase-analytics`) without PII, initialized in `BalddogApplication` and tracking `game_launch` and `game_session_end` in `GameActivity`.
 

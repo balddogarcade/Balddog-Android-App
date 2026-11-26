@@ -39,4 +39,19 @@ object CrashlyticsHelper {
     fun recordNonFatal(throwable: Throwable) {
         instance()?.recordException(throwable)
     }
+
+    fun setCurrentGameDetail(gameId: String, romSlug: String) {
+        instance()?.apply {
+            setCustomKey("detail_game_id", gameId.ifBlank { "unknown" })
+            setCustomKey("detail_rom_slug", romSlug.ifBlank { "unknown" })
+            log("Opened GameDetail for $romSlug ($gameId)")
+        }
+    }
+
+    fun logGameDetailError(romSlug: String, throwable: Throwable) {
+        instance()?.apply {
+            log("GameDetail error on $romSlug: ${throwable.message}")
+            recordException(throwable)
+        }
+    }
 }

@@ -34,7 +34,29 @@ data class GameDto(
     @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
     @SerialName("max_valid_score") val maxValidScore: Long? = null,
     @SerialName("score_config") val scoreConfig: ScoreConfigDto? = null,
-    @SerialName("created_at") val createdAt: String? = null
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("game_name") val gameName: String? = null,
+    @SerialName("adb_title") val adbTitle: String? = null,
+    @SerialName("short_title") val shortTitle: String? = null,
+    val manufacturer: String? = null,
+    val year: String? = null,
+    val genre: String? = null,
+    val serie: String? = null,
+    val players: Int? = null,
+    val nplayers: String? = null,
+    @SerialName("emulator_name") val emulatorName: String? = null,
+    @SerialName("input_controls") val inputControls: String? = null,
+    @SerialName("input_buttons") val inputButtons: Int? = null,
+    @SerialName("buttons_colors") val buttonsColors: String? = null,
+    val history: String? = null,
+    @SerialName("history_copyright_long") val historyCopyrightLong: String? = null,
+    @SerialName("youtube_video_id") val youtubeVideoId: String? = null,
+    @SerialName("url_image_ingame") val urlImageIngame: String? = null,
+    @SerialName("url_image_title") val urlImageTitle: String? = null,
+    @SerialName("url_image_marquee") val urlImageMarquee: String? = null,
+    @SerialName("url_image_cabinet") val urlImageCabinet: String? = null,
+    @SerialName("url_image_flyer") val urlImageFlyer: String? = null,
+    @SerialName("url_icon") val urlIcon: String? = null
 )
 
 @Serializable
