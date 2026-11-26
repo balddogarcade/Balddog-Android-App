@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1086,95 +1087,43 @@ private fun CatalogTab(
             placeholder = "Buscar en catálogo..."
         )
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            item {
-                val isSelected = selectedSort == CatalogSortOption.RECENT
-                FilterChip(
-                    selected = isSelected,
-                    onClick = {
-                        selectedSort = if (isSelected) CatalogSortOption.NAME else CatalogSortOption.RECENT
-                    },
-                    label = { Text("Más reciente", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = CarbonSurface,
-                        labelColor = MutedGray,
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-                        selectedLabelColor = PureWhite
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor = CharcoalBorder,
-                        selectedBorderColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            }
-            item {
-                val isSelected = selectedSort == CatalogSortOption.MOST_DOWNLOADED
-                FilterChip(
-                    selected = isSelected,
-                    onClick = {
-                        selectedSort = if (isSelected) CatalogSortOption.NAME else CatalogSortOption.MOST_DOWNLOADED
-                    },
-                    label = { Text("Más descargados", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = CarbonSurface,
-                        labelColor = MutedGray,
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-                        selectedLabelColor = PureWhite
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor = CharcoalBorder,
-                        selectedBorderColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            }
-            item {
-                val isSelected = selectedSort == CatalogSortOption.MOST_PLAYED
-                FilterChip(
-                    selected = isSelected,
-                    onClick = {
-                        selectedSort = if (isSelected) CatalogSortOption.NAME else CatalogSortOption.MOST_PLAYED
-                    },
-                    label = { Text("Más jugados", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = CarbonSurface,
-                        labelColor = MutedGray,
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-                        selectedLabelColor = PureWhite
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor = CharcoalBorder,
-                        selectedBorderColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            }
-            item {
-                FilterChip(
-                    selected = downloadedOnly,
-                    onClick = { downloadedOnly = !downloadedOnly },
-                    label = { Text("Descargados", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = CarbonSurface,
-                        labelColor = MutedGray,
-                        selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
-                        selectedLabelColor = PureWhite
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = downloadedOnly,
-                        borderColor = CharcoalBorder,
-                        selectedBorderColor = MaterialTheme.colorScheme.primary
-                    )
-                )
-            }
+            val isRecent = selectedSort == CatalogSortOption.RECENT
+            CatalogFilterChip(
+                label = "Nuevos",
+                selected = isRecent,
+                onClick = {
+                    selectedSort = if (isRecent) CatalogSortOption.NAME else CatalogSortOption.RECENT
+                },
+                modifier = Modifier.weight(1f)
+            )
+            val isMostDownloaded = selectedSort == CatalogSortOption.MOST_DOWNLOADED
+            CatalogFilterChip(
+                label = "Más descargados",
+                selected = isMostDownloaded,
+                onClick = {
+                    selectedSort = if (isMostDownloaded) CatalogSortOption.NAME else CatalogSortOption.MOST_DOWNLOADED
+                },
+                modifier = Modifier.weight(1f)
+            )
+            val isMostPlayed = selectedSort == CatalogSortOption.MOST_PLAYED
+            CatalogFilterChip(
+                label = "Más jugados",
+                selected = isMostPlayed,
+                onClick = {
+                    selectedSort = if (isMostPlayed) CatalogSortOption.NAME else CatalogSortOption.MOST_PLAYED
+                },
+                modifier = Modifier.weight(1f)
+            )
+            CatalogFilterChip(
+                label = "Biblioteca",
+                selected = downloadedOnly,
+                onClick = { downloadedOnly = !downloadedOnly },
+                modifier = Modifier.weight(1f)
+            )
         }
 
         if (filtered.isEmpty() && (searchQuery.isNotBlank() || downloadedOnly)) {
@@ -1719,5 +1668,36 @@ private fun RoomsTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CatalogFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(0.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else CarbonSurface,
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else CharcoalBorder
+        ),
+        modifier = modifier
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = if (selected) PureWhite else MutedGray,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 8.dp)
+        )
     }
 }
