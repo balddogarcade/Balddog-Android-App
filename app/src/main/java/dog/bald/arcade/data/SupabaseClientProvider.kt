@@ -22,13 +22,8 @@ private class EncryptedSessionManager(context: Context) : SessionManager {
         try {
             createPrefs(context)
         } catch (_: Exception) {
-            try {
-                val prefFile = File(context.filesDir.parentFile, "shared_prefs/balddog_secure_session.xml")
-                if (prefFile.exists()) prefFile.delete()
-                createPrefs(context)
-            } catch (_: Exception) {
-                context.getSharedPreferences("balddog_secure_session_fallback", Context.MODE_PRIVATE)
-            }
+            context.deleteSharedPreferences("balddog_secure_session")
+            createPrefs(context)
         }
     }
 

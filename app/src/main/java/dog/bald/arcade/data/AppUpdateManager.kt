@@ -180,23 +180,25 @@ class AppUpdateManager(
 
             _state.value = AppUpdateState.Verifying
             val shaUrl = info.sha256Url
-            if (!shaUrl.isNullOrBlank()) {
-                val shaReq = Request.Builder()
-                    .url(shaUrl)
-                    .header("User-Agent", "balddog-arcade-android/${BuildConfig.VERSION_NAME}")
-                    .build()
-                val shaContent = client.newCall(shaReq).execute().use { resp ->
-                    if (!resp.isSuccessful) {
-                        throw IllegalStateException("Descarga SHA-256 falló (HTTP ${resp.code})")
-                    }
-                    resp.body?.string().orEmpty()
+            if (shaUrl.isNullOrBlank()) {
+                tmpFile.delete()
+                throw SecurityException("La release no incluye archivo .sha256 para verificar integridad")
+            }
+            val shaReq = Request.Builder()
+                .url(shaUrl)
+                .header("User-Agent", "balddog-arcade-android/${BuildConfig.VERSION_NAME}")
+                .build()
+            val shaContent = client.newCall(shaReq).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    throw IllegalStateException("Descarga SHA-256 falló (HTTP ${resp.code})")
                 }
-                val expectedSha = parseSha256Content(shaContent)
-                    ?: throw IllegalStateException("Formato de archivo .sha256 inválido")
-                if (!verifyApkSha256(tmpFile, expectedSha)) {
-                    tmpFile.delete()
-                    throw SecurityException("La verificación SHA-256 falló: el APK descargado está corrupto o alterado")
-                }
+                resp.body?.string().orEmpty()
+            }
+            val expectedSha = parseSha256Content(shaContent)
+                ?: throw IllegalStateException("Formato de archivo .sha256 inválido")
+            if (!verifyApkSha256(tmpFile, expectedSha)) {
+                tmpFile.delete()
+                throw SecurityException("La verificación SHA-256 falló: el APK descargado está corrupto o alterado")
             }
 
             if (targetFile.exists()) targetFile.delete()

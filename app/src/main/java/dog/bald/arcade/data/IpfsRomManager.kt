@@ -24,7 +24,15 @@ class IpfsRomManager(context: Context) {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val gateways = listOf(
+    private val replaysCacheDir = File(context.cacheDir, "replays")
+
+    private fun safeFile(dir: File, filename: String): File {
+        val clean = File(filename).name
+        require(clean.isNotBlank() && clean == filename && !clean.contains("..")) {
+            "Nombre de archivo inválido: $filename"
+        }
+        return File(dir, clean)
+    }
         "https://gateway.pinata.cloud/ipfs/",
         "https://ipfs.io/ipfs/",
         "https://dweb.link/ipfs/"
@@ -56,7 +64,7 @@ class IpfsRomManager(context: Context) {
     }
 
     fun clearAllCache() {
-        listOf(romsDir, systemDir, savestatesDir).forEach { dir ->
+        listOf(romsDir, systemDir, savestatesDir, replaysCacheDir).forEach { dir ->
             dir.listFiles()?.forEach { it.delete() }
         }
     }
