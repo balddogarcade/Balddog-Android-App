@@ -6,7 +6,17 @@ const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "bald.dog ARCADE <noreply@bald.
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
+function escapeHtml(raw: string): string {
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildWelcomeHtml(username: string): string {
+  const safeUsername = escapeHtml(username);
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -24,7 +34,7 @@ function buildWelcomeHtml(username: string): string {
               <h1 style="margin:0 0 8px 0;font-size:24px;letter-spacing:1px;color:#ffffff;">BALD.DOG ARCADE</h1>
               <p style="margin:0 0 24px 0;font-size:14px;color:#9ca3af;">El patio de recreo de los perros calvos.</p>
               <p style="margin:0 0 16px 0;font-size:16px;line-height:1.5;color:#e5e7eb;">
-                ¡Bienvenido, <strong>${username}</strong>! Tu cuenta está lista. Aquí tienes todo lo que puedes hacer en la plataforma:
+                ¡Bienvenido, <strong>${safeUsername}</strong>! Tu cuenta está lista. Aquí tienes todo lo que puedes hacer en la plataforma:
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;background-color:#0f0f14;border:1px solid #262630;">
                 <tr><td style="padding:14px 16px;border-bottom:1px solid #262630;">
@@ -87,16 +97,18 @@ serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "User has no email" }), { status: 400 });
     }
 
-    const { data: profile, error: profileError } = await admin
+    const { data: claimed, error: claimError } = await admin
       .from("profiles")
-      .select("username, welcome_email_sent")
+      .update({ welcome_email_sent: true })
       .eq("id", user.id)
+      .eq("welcome_email_sent", false)
+      .select("username")
       .maybeSingle();
 
-    if (profileError) {
-      return new Response(JSON.stringify({ error: profileError.message }), { status: 500 });
+    if (claimError) {
+      return new Response(JSON.stringify({ error: "Failed to claim welcome email state" }), { status: 500 });
     }
-    if (profile?.welcome_email_sent) {
+    if (!claimed) {
       return new Response(JSON.stringify({ skipped: true, reason: "already_sent" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -104,7 +116,7 @@ serve(async (req: Request) => {
     }
 
     const username =
-      profile?.username ??
+      claimed.username ??
       (user.user_metadata?.username as string | undefined) ??
       email.split("@")[0] ??
       "Jugador";
@@ -124,10 +136,10 @@ serve(async (req: Request) => {
     });
 
     const data = await res.json();
-    if (res.ok) {
+    if (!res.ok) {
       await admin
         .from("profiles")
-        .update({ welcome_email_sent: true })
+        .update({ welcome_email_sent: false })
         .eq("id", user.id);
     }
 
@@ -135,7 +147,7 @@ serve(async (req: Request) => {
       status: res.ok ? 200 : res.status,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+  } catch {
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
   }
 });
