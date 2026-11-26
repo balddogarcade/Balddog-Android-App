@@ -75,11 +75,9 @@ android {
                     .ifBlank { envOrProp("BALDDOG_KEYSTORE_PASSWORD") }
                 keyAlias = envOrProp("ANDROID_KEYSTORE_ALIAS")
                     .ifBlank { envOrProp("BALDDOG_KEY_ALIAS") }
-                keyPassword = envOrProp("ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_PASSWORD")
-                    .let {
-                        envOrProp("ANDROID_KEY_PASSWORD")
-                            .ifBlank { envOrProp("BALDDOG_KEY_PASSWORD") }
-                    }
+                keyPassword = envOrProp("ANDROID_KEY_PASSWORD")
+                    .ifBlank { envOrProp("BALDDOG_KEY_PASSWORD") }
+                    .ifBlank { storePassword ?: "" }
             }
         }
     }
