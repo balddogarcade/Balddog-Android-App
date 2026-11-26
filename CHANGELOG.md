@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- Added `LICENSE` (MIT) and `cargo test` execution in `.github/workflows/quality.yml` (resolving OpenSSF Scorecard `License` and `CI-Tests`).
 - Pinned all GitHub Actions in `.github/workflows/*.yml` to full commit SHAs (resolving OpenSSF Scorecard `Pinned-Dependencies`).
 - Added `SECURITY.md` with vulnerability reporting policy and supported versions.
 - Scoped `permissions` in `.github/workflows/release.yml` to `read-all` globally and job-level write permissions only on `build-and-release`.

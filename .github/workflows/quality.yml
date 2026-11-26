@@ -27,6 +27,9 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --manifest-path rust/Cargo.toml --all-targets
 
+      - name: Run Rust unit tests
+        run: cargo test --manifest-path rust/Cargo.toml
+
       - name: Autofix Rust formatting (PRs)
         if: github.event_name == 'pull_request' && failure()
         run: cargo fmt --manifest-path rust/Cargo.toml --all
