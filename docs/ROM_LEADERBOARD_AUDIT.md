@@ -18,12 +18,12 @@ Para cada juego se contrasta:
 | 1 | `altbeast` | Altered Beast | Sega System 16B | Sí | OK (con advertencia) | Puntaje pantalla `500` = memoria `500`, pero `STA:0xH0820=1` tuvo `flickers=10` durante boot/attract. |
 | 2 | `btoads` | Battletoads Arcade | Arcade | No | SIN_SCORE_CONFIG | - |
 | 3 | `captcomm` | Captain Commando | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
-| 4 | `dbz2` | Dragon Ball Z 2: Super Battle | Banpresto | Sí | PENDIENTE | - |
-| 5 | `ddragon2` | Double Dragon II: The Revenge | Technos Japan | Sí | PENDIENTE | - |
-| 6 | `ddtod` | Dungeons & Dragons: Tower of Doom | CPS2 | Sí | PENDIENTE | - |
+| 4 | `dbz2` | Dragon Ball Z 2: Super Battle | Banpresto | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin daño en ventana corta). |
+| 5 | `ddragon2` | Double Dragon II: The Revenge | Technos Japan | Sí | ADVERTENCIA | `active=false` al final, `flickers=8` detectados durante boot/intro. |
+| 6 | `ddtod` | Dungeons & Dragons: Tower of Doom | CPS2 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 7 | `dino` | Cadillacs and Dinosaurs | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
-| 8 | `ffight` | Final Fight | CPS1 | Sí | PENDIENTE | - |
-| 9 | `ghouls` | Ghouls 'n Ghosts | CPS1 | Sí | PENDIENTE | - |
+| 8 | `ffight` | Final Fight | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
+| 9 | `ghouls` | Ghouls 'n Ghosts | CPS1 | Sí | OK | `active=false` (en intro/mapa inicial), `flickers=0`. |
 | 10 | `knights` | Knights of the Round | CPS1 | Sí | PENDIENTE | - |
 | 11 | `kod` | The King of Dragons | CPS1 | Sí | PENDIENTE | - |
 | 12 | `mslug` | Metal Slug: Super Vehicle-001 | NEOGEO | Sí | PENDIENTE | - |
