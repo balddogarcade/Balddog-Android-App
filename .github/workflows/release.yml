@@ -190,7 +190,7 @@ jobs:
           PY
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.version_name }}
           name: bald.dog ARCADE v${{ steps.version.outputs.version_name }}
