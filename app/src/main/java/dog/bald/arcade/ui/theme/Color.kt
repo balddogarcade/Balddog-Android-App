@@ -14,7 +14,7 @@ val PureWhite = Color(0xFFFAFAFA)
 val PureBlack = Color(0xFF000000)
 
 // Semantic Action Tokens
-val DangerRed = Color(0xFFC62828)
-val DangerRedBorder = Color(0xFFE53935)
-val ReadyGreen = Color(0xFF2E7D32)
-val ReadyGreenAccent = Color(0xFF4CAF50)
+val DangerRed = Color(0xFFFF3B30)
+val DangerRedBorder = Color(0xFF661A1A)
+val ReadyGreen = Color(0xFF34C759)
+val ReadyGreenAccent = Color(0xFF1A5C29)

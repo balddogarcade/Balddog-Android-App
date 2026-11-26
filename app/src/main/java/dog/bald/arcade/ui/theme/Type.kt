@@ -30,7 +30,7 @@ val SpaceGroteskFamily = FontFamily(
     Font(
         resId = R.font.space_grotesk,
         weight = FontWeight.ExtraBold,
-        variationSettings = FontVariation.Settings(FontVariation.weight(700))
+        variationSettings = FontVariation.Settings(FontVariation.weight(800))
     )
 )
 
