@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
+    id("io.gitlab.arturbosch.detekt")
 }
 
 val localProps = Properties().apply {
@@ -127,6 +128,12 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    source.setFrom(files("src/main/java/dog"))
 }
 
 dependencies {

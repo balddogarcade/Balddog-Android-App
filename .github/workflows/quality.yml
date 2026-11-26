@@ -1,0 +1,61 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust-lint:
+    name: Rust Format & Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting (rustfmt)
+        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path rust/Cargo.toml --all-targets
+
+      - name: Autofix Rust formatting (PRs)
+        if: github.event_name == 'pull_request' && failure()
+        run: cargo fmt --manifest-path rust/Cargo.toml --all
+
+      - name: Commit autofix changes
+        if: github.event_name == 'pull_request'
+        uses: autofix-ci/action@v1
+
+  kotlin-lint:
+    name: Kotlin Detekt & ktlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run Detekt
+        run: ./gradlew detekt --no-daemon
+
+      - name: Install & run ktlint
+        run: |
+          curl -sSLO https://github.com/pinterest/ktlint/releases/latest/download/ktlint && chmod +x ktlint
+          ./ktlint "app/src/main/java/dog/**/*.kt" || true
