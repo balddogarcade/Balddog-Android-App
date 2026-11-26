@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Hardened Supabase RPCs and RLS (`037`, `038`): idempotent `update_room_slot('leave')`, preserved guest `ready` state on `'claim'`, anonymous signup block and username collision handling in `handle_new_user()`, closed direct `rooms` UPDATE DML, enforced `is_private` across public/leaderboard RPCs, added partial indexes, and revoked `PUBLIC` execute on `cleanup_stale_rooms()`.
+- Hardened `send-welcome-email` Edge Function against HTML injection and TOCTOU duplicate sends, and added `delete-account` Edge Function for in-app account & replay deletion.
+- Enforced strict BSV1 replay verification (`from_gzip_file_strict`, 16 MiB gzip cap, no embedded `initial_state` or `rom_crc32=0` bypass) and aligned `scripts/verify-replays-worker.py` with migration `023` parameters and `error` status mapping.
+- Removed plaintext `SharedPreferences` fallback in `EncryptedSessionManager`, required `.sha256` verification in `AppUpdateManager`, and removed the blanket R8 `-keep class dog.bald.arcade.**` rule in `proguard-rules.pro`.
+
+### Fixed
+- Fixed netplay NVRAM desync (`clear_deterministic_nvram`), stale `audio_scratch` replay in `take_audio_samples()`, `ReplayRecorder` cutoff after 1CC disqualification, `SeekReplay` leaderboard evaluation, `pending_submit_score` compare-exchange race, and `GgrsEvent::Synchronized` exposure for 0ms LAN sync.
+- Fixed `GameActivity` `configChanges` (`screenLayout|smallestScreenSize|uiMode|density`), `rom_startup_trace` leak, transient `fetchRoomById` netplay disconnects, and `LaunchedEffect(Unit)` polling.
+
+### Performance
+- Optimized `GameCoverImage` with shared `OkHttpClient`, in-flight deduplication, atomic disk writes, `inSampleSize` downsampling, and KB-bounded `LruCache`.
+- Parallelized `MainShellScreen.refreshAll()` with `coroutineScope { async ... }` and skipped Opus decoding when voice `listen_enabled` is false.
+- Added `-Wl,-z,max-page-size=16384` to `scripts/build-rust.sh` for 16 KB page alignment.
+
+### Added
+- Added in-app **Eliminar cuenta** flow in `ProfileScreen` and legal links (`https://bald.dog/privacy`, `https://bald.dog/terms`).
+
 ### Changed
 - Migrated all game cover images (`cover_url`) from bundled `assets/covers/*.webp` to Pinata IPFS (`public.games.cover_url`), refactored `GameCoverImage` and `RemoteImage` to share a unified memory + disk cache (`RemoteImageCache`), and removed local cover assets from the APK.
 

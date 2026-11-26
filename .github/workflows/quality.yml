@@ -56,8 +56,8 @@ jobs:
 
       - name: Install & run ktlint
         run: |
-          curl -sSLO https://github.com/pinterest/ktlint/releases/latest/download/ktlint && chmod +x ktlint
-          ./ktlint "app/src/main/java/dog/**/*.kt" || true
+          curl -sSLO https://github.com/pinterest/ktlint/releases/download/1.5.0/ktlint && chmod +x ktlint
+          ./ktlint "app/src/main/java/dog/**/*.kt"
 
   qodana:
     name: JetBrains Qodana (Community)
