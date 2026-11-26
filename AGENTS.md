@@ -338,3 +338,13 @@ Al agregar nuevos juegos al catálogo (`public.games`), ejecuta el seeder para p
    - La respuesta de `adb.arcadeitalia.net` viene comprimida en **GZIP** (`\x1f\x8b`).
    - El seeder preserva intactos `cover_url` y `title` actuales del catálogo (el título de ADB se guarda en `adb_title`).
    - Requiere `SUPABASE_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN` y credenciales de Pinata (`PINATA_JWT` o `PINATA_API_KEY` + `PINATA_SECRET_API_KEY`) en `local.properties` o entorno.
+
+---
+
+## Protocolo: Mantenimiento Automático con `pg_cron` y Analítica Dual
+
+1. **Limpieza automática de salas (`pg_cron`):**
+   - La extensión `pg_cron` está habilitada en Supabase (`036_enable_pg_cron_maintenance.sql`) y ejecuta `public.cleanup_stale_rooms()` cada 5 minutos (`*/5 * * * *`) para cerrar salas en estado `'waiting'` o `'playing'` sin actividad (`updated_at`) durante más de 30 minutos.
+2. **Analítica Dual:**
+   - **App Android:** Firebase Analytics (GA4) vía `AnalyticsHelper` (sin PII).
+   - **Web pública (`bald.dog`):** Cloudflare Web Analytics (sin cookies, inyección automática vía `auto_install: True`).

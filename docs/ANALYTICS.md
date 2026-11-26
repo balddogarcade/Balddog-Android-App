@@ -32,3 +32,10 @@ Toda la instrumentación pasa por [`AnalyticsHelper.kt`](../app/src/main/java/do
    ```bash
    adb shell setprop debug.firebase.analytics.app .none.
    ```
+
+## Analítica Web Pública (Cloudflare Web Analytics)
+
+La web pública (`https://bald.dog`, alojada en Cloudflare Pages en el repositorio `Balddog-Main-Webpage`) complementa a Firebase Analytics (GA4) de la app Android utilizando **Cloudflare Web Analytics**:
+
+- **Sin cookies y respetuosa con la privacidad:** No almacena identificadores personales ni requiere banner de consentimiento de cookies.
+- **Inyección automática (`auto_install: True`):** Cloudflare inyecta el beacon (`static.cloudflareinsights.com/beacon.min.js`) automáticamente en las respuestas HTML servidas bajo la zona `bald.dog`, por lo que no se debe duplicar el snippet manualmente en el código fuente.
