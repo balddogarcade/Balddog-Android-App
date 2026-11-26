@@ -29,11 +29,15 @@ import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.MutedGray
 import java.io.File
-import java.net.URL
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 internal object CoverUrlRegistry {
     private val urlsBySlug = ConcurrentHashMap<String, String>()
@@ -51,32 +55,92 @@ internal object CoverUrlRegistry {
 }
 
 internal object RemoteImageCache {
-    private val memoryCache = LruCache<String, ImageBitmap>(64)
+    private const val MAX_MEMORY_KB = 24 * 1024
+    private const val MAX_IMAGE_BYTES = 5 * 1024 * 1024
+    private const val MAX_DECODE_DIM = 1024
+
+    private val httpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .build()
+    }
+
+    private val inFlightLocks = ConcurrentHashMap<String, Mutex>()
+
+    private val memoryCache = object : LruCache<String, ImageBitmap>(MAX_MEMORY_KB) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int =
+            ((value.width.toLong() * value.height.toLong() * 4L) / 1024L).toInt().coerceAtLeast(1)
+    }
 
     fun getFromMemory(url: String): ImageBitmap? = memoryCache.get(url)
 
     suspend fun load(context: Context, url: String): ImageBitmap? {
+        if (!url.startsWith("https://") && !url.startsWith("http://")) return null
         memoryCache.get(url)?.let { return it }
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val cacheDir = File(context.cacheDir, "image_cache").apply { mkdirs() }
-                val cacheFile = File(cacheDir, sha256(url))
+        val lock = inFlightLocks.computeIfAbsent(url) { Mutex() }
+        return lock.withLock {
+            memoryCache.get(url)?.let { return@withLock it }
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val cacheDir = File(context.cacheDir, "image_cache").apply { mkdirs() }
+                    val cacheFile = File(cacheDir, sha256(url))
 
-                if (cacheFile.exists() && cacheFile.length() > 0L) {
-                    BitmapFactory.decodeFile(cacheFile.absolutePath)?.asImageBitmap()?.also { bmp ->
-                        memoryCache.put(url, bmp)
-                        return@runCatching bmp
+                    if (cacheFile.exists() && cacheFile.length() > 0L) {
+                        decodeSampledFile(cacheFile)?.asImageBitmap()?.also { bmp ->
+                            memoryCache.put(url, bmp)
+                            return@runCatching bmp
+                        }
                     }
-                }
 
-                val bytes = URL(url).openStream().use { it.readBytes() }
-                val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                    ?: return@runCatching null
-                runCatching { cacheFile.writeBytes(bytes) }
-                memoryCache.put(url, bmp)
-                bmp
-            }.getOrNull()
+                    val req = Request.Builder().url(url).build()
+                    val bytes = httpClient.newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) return@use null
+                        val body = resp.body ?: return@use null
+                        if (body.contentLength() > MAX_IMAGE_BYTES) return@use null
+                        val raw = body.bytes()
+                        if (raw.size > MAX_IMAGE_BYTES) return@use null
+                        raw
+                    } ?: return@runCatching null
+
+                    val bmp = decodeSampledBytes(bytes)?.asImageBitmap() ?: return@runCatching null
+                    runCatching {
+                        val tmp = File(cacheDir, "${cacheFile.name}.tmp")
+                        tmp.writeBytes(bytes)
+                        if (!tmp.renameTo(cacheFile)) {
+                            tmp.copyTo(cacheFile, overwrite = true)
+                            tmp.delete()
+                        }
+                    }
+                    memoryCache.put(url, bmp)
+                    bmp
+                }.getOrNull()
+            }
         }
+    }
+
+    private fun decodeSampledBytes(bytes: ByteArray): android.graphics.Bitmap? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight)
+        opts.inJustDecodeBounds = false
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+    }
+
+    private fun decodeSampledFile(file: File): android.graphics.Bitmap? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight)
+        opts.inJustDecodeBounds = false
+        return BitmapFactory.decodeFile(file.absolutePath, opts)
+    }
+
+    private fun calculateInSampleSize(width: Int, height: Int): Int {
+        var inSampleSize = 1
+        while (width / inSampleSize > MAX_DECODE_DIM || height / inSampleSize > MAX_DECODE_DIM) {
+            inSampleSize *= 2
+        }
+        return inSampleSize
     }
 
     private fun sha256(input: String): String {
