@@ -176,6 +176,7 @@ data class GameLeaderboardData(
 
 @Serializable
 data class MyHighScoreDto(
+    @SerialName("id") val id: String? = null,
     @SerialName("game_id") val gameId: String,
     val score: Long,
     @SerialName("achieved_at") val achievedAt: String = "",

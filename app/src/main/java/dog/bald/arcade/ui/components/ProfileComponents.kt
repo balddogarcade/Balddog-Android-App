@@ -43,7 +43,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.widget.Toast
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
@@ -934,6 +939,8 @@ fun ProfileReplayRow(
 ) {
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
     val sizeKb = record.replaySizeBytes?.let { (it / 1024.0) }
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     Column(
         modifier =
@@ -995,6 +1002,26 @@ fun ProfileReplayRow(
                             fontSize = 10.sp,
                         )
                     }
+                }
+            }
+
+            if (!record.id.isNullOrBlank()) {
+                OutlinedButton(
+                    onClick = {
+                        val url = "https://bald.dog/replays/${record.id}"
+                        clipboardManager.setText(AnnotatedString(url))
+                        Toast.makeText(context, "Enlace de repetición copiado", Toast.LENGTH_SHORT).show()
+                    },
+                    shape = RectangleShape,
+                    border = BorderStroke(1.dp, CharcoalBorder),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = "Copiar enlace web de repetición",
+                        tint = SilverGray,
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
             }
 
