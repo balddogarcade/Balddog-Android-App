@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public read-only Supabase RPC `get_public_arcade_stats()` for aggregated landing page metrics and Top 6 game rankings (`028_public_web_stats_rpc.sql`).
 
 ### Fixed
+- Fixed *Metal Slug 3* (`mslug3`) and *Snow Bros.* (`snowbros`) leaderboard `score_config` expressions to read 4-byte Big-Endian BCD scores at `0xED16..0xED19` and `0x1403..0x1406` respectively (`033_fix_mslug3_and_snowbros_score_config.sql`).
 - Fixed *The Simpsons* (`simpsons`) leaderboard `score_config` to read the 16-bit Big-Endian BCD enemy-defeat counter at `0x11D4..0x11D5` (`VAL:A:b0xH11D4*100_M:b0xH11D5`) instead of the spurious `0xX1B04` address, and cleared prior invalid scores (`032_fix_simpsons_score_config.sql`).
 - Reactive Supabase `SessionStatus` observation in `MainActivity` with `ProfileCache` persistence and neutral `ArcadeAvatarOrPlaceholder` fallback, preventing wrong avatars or lost user data when minimizing/reopening the app.
 - Google OAuth flow in `AuthScreen` now waits for the `dog.bald.arcade://login-callback` deeplink instead of navigating prematurely to the catalog without an active session.
@@ -32,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-app updater (`AppUpdateManager`) with SHA-256 verification and Profile screen integration.
 
 ### Fixed
+- Fixed *Metal Slug 3* (`mslug3`) and *Snow Bros.* (`snowbros`) leaderboard `score_config` expressions to read 4-byte Big-Endian BCD scores at `0xED16..0xED19` and `0x1403..0x1406` respectively (`033_fix_mslug3_and_snowbros_score_config.sql`).
 - Fixed *The Simpsons* (`simpsons`) leaderboard `score_config` to read the 16-bit Big-Endian BCD enemy-defeat counter at `0x11D4..0x11D5` (`VAL:A:b0xH11D4*100_M:b0xH11D5`) instead of the spurious `0xX1B04` address, and cleared prior invalid scores (`032_fix_simpsons_score_config.sql`).
 - Bottom navigation bar tab switching desynchronization with `HorizontalPager` in `MainShellScreen.kt`.
 

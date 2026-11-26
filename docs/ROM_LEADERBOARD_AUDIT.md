@@ -27,7 +27,7 @@ Para cada juego se contrasta:
 | 10 | `knights` | Knights of the Round | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 11 | `kod` | The King of Dragons | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 12 | `mslug` | Metal Slug: Super Vehicle-001 | NEOGEO | Sí | OK | Puntaje pantalla `500` = memoria `500`, `flickers=0`. |
-| 13 | `mslug3` | Metal Slug 3 | NEOGEO | Sí | DISCREPANCIA | Puntaje pantalla `100` vs memoria `200` (factor 2x o dirección incorrecta). |
+| 13 | `mslug3` | Metal Slug 3 | NEOGEO | Sí | MODIFICADO (OK) | Corregida dirección a `0xED16..0xED19` (`bcd4_be`) en migración `033` y `leaderboard.rs`. |
 | 14 | `nbajam` | NBA Jam | Midway | No | SIN_SCORE_CONFIG | - |
 | 15 | `nbbatman` | Ninja Baseball Bat Man | Irem | Sí | OK | `active=false` (en intro/selección), `flickers=0`. |
 | 16 | `pbobble` | Puzzle Bobble / Bust-A-Move | NEOGEO | No | SIN_SCORE_CONFIG | - |
@@ -36,7 +36,7 @@ Para cada juego se contrasta:
 | 19 | `robocop` | RoboCop | Data East | Sí | OK | Puntaje pantalla `1000` = memoria `1000`, `flickers=0`. |
 | 20 | `simpsons` | The Simpsons | Konami | Sí | OK | Puntaje pantalla `1` = memoria `1`, `flickers=0`. |
 | 21 | `snowbro2` | Snow Bros. 2: With New Elves | Toaplan | No | SIN_SCORE_CONFIG | - |
-| 22 | `snowbros` | Snow Bros.: Nick & Tom | Toaplan | Sí | DISCREPANCIA | Puntaje pantalla `70` vs memoria `15728778` (`flickers=1`). |
+| 22 | `snowbros` | Snow Bros.: Nick & Tom | Toaplan | Sí | MODIFICADO (OK) | Corregida dirección a `0x1403..0x1406` (`bcd4_be`) en migración `033` y `leaderboard.rs`. |
 | 23 | `spidman` | Spider-Man: The Videogame | Sega System 32 | No | SIN_SCORE_CONFIG | - |
 | 24 | `ssriders` | Sunset Riders | Konami | Sí | OK | Puntaje pantalla `100` = memoria `100`, `flickers=0`. |
 | 25 | `tmnt` | Teenage Mutant Ninja Turtles | Konami | No | SIN_SCORE_CONFIG | - |
