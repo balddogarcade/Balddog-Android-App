@@ -102,7 +102,7 @@ fun ProfileScreen(
     profile: ProfileDto?,
     userEmail: String?,
     myUserId: String?,
-    avatarSeed: String,
+    avatarSeed: String?,
     games: List<GameDto>,
     myHighScores: List<MyHighScoreDto>,
     myMatchHistory: List<MatchHistoryDto>,
@@ -755,7 +755,7 @@ fun ProfileScreen(
     if (showEditNameDialog && profile != null) {
         EditProfileDialog(
             profile = profile,
-            fallbackAvatarSeed = avatarSeed,
+            fallbackAvatarSeed = avatarSeed ?: myUserId ?: "player",
             saving = savingUsername,
             errorMsg = usernameError,
             onDismiss = { showEditNameDialog = false },

@@ -100,6 +100,7 @@ import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.data.PendingMatchHistoryQueue
 import dog.bald.arcade.data.PendingScoreQueue
+import dog.bald.arcade.data.ProfileCache
 import dog.bald.arcade.data.ProfileDto
 import dog.bald.arcade.data.PublicProfileDto
 import dog.bald.arcade.data.RoomDto
@@ -107,6 +108,7 @@ import dog.bald.arcade.data.UserGameStatDto
 import dog.bald.arcade.net.DiscoveredLanRoom
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.ui.components.AppPreloadScreen
+import dog.bald.arcade.ui.components.ArcadeAvatarOrPlaceholder
 import dog.bald.arcade.ui.components.ArcadeGameCard
 import dog.bald.arcade.ui.components.ArcadeSearchBar
 import dog.bald.arcade.ui.components.DiagnosticsSheet
@@ -165,6 +167,8 @@ fun MainShellScreen(
     romManager: IpfsRomManager,
     lanNsd: LanNsdManager,
     nativeLibDir: String,
+    currentUserId: String = repo.currentUserId().orEmpty(),
+    gameReturnCounter: Int = 0,
     onActiveHostRoomChanged: (String?) -> Unit = {},
     onSignedOut: () -> Unit,
     onLaunchLocalRom: (GameDto) -> Unit,
@@ -181,7 +185,10 @@ fun MainShellScreen(
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
     var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
-    var profile by remember { mutableStateOf<ProfileDto?>(null) }
+    var profile by remember(currentUserId) {
+        mutableStateOf(ProfileCache.load(context, currentUserId))
+    }
+    var hasLoadedInitialScores by remember(currentUserId) { mutableStateOf(false) }
     var myHighScores by remember { mutableStateOf<List<MyHighScoreDto>>(emptyList()) }
     var myMatchHistory by remember { mutableStateOf<List<MatchHistoryDto>>(emptyList()) }
     var myGameStats by remember { mutableStateOf<List<UserGameStatDto>>(emptyList()) }
@@ -195,12 +202,8 @@ fun MainShellScreen(
     var showDiagnosticsSheet by remember { mutableStateOf(false) }
     var userMenuExpanded by remember { mutableStateOf(false) }
     val userEmail = remember(profile) { repo.currentUserEmail() }
-    val avatarSeed = remember(userEmail, profile) {
+    val avatarSeed: String? = remember(profile) {
         profile?.avatarSeed?.takeIf { it.isNotBlank() }
-            ?: userEmail?.takeIf { it.isNotBlank() }
-            ?: profile?.username?.takeIf { it.isNotBlank() }
-            ?: repo.currentUserId()
-            ?: "guest"
     }
     var engineStatus by remember { mutableStateOf<EngineStatus?>(null) }
     var logs by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -270,8 +273,13 @@ fun MainShellScreen(
                     games = repo.fetchGames()
                     biosList = repo.fetchBios()
                     rooms = repo.fetchOpenRooms()
-                    profile = repo.fetchMyProfile()
-                    myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(emptyList())
+                    runCatching { repo.fetchMyProfile() }.getOrNull()?.let { fetchedProfile ->
+                        profile = fetchedProfile
+                    }
+                    runCatching { repo.fetchMyHighScores() }.onSuccess { fetchedScores ->
+                        myHighScores = fetchedScores
+                        hasLoadedInitialScores = true
+                    }
                     myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(emptyList())
                     myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
                     myPublicProfile = repo.currentUserId()?.let { uid ->
@@ -326,11 +334,11 @@ fun MainShellScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(currentUserId) {
         refreshAll()
     }
 
-    // Refrescar catálogo, tiempos y récords al volver desde GameActivity (ON_RESUME)
+    // Sincronizar sesión y datos al volver a primer plano (sin disparar modal de nuevo récord)
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasResumedOnce by remember { mutableStateOf(false) }
     DisposableEffect(lifecycleOwner) {
@@ -340,15 +348,18 @@ fun MainShellScreen(
                     hasResumedOnce = true
                 } else {
                     scope.launch {
-                        val prevScores = myHighScores.associateBy { it.gameId }
-                        ExitSyncCoordinator.awaitInFlight(timeoutMs = 8_000L)
+                        repo.refreshSessionIfNeeded()
                         runCatching { PendingScoreQueue.flushAll(context, repo) }
                         runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
                         pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                         runCatching { games = repo.fetchGames() }
-                        runCatching { profile = repo.fetchMyProfile() }
-                        val updatedScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
-                        myHighScores = updatedScores
+                        runCatching { repo.fetchMyProfile() }.getOrNull()?.let { fetchedProfile ->
+                            profile = fetchedProfile
+                        }
+                        runCatching { repo.fetchMyHighScores() }.onSuccess { fetchedScores ->
+                            myHighScores = fetchedScores
+                            hasLoadedInitialScores = true
+                        }
                         runCatching { myMatchHistory = repo.fetchMyMatchHistory() }
                         runCatching { myGameStats = repo.fetchMyGameStats() }
                         repo.currentUserId()?.let { uid ->
@@ -357,25 +368,57 @@ fun MainShellScreen(
                         runCatching {
                             rankingSummaries = repo.fetchGamesRankingSummary().associateBy { it.gameId }
                         }
-
-                        val improved = detectImprovedHighScore(prevScores, updatedScores)
-                        if (improved != null) {
-                            val gameObj = games.firstOrNull { it.id == improved.gameId }
-                            if (gameObj != null) {
-                                postMatchRecordBanner = PostMatchRecordBannerData(
-                                    game = gameObj,
-                                    score = improved.score,
-                                    previousRank = prevScores[improved.gameId]?.rank,
-                                    newRank = improved.rank
-                                )
-                            }
-                        }
                     }
                 }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Evaluar nuevo récord 1CC únicamente al regresar explícitamente de GameActivity
+    LaunchedEffect(gameReturnCounter) {
+        if (gameReturnCounter <= 0) return@LaunchedEffect
+        val prevScores = if (hasLoadedInitialScores) {
+            myHighScores.associateBy { it.gameId }
+        } else {
+            null
+        }
+        ExitSyncCoordinator.awaitInFlight(timeoutMs = 8_000L)
+        runCatching { PendingScoreQueue.flushAll(context, repo) }
+        runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
+        pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
+        runCatching { games = repo.fetchGames() }
+        runCatching { repo.fetchMyProfile() }.getOrNull()?.let { fetchedProfile ->
+            profile = fetchedProfile
+        }
+        val updatedScores = runCatching { repo.fetchMyHighScores() }.getOrNull()
+        if (updatedScores != null) {
+            myHighScores = updatedScores
+            hasLoadedInitialScores = true
+            if (prevScores != null) {
+                val improved = detectImprovedHighScore(prevScores, updatedScores)
+                if (improved != null) {
+                    val gameObj = games.firstOrNull { it.id == improved.gameId }
+                    if (gameObj != null) {
+                        postMatchRecordBanner = PostMatchRecordBannerData(
+                            game = gameObj,
+                            score = improved.score,
+                            previousRank = prevScores[improved.gameId]?.rank,
+                            newRank = improved.rank
+                        )
+                    }
+                }
+            }
+        }
+        runCatching { myMatchHistory = repo.fetchMyMatchHistory() }
+        runCatching { myGameStats = repo.fetchMyGameStats() }
+        repo.currentUserId()?.let { uid ->
+            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+        }
+        runCatching {
+            rankingSummaries = repo.fetchGamesRankingSummary().associateBy { it.gameId }
+        }
     }
 
     // Auto-refrescar salas cada 3s mientras el usuario está en la pestaña Salas
@@ -424,7 +467,7 @@ fun MainShellScreen(
                 myEndpoint = myEndpoint,
                 myUdpPort = myUdpPort,
                 myVoiceEndpoint = myVoiceEndpoint,
-                myAvatarSeed = avatarSeed,
+                myAvatarSeed = avatarSeed ?: currentUserId,
                 hasActiveOverlay = topOverlay != null,
                 onOpenUserProfile = { uid ->
                     overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
@@ -542,8 +585,8 @@ fun MainShellScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { userMenuExpanded = true }
                         ) {
-                        DiceBearPixelArtAvatar(
-                            seed = avatarSeed,
+                        ArcadeAvatarOrPlaceholder(
+                            avatarSeed = avatarSeed,
                             modifier = Modifier.size(32.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))

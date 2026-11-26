@@ -80,10 +80,38 @@ import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
+fun ArcadeAvatarOrPlaceholder(
+    avatarSeed: String?,
+    modifier: Modifier = Modifier
+) {
+    val cleanSeed = avatarSeed?.takeIf { it.isNotBlank() }
+    if (cleanSeed != null) {
+        DiceBearPixelArtAvatar(
+            seed = cleanSeed,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .background(ObsidianBlack, RectangleShape)
+                .border(1.dp, SteelBorder, RectangleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = MutedGray,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
 fun ProfileHeroCard(
     profile: ProfileDto?,
     userEmail: String?,
-    avatarSeed: String,
+    avatarSeed: String?,
     recordsCount: Int,
     gamesPlayedCount: Int,
     onEditUsername: () -> Unit,
@@ -92,7 +120,8 @@ fun ProfileHeroCard(
     onOpenFollowing: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val effectiveSeed = profile?.avatarSeed?.takeIf { it.isNotBlank() } ?: avatarSeed
+    val effectiveSeed = profile?.avatarSeed?.takeIf { it.isNotBlank() }
+        ?: avatarSeed?.takeIf { it.isNotBlank() }
     val globalPoints = publicProfile?.globalPoints ?: 0L
     val rank = ArcadeRank.fromPoints(globalPoints)
     val flag = CountryCatalog.flagEmoji(profile?.countryCode)
@@ -128,8 +157,8 @@ fun ProfileHeroCard(
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {
-                DiceBearPixelArtAvatar(
-                    seed = effectiveSeed,
+                ArcadeAvatarOrPlaceholder(
+                    avatarSeed = effectiveSeed,
                     modifier = Modifier.size(52.dp)
                 )
             }
@@ -146,7 +175,7 @@ fun ProfileHeroCard(
                         Text(text = flag, fontSize = 16.sp)
                     }
                     Text(
-                        text = profile?.username ?: "Jugador",
+                        text = profile?.username ?: "Cargando...",
                         color = PureWhite,
                         fontFamily = SpaceGroteskFamily,
                         fontWeight = FontWeight.Bold,
