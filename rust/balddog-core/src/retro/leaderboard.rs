@@ -202,9 +202,8 @@ mod tests {
     #[test]
     fn evaluates_start_update_and_trigger_from_ram() {
         // STA cuando RAM[0]==1, CAN cuando RAM[0]==2, SUB cuando RAM[0]==3, VAL = uint16 LE en 0x04
-        let mut engine =
-            LeaderboardEngine::new("STA:0xH00=1::CAN:0xH00=2::SUB:0xH00=3::VAL:0x 04")
-                .expect("debe parsear leaderboard válido");
+        let mut engine = LeaderboardEngine::new("STA:0xH00=1::CAN:0xH00=2::SUB:0xH00=3::VAL:0x 04")
+            .expect("debe parsear leaderboard válido");
 
         let mut ram = [0u8; 16];
         // Frame 1: estado idle
@@ -236,9 +235,8 @@ mod tests {
 
     #[test]
     fn canceling_leaderboard_clears_active_and_current_score() {
-        let mut engine =
-            LeaderboardEngine::new("STA:0xH00=1::CAN:0xH00=2::SUB:0xH00=3::VAL:0x 04")
-                .expect("debe parsear leaderboard válido");
+        let mut engine = LeaderboardEngine::new("STA:0xH00=1::CAN:0xH00=2::SUB:0xH00=3::VAL:0x 04")
+            .expect("debe parsear leaderboard válido");
 
         let mut ram = [0u8; 16];
         // Frame 1: idle (para que rcheevos arme la transición de inicio)

@@ -75,8 +75,9 @@ pub fn build_p2p_session(
         ));
     }
 
-    let socket = UdpNonBlockingSocket::bind_to_port(cfg.local_port)
-        .map_err(|e| NetplayError::Transport(format!("No se pudo abrir UDP {}: {e}", cfg.local_port)))?;
+    let socket = UdpNonBlockingSocket::bind_to_port(cfg.local_port).map_err(|e| {
+        NetplayError::Transport(format!("No se pudo abrir UDP {}: {e}", cfg.local_port))
+    })?;
 
     let mut builder = SessionBuilder::<ArcadeGgrsConfig>::new()
         .with_num_players(cfg.num_players)
@@ -283,8 +284,14 @@ mod tests {
         let xport = (port ^ STUN_MAGIC_COOKIE_U16).to_be_bytes();
         let oct = ip.octets();
         let attr = [
-            0x00, 0x20, 0x00, 0x08, // XOR-MAPPED-ADDRESS, len 8
-            0x00, 0x01, xport[0], xport[1], // family IPv4
+            0x00,
+            0x20,
+            0x00,
+            0x08, // XOR-MAPPED-ADDRESS, len 8
+            0x00,
+            0x01,
+            xport[0],
+            xport[1], // family IPv4
             oct[0] ^ STUN_MAGIC_COOKIE[0],
             oct[1] ^ STUN_MAGIC_COOKIE[1],
             oct[2] ^ STUN_MAGIC_COOKIE[2],
@@ -305,9 +312,18 @@ mod tests {
         let port_bytes = port.to_be_bytes();
         let oct = ip.octets();
         let attr = [
-            0x00, 0x01, 0x00, 0x08, // MAPPED-ADDRESS, len 8
-            0x00, 0x01, port_bytes[0], port_bytes[1], // family IPv4
-            oct[0], oct[1], oct[2], oct[3],
+            0x00,
+            0x01,
+            0x00,
+            0x08, // MAPPED-ADDRESS, len 8
+            0x00,
+            0x01,
+            port_bytes[0],
+            port_bytes[1], // family IPv4
+            oct[0],
+            oct[1],
+            oct[2],
+            oct[3],
         ];
         let pkt = make_stun_response(&tid, &attr);
         assert_eq!(
@@ -331,10 +347,7 @@ mod tests {
             attr.push(oct[i] ^ key[i]);
         }
         let pkt = make_stun_response(&tid, &attr);
-        assert_eq!(
-            parse_stun_xor_mapped(&pkt, &tid),
-            None
-        );
+        assert_eq!(parse_stun_xor_mapped(&pkt, &tid), None);
     }
 
     #[test]
@@ -342,7 +355,14 @@ mod tests {
         let tid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
         let xport = (12345u16 ^ STUN_MAGIC_COOKIE_U16).to_be_bytes();
         let attr = [
-            0x00, 0x20, 0x00, 0x08, 0x00, 0x01, xport[0], xport[1],
+            0x00,
+            0x20,
+            0x00,
+            0x08,
+            0x00,
+            0x01,
+            xport[0],
+            xport[1],
             1 ^ STUN_MAGIC_COOKIE[0],
             2 ^ STUN_MAGIC_COOKIE[1],
             3 ^ STUN_MAGIC_COOKIE[2],

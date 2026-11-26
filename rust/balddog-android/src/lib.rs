@@ -11,9 +11,7 @@ use balddog_core::retro::replay::{compute_file_crc32, ReplayPlayer};
 use balddog_core::session::{clear_deterministic_nvram, EmulationSession, SessionControl};
 use balddog_core::{engine_info, recent_logs, record_log, CoreError};
 use balddog_netplay::voice::{VoicePeerEndpoint, VoiceSession, VoiceSessionConfig};
-use balddog_netplay::{
-    discover_stun_endpoint, NetplayError, NetplaySessionConfig, PeerEndpoint,
-};
+use balddog_netplay::{discover_stun_endpoint, NetplayError, NetplaySessionConfig, PeerEndpoint};
 use thiserror::Error;
 
 uniffi::setup_scaffolding!();
@@ -701,11 +699,9 @@ pub fn open_offline_replay_renderer(
     let expected_crc = compute_file_crc32(&rom_pb).map_err(|e| EngineBridgeError::Core {
         detail: format!("No se pudo leer la ROM {:?}: {e}", rom_pb),
     })?;
-    let player =
-        ReplayPlayer::from_gzip_file(Path::new(&replay_path), Some(expected_crc)).map_err(|e| {
-            EngineBridgeError::Core {
-                detail: format!("Replay inválido: {e}"),
-            }
+    let player = ReplayPlayer::from_gzip_file(Path::new(&replay_path), Some(expected_crc))
+        .map_err(|e| EngineBridgeError::Core {
+            detail: format!("Replay inválido: {e}"),
         })?;
     let core_path = PathBuf::from(native_lib_dir).join("libfbneo_libretro.so");
     let mut core = LibretroCore::load(&core_path, Path::new(&system_dir), &save_pb)?;
@@ -767,7 +763,8 @@ mod tests {
         let (ctrl, cmd_rx) = SessionControl::channel_pair();
         *lock_unpoisoned(stopping_session_slot()) = Some(ctrl);
 
-        let cloned = clone_session_control().expect("stopping session control must remain reachable");
+        let cloned =
+            clone_session_control().expect("stopping session control must remain reachable");
         let completed = Arc::new(AtomicBool::new(false));
         let completed_bg = Arc::clone(&completed);
 

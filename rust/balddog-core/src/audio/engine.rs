@@ -114,7 +114,11 @@ mod android_audio {
 
     impl AudioEngine {
         pub fn start(sample_rate: i32) -> Result<Self, CoreError> {
-            let safe_rate = if sample_rate > 8000 { sample_rate } else { 44100 };
+            let safe_rate = if sample_rate > 8000 {
+                sample_rate
+            } else {
+                44100
+            };
             let (producer, consumer) = stereo_audio_ring(AUDIO_RING_FRAMES);
             let paused = Arc::new(AtomicBool::new(false));
 
@@ -132,11 +136,13 @@ mod android_audio {
                 .set_sample_rate(safe_rate)
                 .set_callback(callback)
                 .open_stream()
-                .map_err(|e| CoreError::Init(format!("Error abriendo stream Oboe/AAudio: {e:?}")))?;
+                .map_err(|e| {
+                    CoreError::Init(format!("Error abriendo stream Oboe/AAudio: {e:?}"))
+                })?;
 
-            stream
-                .start()
-                .map_err(|e| CoreError::Init(format!("Error iniciando stream Oboe/AAudio: {e:?}")))?;
+            stream.start().map_err(|e| {
+                CoreError::Init(format!("Error iniciando stream Oboe/AAudio: {e:?}"))
+            })?;
 
             record_log("INFO", &format!("Oboe/AAudio iniciado a {safe_rate} Hz"));
 

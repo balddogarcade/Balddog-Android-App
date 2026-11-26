@@ -6,9 +6,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use balddog_netplay::{
-    build_p2p_session, NetplayHudStats, NetplaySessionConfig,
-};
+use balddog_netplay::{build_p2p_session, NetplayHudStats, NetplaySessionConfig};
 use crossbeam_channel::{bounded, unbounded, Sender};
 use ggrs::{GgrsEvent, GgrsRequest, InputStatus, SessionState};
 
@@ -221,7 +219,11 @@ impl SessionControl {
     }
 }
 
-fn initial_ranking_eligible(has_netplay: bool, is_replay_mode: bool, has_leaderboard: bool) -> bool {
+fn initial_ranking_eligible(
+    has_netplay: bool,
+    is_replay_mode: bool,
+    has_leaderboard: bool,
+) -> bool {
     !has_netplay && !is_replay_mode && has_leaderboard
 }
 
@@ -376,7 +378,9 @@ impl EmulationSession {
         netplay: Option<NetplaySessionConfig>,
         score_def: Option<String>,
     ) -> Result<Self, CoreError> {
-        Self::start_internal(core_path, rom_path, system_dir, save_dir, netplay, score_def, None)
+        Self::start_internal(
+            core_path, rom_path, system_dir, save_dir, netplay, score_def, None,
+        )
     }
 
     pub fn start_replay(
@@ -1006,7 +1010,9 @@ impl EmulationSession {
             }
             Err(_) => {
                 let _ = thread.join();
-                Err(CoreError::Init("El hilo de emulación terminó inesperadamente".into()))
+                Err(CoreError::Init(
+                    "El hilo de emulación terminó inesperadamente".into(),
+                ))
             }
         }
     }
@@ -1192,7 +1198,10 @@ mod tests {
         assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
         assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
         // Game Over / Continue screen (active = false), player presses START to continue
-        assert_eq!(tracker.observe_frame(false, &[RETRO_START_MASK, 0, 0, 0]), 1);
+        assert_eq!(
+            tracker.observe_frame(false, &[RETRO_START_MASK, 0, 0, 0]),
+            1
+        );
         // Second run started using preloaded credits (active = true again)
         assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 2);
         assert_eq!(tracker.coins_inserted(), 2);
@@ -1465,7 +1474,10 @@ mod tests {
         buf.update(320, 240, 1, &frame1);
         let ptr1 = buf.rgba.as_ptr();
         let cap1 = buf.rgba.capacity();
-        assert_eq!(buf.as_frame().map(|(w, h, rot, _)| (w, h, rot)), Some((320, 240, 1)));
+        assert_eq!(
+            buf.as_frame().map(|(w, h, rot, _)| (w, h, rot)),
+            Some((320, 240, 1))
+        );
 
         let frame2 = vec![2u8; 320 * 240 * 4];
         buf.update(320, 240, 1, &frame2);
@@ -1490,12 +1502,30 @@ mod tests {
         use std::time::Duration;
         // 8s disconnect timeout with 2s notify delay -> GGRS delivers 6000ms budget
         let budget = Duration::from_millis(6000);
-        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(0)), 6);
-        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(500)), 6);
-        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(1000)), 5);
-        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(5900)), 1);
-        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(6000)), 0);
-        assert_eq!(super::compute_reconnect_secs_left(budget, Duration::from_millis(8000)), 0);
+        assert_eq!(
+            super::compute_reconnect_secs_left(budget, Duration::from_millis(0)),
+            6
+        );
+        assert_eq!(
+            super::compute_reconnect_secs_left(budget, Duration::from_millis(500)),
+            6
+        );
+        assert_eq!(
+            super::compute_reconnect_secs_left(budget, Duration::from_millis(1000)),
+            5
+        );
+        assert_eq!(
+            super::compute_reconnect_secs_left(budget, Duration::from_millis(5900)),
+            1
+        );
+        assert_eq!(
+            super::compute_reconnect_secs_left(budget, Duration::from_millis(6000)),
+            0
+        );
+        assert_eq!(
+            super::compute_reconnect_secs_left(budget, Duration::from_millis(8000)),
+            0
+        );
     }
 
     #[test]

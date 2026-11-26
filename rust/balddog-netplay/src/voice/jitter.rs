@@ -83,7 +83,8 @@ impl JitterBuffer {
                 break;
             }
         }
-        self.packets.insert(insert_idx, BufferedPacket { seq, payload });
+        self.packets
+            .insert(insert_idx, BufferedPacket { seq, payload });
 
         while self.packets.len() > self.max_frames {
             if let Some(dropped) = self.packets.pop_front() {

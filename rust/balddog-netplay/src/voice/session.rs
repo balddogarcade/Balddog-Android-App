@@ -208,7 +208,9 @@ impl VoiceSession {
     }
 
     pub fn set_controls(&self, mic_enabled: bool, listen_enabled: bool, volume: f32, paused: bool) {
-        self.controls.mic_enabled.store(mic_enabled, Ordering::Release);
+        self.controls
+            .mic_enabled
+            .store(mic_enabled, Ordering::Release);
         self.controls
             .listen_enabled
             .store(listen_enabled, Ordering::Release);
@@ -419,7 +421,8 @@ fn run_voice_loop(
             for (&handle, peer) in remote_peers.iter_mut() {
                 match peer.jitter.pop() {
                     JitterPop::Frame(opus_pkt) => {
-                        if let Ok(decoded) = peer.decoder.decode(&opus_pkt, &mut decode_buf, false) {
+                        if let Ok(decoded) = peer.decoder.decode(&opus_pkt, &mut decode_buf, false)
+                        {
                             let n = decoded.min(VOICE_FRAME_SAMPLES);
                             for i in 0..n {
                                 mix_acc[i] += i32::from(decode_buf[i]);
@@ -475,7 +478,7 @@ mod tests {
     #[test]
     fn mix_scale_sample_avoids_i32_overflow_with_multiple_loud_peers() {
         let vol_150_q15 = (1.5f32 * 32768.0) as i32; // 49152
-        // 3 loud peers at i16::MIN: -98304 * 49152 = -4.83e9 (would overflow i32)
+                                                     // 3 loud peers at i16::MIN: -98304 * 49152 = -4.83e9 (would overflow i32)
         let acc_min = 3 * i32::from(i16::MIN);
         assert_eq!(mix_scale_sample(acc_min, vol_150_q15), i16::MIN);
 

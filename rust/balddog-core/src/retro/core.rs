@@ -95,13 +95,11 @@ unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -> bool {
             match fmt {
                 RETRO_PIXEL_FORMAT_0RGB1555
                 | RETRO_PIXEL_FORMAT_XRGB8888
-                | RETRO_PIXEL_FORMAT_RGB565 => {
-                    with_ctx(|ctx| {
-                        ctx.pixel_format = fmt;
-                        true
-                    })
-                    .unwrap_or(false)
-                }
+                | RETRO_PIXEL_FORMAT_RGB565 => with_ctx(|ctx| {
+                    ctx.pixel_format = fmt;
+                    true
+                })
+                .unwrap_or(false),
                 _ => false,
             }
         }
@@ -164,7 +162,9 @@ pub(crate) fn validated_frame_src_len(
         return None;
     }
     let _dst_len = width.checked_mul(height)?.checked_mul(4)?;
-    let src_needed = (height - 1).checked_mul(pitch)?.checked_add(min_row_bytes)?;
+    let src_needed = (height - 1)
+        .checked_mul(pitch)?
+        .checked_add(min_row_bytes)?;
     Some((min_row_bytes, src_needed))
 }
 
@@ -378,20 +378,30 @@ impl LibretroCore {
 
         let retro_init = load_sym!(b"retro_init\0", unsafe extern "C" fn());
         let retro_deinit = load_sym!(b"retro_deinit\0", unsafe extern "C" fn());
-        let retro_set_environment =
-            load_sym!(b"retro_set_environment\0", unsafe extern "C" fn(RetroEnvironmentFn));
-        let retro_set_video_refresh =
-            load_sym!(b"retro_set_video_refresh\0", unsafe extern "C" fn(RetroVideoRefreshFn));
-        let retro_set_audio_sample =
-            load_sym!(b"retro_set_audio_sample\0", unsafe extern "C" fn(RetroAudioSampleFn));
+        let retro_set_environment = load_sym!(
+            b"retro_set_environment\0",
+            unsafe extern "C" fn(RetroEnvironmentFn)
+        );
+        let retro_set_video_refresh = load_sym!(
+            b"retro_set_video_refresh\0",
+            unsafe extern "C" fn(RetroVideoRefreshFn)
+        );
+        let retro_set_audio_sample = load_sym!(
+            b"retro_set_audio_sample\0",
+            unsafe extern "C" fn(RetroAudioSampleFn)
+        );
         let retro_set_audio_sample_batch = load_sym!(
             b"retro_set_audio_sample_batch\0",
             unsafe extern "C" fn(RetroAudioSampleBatchFn)
         );
-        let retro_set_input_poll =
-            load_sym!(b"retro_set_input_poll\0", unsafe extern "C" fn(RetroInputPollFn));
-        let retro_set_input_state =
-            load_sym!(b"retro_set_input_state\0", unsafe extern "C" fn(RetroInputStateFn));
+        let retro_set_input_poll = load_sym!(
+            b"retro_set_input_poll\0",
+            unsafe extern "C" fn(RetroInputPollFn)
+        );
+        let retro_set_input_state = load_sym!(
+            b"retro_set_input_state\0",
+            unsafe extern "C" fn(RetroInputStateFn)
+        );
         let retro_get_system_av_info = load_sym!(
             b"retro_get_system_av_info\0",
             unsafe extern "C" fn(*mut RetroSystemAvInfo)
@@ -608,7 +618,9 @@ impl LibretroCore {
         // SAFETY: Llamado desde el hilo de emulación con el juego cargado.
         let size = unsafe { (self.retro_serialize_size)() };
         if size == 0 {
-            return Err(CoreError::State("El core reportó serialize_size = 0".into()));
+            return Err(CoreError::State(
+                "El core reportó serialize_size = 0".into(),
+            ));
         }
         let mut buf = vec![0u8; size];
         // SAFETY: `buf` tiene exactamente `size` bytes asignados.
@@ -767,7 +779,8 @@ mod tests {
             with_ctx(|ctx| {
                 ctx.inputs[0] = 0b1010;
             });
-            let state = unsafe { input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK) };
+            let state =
+                unsafe { input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK) };
             assert_eq!(state, 0b1010);
 
             unsafe {
@@ -943,17 +956,15 @@ mod tests {
         ));
         assert_eq!(
             dst,
-            vec![
-                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255
-            ]
+            vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]
         );
 
         // XRGB8888 with odd pitch = 9 bytes (width=2 -> 8 bytes + 1 pad byte)
         let p0 = 0x0012_3456u32.to_ne_bytes();
         let p1 = 0x00AB_CDEFu32.to_ne_bytes();
         let src8888 = [
-            p0[0], p0[1], p0[2], p0[3], p1[0], p1[1], p1[2], p1[3], 0x99,
-            p1[0], p1[1], p1[2], p1[3], p0[0], p0[1], p0[2], p0[3],
+            p0[0], p0[1], p0[2], p0[3], p1[0], p1[1], p1[2], p1[3], 0x99, p1[0], p1[1], p1[2],
+            p1[3], p0[0], p0[1], p0[2], p0[3],
         ];
         assert!(convert_frame_to_rgba(
             RETRO_PIXEL_FORMAT_XRGB8888,
@@ -966,8 +977,8 @@ mod tests {
         assert_eq!(
             dst,
             vec![
-                0x12, 0x34, 0x56, 0xFF, 0xAB, 0xCD, 0xEF, 0xFF,
-                0xAB, 0xCD, 0xEF, 0xFF, 0x12, 0x34, 0x56, 0xFF
+                0x12, 0x34, 0x56, 0xFF, 0xAB, 0xCD, 0xEF, 0xFF, 0xAB, 0xCD, 0xEF, 0xFF, 0x12, 0x34,
+                0x56, 0xFF
             ]
         );
 
@@ -989,12 +1000,54 @@ mod tests {
     fn convert_frame_rejects_zero_dims_short_pitch_and_overflow() {
         let mut dst = Vec::new();
         let buf = [0u8; 64];
-        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 0, 2, 4, &buf, &mut dst));
-        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 2, 0, 4, &buf, &mut dst));
-        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 4, 2, 6, &buf, &mut dst));
-        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_XRGB8888, 4, 2, 12, &buf, &mut dst));
-        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 9000, 2, 18000, &buf, &mut dst));
-        assert!(!convert_frame_to_rgba(RETRO_PIXEL_FORMAT_RGB565, 2, 2, 4, &buf[..6], &mut dst));
+        assert!(!convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_RGB565,
+            0,
+            2,
+            4,
+            &buf,
+            &mut dst
+        ));
+        assert!(!convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_RGB565,
+            2,
+            0,
+            4,
+            &buf,
+            &mut dst
+        ));
+        assert!(!convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_RGB565,
+            4,
+            2,
+            6,
+            &buf,
+            &mut dst
+        ));
+        assert!(!convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_XRGB8888,
+            4,
+            2,
+            12,
+            &buf,
+            &mut dst
+        ));
+        assert!(!convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_RGB565,
+            9000,
+            2,
+            18000,
+            &buf,
+            &mut dst
+        ));
+        assert!(!convert_frame_to_rgba(
+            RETRO_PIXEL_FORMAT_RGB565,
+            2,
+            2,
+            4,
+            &buf[..6],
+            &mut dst
+        ));
     }
 
     static DUMMY_DEINIT_CALLS: AtomicU64 = AtomicU64::new(0);
@@ -1118,10 +1171,7 @@ mod tests {
         drop(core1);
         assert_eq!(DUMMY_DEINIT_CALLS.load(Ordering::SeqCst), 0);
         assert_eq!(DUMMY_UNLOAD_CALLS.load(Ordering::SeqCst), 0);
-        assert_eq!(
-            lock_ctx().as_ref().map(|c| c.instance_id),
-            Some(102)
-        );
+        assert_eq!(lock_ctx().as_ref().map(|c| c.instance_id), Some(102));
 
         // Dropping owning core2 MUST call retro_unload_game + retro_deinit and clear ACTIVE_CTX.
         drop(core2);
@@ -1140,7 +1190,10 @@ mod tests {
         let core = dummy_core_with_id(201, false);
         core.run_frame();
         assert!(matches!(core.save_state_bytes(), Err(CoreError::State(_))));
-        assert!(matches!(core.load_state_bytes(&[1, 2, 3]), Err(CoreError::State(_))));
+        assert!(matches!(
+            core.load_state_bytes(&[1, 2, 3]),
+            Err(CoreError::State(_))
+        ));
         assert!(core.system_ram().is_none());
 
         assert_eq!(DUMMY_RUN_CALLS.load(Ordering::SeqCst), 0);
@@ -1150,7 +1203,10 @@ mod tests {
         // Ensure load_game rejects missing ROM without invoking C load_game or unload_game.
         let mut core_mut = core;
         let missing = Path::new("/nonexistent_balddog_rom_test/missing.zip");
-        assert!(matches!(core_mut.load_game(missing), Err(CoreError::CoreLoad(_))));
+        assert!(matches!(
+            core_mut.load_game(missing),
+            Err(CoreError::CoreLoad(_))
+        ));
         assert!(!core_mut.game_loaded);
     }
 }

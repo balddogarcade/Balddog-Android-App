@@ -84,7 +84,13 @@ fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>, boot_frames: u32, 
     let ram_s1 = core.system_ram().unwrap_or(&[]).to_vec();
     for step in 0..combat_steps {
         let dir = if step % 12 < 8 { BTN_RIGHT } else { BTN_LEFT };
-        let v = if step % 8 == 0 { BTN_UP } else if step % 8 == 4 { BTN_DOWN } else { 0 };
+        let v = if step % 8 == 0 {
+            BTN_UP
+        } else if step % 8 == 4 {
+            BTN_DOWN
+        } else {
+            0
+        };
         press_simple(core, dir | v, 6, 0);
         press_simple(core, BTN_A, 4, 3);
         press_simple(core, BTN_B, 4, 3);
@@ -137,16 +143,26 @@ fn run_scan(core: &mut LibretroCore, snap_path: Option<&str>, boot_frames: u32, 
         let sw0 = [ram_s0[i + 1], ram_s0[i], ram_s0[i + 3], ram_s0[i + 2]];
         let sw1 = [ram_s1[i + 1], ram_s1[i], ram_s1[i + 3], ram_s1[i + 2]];
         let sw2 = [ram_s2[i + 1], ram_s2[i], ram_s2[i + 3], ram_s2[i + 2]];
-        if let (Some(b0), Some(b1), Some(b2)) = (decode_bcd_be(&sw0), decode_bcd_be(&sw1), decode_bcd_be(&sw2)) {
+        if let (Some(b0), Some(b1), Some(b2)) = (
+            decode_bcd_be(&sw0),
+            decode_bcd_be(&sw1),
+            decode_bcd_be(&sw2),
+        ) {
             if b0 == 0 && b1 <= b2 && b2 >= 100 && b2 <= 100_000 && b2 % 10 == 0 && b1 % 10 == 0 {
-                println!("  bcd4_sw @ 0x{i:04X}: 0 -> {b1} -> {b2} raw={:02X?}", &ram_s2[i..i + 4]);
+                println!(
+                    "  bcd4_sw @ 0x{i:04X}: 0 -> {b1} -> {b2} raw={:02X?}",
+                    &ram_s2[i..i + 4]
+                );
             }
         }
         let u0 = u32::from_be_bytes(sw0);
         let u1 = u32::from_be_bytes(sw1);
         let u2 = u32::from_be_bytes(sw2);
         if u0 == 0 && u1 <= u2 && u2 >= 100 && u2 <= 100_000 && u2 % 10 == 0 && u1 % 10 == 0 {
-            println!("  u32_sw  @ 0x{i:04X}: 0 -> {u1} -> {u2} raw={:02X?}", &ram_s2[i..i + 4]);
+            println!(
+                "  u32_sw  @ 0x{i:04X}: 0 -> {u1} -> {u2} raw={:02X?}",
+                &ram_s2[i..i + 4]
+            );
         }
     }
 }
@@ -157,28 +173,29 @@ fn run_auto_probe(core: &mut LibretroCore) {
     )
     .expect("captcomm lboard válido");
 
-    let step_press = |core: &mut LibretroCore, lb: &mut LeaderboardEngine, mask: u16, hold: u32, wait: u32| {
-        for _ in 0..hold {
-            core.set_inputs([mask, 0, 0, 0]);
-            core.run_frame();
-            if let Some(ram) = core.system_ram() {
-                let out = lb.evaluate_frame(ram);
-                if let Some(s) = out.triggered_score {
-                    println!("TRIGGERED! score={s}");
+    let step_press =
+        |core: &mut LibretroCore, lb: &mut LeaderboardEngine, mask: u16, hold: u32, wait: u32| {
+            for _ in 0..hold {
+                core.set_inputs([mask, 0, 0, 0]);
+                core.run_frame();
+                if let Some(ram) = core.system_ram() {
+                    let out = lb.evaluate_frame(ram);
+                    if let Some(s) = out.triggered_score {
+                        println!("TRIGGERED! score={s}");
+                    }
                 }
             }
-        }
-        core.set_inputs([0, 0, 0, 0]);
-        for _ in 0..wait {
-            core.run_frame();
-            if let Some(ram) = core.system_ram() {
-                let out = lb.evaluate_frame(ram);
-                if let Some(s) = out.triggered_score {
-                    println!("TRIGGERED! score={s}");
+            core.set_inputs([0, 0, 0, 0]);
+            for _ in 0..wait {
+                core.run_frame();
+                if let Some(ram) = core.system_ram() {
+                    let out = lb.evaluate_frame(ram);
+                    if let Some(s) = out.triggered_score {
+                        println!("TRIGGERED! score={s}");
+                    }
                 }
             }
-        }
-    };
+        };
 
     step_press(core, &mut lb, 0, 0, 500);
     step_press(core, &mut lb, BTN_SELECT, 6, 30);
@@ -199,13 +216,23 @@ fn run_auto_probe(core: &mut LibretroCore) {
         let out = lb.evaluate_frame(ram);
         println!(
             "After combat: active={} current_score={} AA74={:02X?} A855={} AA7D={}",
-            out.active, out.current_score, &ram[0xAA74..0xAA78], ram[0xA855], ram[0xAA7D]
+            out.active,
+            out.current_score,
+            &ram[0xAA74..0xAA78],
+            ram[0xA855],
+            ram[0xAA7D]
         );
     }
     for step in 0..12 {
         step_press(core, &mut lb, 0, 0, 600);
         if let Some(ram) = core.system_ram() {
-            println!("Idle +{}f: A855={} AA7D={} AA74={:02X?}", (step + 1) * 600, ram[0xA855], ram[0xAA7D], &ram[0xAA74..0xAA78]);
+            println!(
+                "Idle +{}f: A855={} AA7D={} AA74={:02X?}",
+                (step + 1) * 600,
+                ram[0xA855],
+                ram[0xAA7D],
+                &ram[0xAA74..0xAA78]
+            );
         }
     }
 }
@@ -247,7 +274,10 @@ fn main() {
     }
     if args.get(5).map(String::as_str) == Some("--audit") {
         let def = args.get(6).expect("Falta lboard_def");
-        let out_ppm = args.get(7).map(String::as_str).unwrap_or("/tmp/audit_frame.ppm");
+        let out_ppm = args
+            .get(7)
+            .map(String::as_str)
+            .unwrap_or("/tmp/audit_frame.ppm");
         let mut lb = LeaderboardEngine::new(def).expect("Definición rcheevos inválida");
         let mut flickers = 0u32;
         let mut was_active = false;
@@ -260,11 +290,15 @@ fn main() {
                 c.run_frame();
                 if let Some(ram) = c.system_ram() {
                     let out = lb.evaluate_frame(ram);
-                    if was_active && !out.active { flickers += 1; }
+                    if was_active && !out.active {
+                        flickers += 1;
+                    }
                     was_active = out.active;
                     last_active = out.active;
                     last_score = out.current_score;
-                    if out.current_score > max_score { max_score = out.current_score; }
+                    if out.current_score > max_score {
+                        max_score = out.current_score;
+                    }
                 }
             }
             c.set_inputs([0, 0, 0, 0]);
@@ -272,11 +306,15 @@ fn main() {
                 c.run_frame();
                 if let Some(ram) = c.system_ram() {
                     let out = lb.evaluate_frame(ram);
-                    if was_active && !out.active { flickers += 1; }
+                    if was_active && !out.active {
+                        flickers += 1;
+                    }
                     was_active = out.active;
                     last_active = out.active;
                     last_score = out.current_score;
-                    if out.current_score > max_score { max_score = out.current_score; }
+                    if out.current_score > max_score {
+                        max_score = out.current_score;
+                    }
                 }
             }
         };
@@ -301,9 +339,8 @@ fn main() {
     let frames: u32 = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(600);
     let lboard_def = args.get(6).map(String::as_str);
 
-    let mut lb = lboard_def.map(|def| {
-        LeaderboardEngine::new(def).expect("Definición rcheevos inválida")
-    });
+    let mut lb =
+        lboard_def.map(|def| LeaderboardEngine::new(def).expect("Definición rcheevos inválida"));
 
     for f in 0..frames {
         core.run_frame();
@@ -320,6 +357,9 @@ fn main() {
 
     if let Some(ram) = core.system_ram() {
         let non_zero = ram.iter().filter(|&&b| b != 0).count();
-        println!("Tras {frames} frames: {non_zero}/{} bytes distintos de cero", ram.len());
+        println!(
+            "Tras {frames} frames: {non_zero}/{} bytes distintos de cero",
+            ram.len()
+        );
     }
 }

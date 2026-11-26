@@ -115,7 +115,10 @@ pub struct ReplayPlayer {
 }
 
 impl ReplayPlayer {
-    pub fn from_bsv_bytes(raw: &[u8], expected_rom_crc32: Option<u32>) -> Result<Self, ReplayError> {
+    pub fn from_bsv_bytes(
+        raw: &[u8],
+        expected_rom_crc32: Option<u32>,
+    ) -> Result<Self, ReplayError> {
         if raw.len() < BSV_HEADER_LEN || raw[0..4] != BSV_MAGIC {
             return Err(ReplayError::InvalidHeader);
         }
@@ -157,14 +160,20 @@ impl ReplayPlayer {
         })
     }
 
-    pub fn from_gzip_bytes(gz: &[u8], expected_rom_crc32: Option<u32>) -> Result<Self, ReplayError> {
+    pub fn from_gzip_bytes(
+        gz: &[u8],
+        expected_rom_crc32: Option<u32>,
+    ) -> Result<Self, ReplayError> {
         let mut decoder = GzDecoder::new(gz);
         let mut raw = Vec::new();
         decoder.read_to_end(&mut raw)?;
         Self::from_bsv_bytes(&raw, expected_rom_crc32)
     }
 
-    pub fn from_gzip_file(path: &Path, expected_rom_crc32: Option<u32>) -> Result<Self, ReplayError> {
+    pub fn from_gzip_file(
+        path: &Path,
+        expected_rom_crc32: Option<u32>,
+    ) -> Result<Self, ReplayError> {
         let gz = std::fs::read(path)?;
         Self::from_gzip_bytes(&gz, expected_rom_crc32)
     }
@@ -215,9 +224,14 @@ mod tests {
             rec.push_frame([mask, 0, 0, 0]);
         }
         let gz = rec.to_gzip_bytes().expect("gzip encode");
-        assert!(gz.len() < 1500, "gzip debe comprimir fuertemente (len={})", gz.len());
+        assert!(
+            gz.len() < 1500,
+            "gzip debe comprimir fuertemente (len={})",
+            gz.len()
+        );
 
-        let mut player = ReplayPlayer::from_gzip_bytes(&gz, Some(0xDEAD_BEEF)).expect("gzip decode");
+        let mut player =
+            ReplayPlayer::from_gzip_bytes(&gz, Some(0xDEAD_BEEF)).expect("gzip decode");
         assert_eq!(player.total_frames(), 3600);
         assert_eq!(player.rom_crc32(), 0xDEAD_BEEF);
         assert_eq!(player.next_frame(), Some([0x0081, 0, 0, 0]));

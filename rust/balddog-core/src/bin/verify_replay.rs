@@ -158,7 +158,15 @@ fn main() -> ExitCode {
             if own_temp_dir {
                 let _ = std::fs::remove_dir_all(&save_dir);
             }
-            print_result(false, 0, 0, 0, 0, 0, Some(&format!("core_load_failed: {e}")));
+            print_result(
+                false,
+                0,
+                0,
+                0,
+                0,
+                0,
+                Some(&format!("core_load_failed: {e}")),
+            );
             return ExitCode::from(2);
         }
     };
