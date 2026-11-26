@@ -24,14 +24,14 @@ Para cada juego se contrasta:
 | 7 | `dino` | Cadillacs and Dinosaurs | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 8 | `ffight` | Final Fight | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 9 | `ghouls` | Ghouls 'n Ghosts | CPS1 | Sí | OK | `active=false` (en intro/mapa inicial), `flickers=0`. |
-| 10 | `knights` | Knights of the Round | CPS1 | Sí | PENDIENTE | - |
-| 11 | `kod` | The King of Dragons | CPS1 | Sí | PENDIENTE | - |
-| 12 | `mslug` | Metal Slug: Super Vehicle-001 | NEOGEO | Sí | PENDIENTE | - |
-| 13 | `mslug3` | Metal Slug 3 | NEOGEO | Sí | PENDIENTE | - |
+| 10 | `knights` | Knights of the Round | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
+| 11 | `kod` | The King of Dragons | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
+| 12 | `mslug` | Metal Slug: Super Vehicle-001 | NEOGEO | Sí | OK | Puntaje pantalla `500` = memoria `500`, `flickers=0`. |
+| 13 | `mslug3` | Metal Slug 3 | NEOGEO | Sí | DISCREPANCIA | Puntaje pantalla `100` vs memoria `200` (factor 2x o dirección incorrecta). |
 | 14 | `nbajam` | NBA Jam | Midway | No | SIN_SCORE_CONFIG | - |
-| 15 | `nbbatman` | Ninja Baseball Bat Man | Irem | Sí | PENDIENTE | - |
+| 15 | `nbbatman` | Ninja Baseball Bat Man | Irem | Sí | OK | `active=false` (en intro/selección), `flickers=0`. |
 | 16 | `pbobble` | Puzzle Bobble / Bust-A-Move | NEOGEO | No | SIN_SCORE_CONFIG | - |
-| 17 | `powerins` | Power Instinct | Atlus | Sí | PENDIENTE | - |
+| 17 | `powerins` | Power Instinct | Atlus | Sí | OK | Puntaje pantalla `300` = memoria `300`, `flickers=0`. |
 | 18 | `punisher` | The Punisher | CPS1 | Sí | PENDIENTE | - |
 | 19 | `robocop` | RoboCop | Data East | Sí | OK | Puntaje pantalla `1000` = memoria `1000`, `flickers=0`. |
 | 20 | `simpsons` | The Simpsons | Konami | Sí | OK | Puntaje pantalla `1` = memoria `1`, `flickers=0`. |
