@@ -18,8 +18,9 @@ En lugar de grabar y almacenar archivos de video pesados en la nube, **bald.dog 
    - La grabación y envío de replays de ranking solo aplica cuando `!isNetplay && !isReplayMode` y existe `score_config->>'lboard'` para el juego.
    - El jugador debe mantener `rankingEligible = true` (sin cargar *Save States*) y `creditsUsed == 1` (sin usar *Continue* / segunda moneda).
 2. **Reemplazo exclusivo por récord máximo:**
-   - Cada usuario conserva **un único replay por juego** en Supabase Storage en la ruta:
-     `replays/<game_id>/<user_id>.bsv.gz` (subido con `x-upsert: true`).
+   - Cada usuario conserva su replay de récord en Supabase Storage bajo la ruta:
+     `<game_id>/<user_id>/<uuid>.bsv.gz` (dentro del bucket `replays`).
+   - La verificación headless (`verify_replay` / `ReplayPlayer::from_gzip_file_strict`) aplica un límite de descompresión de 16 MiB y rechaza replays con `state_size > 0` o `rom_crc32 = 0`.
    - Antes de subir un replay (tanto en `GameActivity.submitOrQueueScore` como en `PendingScoreQueue.flushAll`), el cliente consulta el mejor puntaje actual del jugador (`fetchMyGameRank(gameId)`). **Solo si `score >= currentBest`** se sube y reemplaza el archivo en Storage, evitando que una partida posterior con menor puntaje sobrescriba el replay del récord máximo.
    - En PostgreSQL, `public.submit_high_score` aplica `on conflict (game_id, user_id) do update ... where excluded.score > public.high_scores.score ...`, actualizando `replay_path`, `replay_size_bytes` y `replay_sha256` únicamente cuando corresponde.
 

@@ -236,6 +236,10 @@ Inmediatamente tras la ejecución, lanza una consulta de verificación contra la
 - **Para tablas/columnas:** Consultar `information_schema.columns` verificando que `column_name` exista.
 - **Para seeds de juegos o configuraciones:** Consultar la fila en `public.games` verificando el nuevo valor.
 
+### 5. Invariantes de Salas y Edge Functions
+- **Salas (`public.rooms`):** `rooms_update_host` fue eliminado (`037`); toda modificación de estado o slots debe ejecutarse mediante `update_room_slot(...)`, y `rooms_insert_host` exige `status = 'waiting'`.
+- **Eliminación de cuenta:** La Edge Function `delete-account` (`supabase/functions/delete-account/index.ts`) autentica el JWT del usuario, limpia sus archivos en `storage.from('replays')` y elimina la cuenta vía `auth.admin.deleteUser`.
+
 ---
 
 ## Protocolo Obligatorio: Netplay P2P y Resolución de Red
@@ -314,6 +318,9 @@ Al modificar workflows de CI, dependencias Gradle/Rust o código Kotlin/Rust:
 1. **Toolchain Android (Gradle 9.9.2 + AGP 9.5.3):**
    - AGP 9 usa **built-in Kotlin**: **NUNCA** agregues `id("org.jetbrains.kotlin.android")` ni bloques `kotlinOptions {}` en `app/build.gradle.kts`.
    - Mantén los plugins de Kotlin (`compose` y `serialization`) alineados (`2.4.21`) y `compileSdk = 37.2` (`targetSdk = 36`).
+   - `scripts/build-rust.sh` incluye `-C link-arg=-Wl,-z,max-page-size=16384` para alineamiento de páginas de 16 KB.
+   - `app/proguard-rules.pro` mantiene R8 activo sobre `dog.bald.arcade.**` (sin `-keep` global).
+   - `app/google-services.json` requiere el cliente `dog.bald.arcade.debug` además de `dog.bald.arcade` para ejecutar `./gradlew testDebugUnitTest` e `installDebug`.
 2. **Invariantes de Seguridad (`.github/workflows/security.yml`):**
    - **OpenSSF Scorecard:** Mantén `permissions: read-all` a nivel global del workflow; `security-events: write` va únicamente en los jobs individuales que suben SARIF.
    - **`cargo-deny`:** Los crates internos del workspace (`balddog-core`, `balddog-netplay`, `balddog-android`) deben mantener `publish = false` en sus `Cargo.toml`.

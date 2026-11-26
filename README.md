@@ -142,14 +142,17 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 15. `supabase/migrations/021_rankings_and_gamification_rpcs.sql` — Global rankings, points, and gamification RPCs.
 16. `supabase/migrations/022_security_and_consistency_fixes.sql` — Consolidated RLS hardening, SECURITY DEFINER privileges, and anti-cheat fixes.
 17. `supabase/migrations/023_harden_replay_sha256_and_room_messages_rls.sql` — Unique replay SHA-256 enforcement and room messages RLS hardening.
+18. `supabase/migrations/024_*`..`038_harden_leaderboards_privacy_and_indexes.sql` — Score config fixes (`uccops`, `dino`, `simpsons`, `mslug3`, `snowbros`), Google OAuth & email verification, public web stats/profiles/replays RPCs, Arcade Database metadata & IPFS covers, `pg_cron` stale room cleanup, and security/privacy hardening.
 
 ---
 
 ## Documentation
 
 - **[Adding New Games to bald.dog ARCADE](docs/ADDING_GAMES.md)**: Comprehensive, step-by-step guide on ROM sourcing, Pinata/IPFS distribution, memory reverse-engineering with `ram_probe`, `rcheevos` leaderboard expression calibration, and Android validation.
+- **[Netplay Architecture](docs/NETPLAY_ARCHITECTURE.md)**: P2P topology, GGRS lifecycle, dual WAN|LAN candidate resolution, and NAT hairpinning diagnostics.
 - **[Gamification & Rankings System](docs/GAMIFICATION.md)**: Complete guide to global points, rebalanced ArcadeRank tiers, badges, and desync tie-breakers.
 - **[Replays, History & Anti-Cheat](docs/REPLAYS_AND_HISTORY.md)**: Specifications for BSV1 deterministic recording, headless server verification, and match history.
+- **[Crashlytics & Diagnostics](docs/CRASHLYTICS_AND_DIAGNOSTICS.md)** / **[Security & Signing](docs/SECURITY_AND_SIGNING.md)** / **[CI Quality & Security](docs/CI_QUALITY_AND_SECURITY.md)** / **[ROM Leaderboard Audit](docs/ROM_LEADERBOARD_AUDIT.md)**.
 - **[Brand Manual](docs/BRAND_MANUAL.md)**: Design guidelines, color palette, typography, and logo usage.
 - **[Transactional Emails & Cloudflare DNS](docs/EMAIL_AND_CLOUDFLARE.md)**: Resend setup (`noreply@bald.dog`), Cloudflare DNS records (DKIM/SPF/DMARC), and idempotent welcome email flow.
 - **[Arcade Database API Reference](docs/ARCADE_DATABASE_API_REFERENCE.md)**: Endpoints and 34-field schema for enriching `public.games` via `scripts/enrich-games-metadata.py` (with Pinata/IPFS image backup).
