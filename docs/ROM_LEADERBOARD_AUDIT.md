@@ -32,16 +32,16 @@ Para cada juego se contrasta:
 | 15 | `nbbatman` | Ninja Baseball Bat Man | Irem | Sí | OK | `active=false` (en intro/selección), `flickers=0`. |
 | 16 | `pbobble` | Puzzle Bobble / Bust-A-Move | NEOGEO | No | SIN_SCORE_CONFIG | - |
 | 17 | `powerins` | Power Instinct | Atlus | Sí | OK | Puntaje pantalla `300` = memoria `300`, `flickers=0`. |
-| 18 | `punisher` | The Punisher | CPS1 | Sí | PENDIENTE | - |
+| 18 | `punisher` | The Punisher | CPS1 | Sí | OK | Puntaje pantalla `4200` = memoria `4200`, `flickers=0`. |
 | 19 | `robocop` | RoboCop | Data East | Sí | OK | Puntaje pantalla `1000` = memoria `1000`, `flickers=0`. |
 | 20 | `simpsons` | The Simpsons | Konami | Sí | OK | Puntaje pantalla `1` = memoria `1`, `flickers=0`. |
 | 21 | `snowbro2` | Snow Bros. 2: With New Elves | Toaplan | No | SIN_SCORE_CONFIG | - |
-| 22 | `snowbros` | Snow Bros.: Nick & Tom | Toaplan | Sí | PENDIENTE | - |
+| 22 | `snowbros` | Snow Bros.: Nick & Tom | Toaplan | Sí | DISCREPANCIA | Puntaje pantalla `70` vs memoria `15728778` (`flickers=1`). |
 | 23 | `spidman` | Spider-Man: The Videogame | Sega System 32 | No | SIN_SCORE_CONFIG | - |
-| 24 | `ssriders` | Sunset Riders | Konami | Sí | PENDIENTE | - |
+| 24 | `ssriders` | Sunset Riders | Konami | Sí | OK | Puntaje pantalla `100` = memoria `100`, `flickers=0`. |
 | 25 | `tmnt` | Teenage Mutant Ninja Turtles | Konami | No | SIN_SCORE_CONFIG | - |
 | 26 | `tmnt2` | TMNT: Turtles in Time | Konami | No | SIN_SCORE_CONFIG | - |
-| 27 | `tumblep` | Tumble Pop | Data East | Sí | PENDIENTE | - |
-| 28 | `uccops` | Undercover Cops | Irem | Sí | PENDIENTE | - |
-| 29 | `viostorm` | Violent Storm | Konami | Sí | PENDIENTE | - |
+| 27 | `tumblep` | Tumble Pop | Data East | Sí | OK | Puntaje pantalla `100` = memoria `100`, `flickers=0`. |
+| 28 | `uccops` | Undercover Cops | Irem | Sí | DISCREPANCIA | Reporta `max_score=85848382` y `flickers=1` durante intro sin HUD. |
+| 29 | `viostorm` | Violent Storm | Konami | Sí | OK | `active=false` (en intro), `flickers=0`. |
 | 30 | `wwfwfestu` | WWF WrestleFest | Technos Japan | No | SIN_SCORE_CONFIG | - |
