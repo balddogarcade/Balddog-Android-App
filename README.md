@@ -154,6 +154,7 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 - **[Transactional Emails & Cloudflare DNS](docs/EMAIL_AND_CLOUDFLARE.md)**: Resend setup (`noreply@bald.dog`), Cloudflare DNS records (DKIM/SPF/DMARC), and idempotent welcome email flow.
 - **[Arcade Database API Reference](docs/ARCADE_DATABASE_API_REFERENCE.md)**: Endpoints and 34-field schema for enriching `public.games` via `scripts/enrich-games-metadata.py` (with Pinata/IPFS image backup).
 - **[Google Analytics for Firebase (GA4)](docs/ANALYTICS.md)**: Privacy-safe (`AnalyticsHelper`) event instrumentation and real-time verification with Firebase DebugView.
+- **[Firebase Performance Monitoring](docs/PERFORMANCE.md)**: Custom trace instrumentation (`PerformanceHelper`) for ROM startup and Netplay P2P synchronization bottlenecks.
 
 ---
 

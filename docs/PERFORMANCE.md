@@ -1,0 +1,26 @@
+# Firebase Performance Monitoring
+
+**bald.dog ARCADE** integra **Firebase Performance Monitoring** (`com.google.firebase:firebase-perf` vía `firebase-bom:35.2.0`) para detectar cuellos de botella en el arranque de la aplicación, renderizado de pantallas y trazas personalizadas críticas del emulador y Netplay P2P.
+
+> **Nota de Toolchain (AGP 9.5.3):** Se utiliza el SDK `firebase-perf` directamente sin el plugin de Gradle `com.google.firebase.firebase-perf`, ya que dicho plugin aún referencia la API legacy `Transform` eliminada en AGP 9.
+
+## Wrapper Seguro (`PerformanceHelper`)
+
+Toda la instrumentación de trazas personalizadas pasa por [`PerformanceHelper.kt`](../app/src/main/java/dog/bald/arcade/diagnostics/PerformanceHelper.kt):
+- Encapsula `FirebasePerformance.getInstance().newTrace(...)` con `runCatching`.
+- Provee `startTrace(name)`, `stopTrace(trace, attributes)` y `measureTrace(name, attributes) { ... }`.
+
+## Trazas Personalizadas
+
+| Traza | Propósito | Atributos |
+| :--- | :--- | :--- |
+| `rom_startup_trace` | Medir el tiempo de inicialización del juego y motor Libretro/FBNeo. | `rom_slug`, `mode` |
+| `netplay_sync_trace` | Medir el tiempo de sincronización P2P/GGRS hasta alcanzar `SessionState::Running`. | `rom_slug`, `mode` |
+
+## Verificación en Logcat
+
+Para inspeccionar trazas localmente antes de que aparezcan en **Firebase Console → Performance**:
+```bash
+adb shell setprop log.tag.FirebasePerformance DEBUG
+adb logcat -s FirebasePerformance
+```

@@ -272,6 +272,7 @@ Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, 
 4. **Referencia y consulta:**
    - Guía técnica completa: [docs/CRASHLYTICS_AND_DIAGNOSTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/CRASHLYTICS_AND_DIAGNOSTICS.md).
    - Analítica (GA4): Usa `dog.bald.arcade.diagnostics.AnalyticsHelper` (sin PII); guía en [docs/ANALYTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/ANALYTICS.md).
+   - Rendimiento: Usa `dog.bald.arcade.diagnostics.PerformanceHelper` para trazas personalizadas; guía en [docs/PERFORMANCE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/PERFORMANCE.md).
    - Runbook operativo (build de símbolos, `logcat` `balddog-panic`, consulta en Firebase): `.agents/skills/crashlytics-diagnostics/SKILL.md`.
 
 ---
