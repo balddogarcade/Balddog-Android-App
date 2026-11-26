@@ -43,26 +43,43 @@ internal fun RemoteImage(
     contentScale: ContentScale = ContentScale.Crop,
 ) {
     val context = LocalContext.current
-    val bitmap by produceState<ImageBitmap?>(
-        initialValue = url?.takeIf { it.isNotBlank() }?.let { RemoteImageCache.getFromMemory(it) },
+    val state by produceState<RemoteImageState>(
+        initialValue =
+            url
+                ?.takeIf { it.isNotBlank() }
+                ?.let { RemoteImageCache.getFromMemory(it) }
+                ?.let { RemoteImageState.Success(it) }
+                ?: if (url.isNullOrBlank()) RemoteImageState.Error else RemoteImageState.Loading,
         url,
     ) {
         if (url.isNullOrBlank()) {
-            value = null
+            value = RemoteImageState.Error
             return@produceState
         }
-        value = RemoteImageCache.load(context, url)
+        RemoteImageCache.getFromMemory(url)?.let {
+            value = RemoteImageState.Success(it)
+            return@produceState
+        }
+        value = RemoteImageState.Loading
+        val loaded = RemoteImageCache.load(context, url)
+        value = if (loaded != null) RemoteImageState.Success(loaded) else RemoteImageState.Error
     }
-    val img = bitmap
-    if (img != null) {
-        Image(
-            bitmap = img,
-            contentDescription = contentDescription,
-            contentScale = contentScale,
-            modifier = modifier,
-        )
-    } else {
-        Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
+
+    when (val current = state) {
+        is RemoteImageState.Success -> {
+            Image(
+                bitmap = current.bitmap,
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                modifier = modifier,
+            )
+        }
+        RemoteImageState.Loading -> {
+            SkeletonBox(modifier = modifier)
+        }
+        RemoteImageState.Error -> {
+            Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
+        }
     }
 }
 

@@ -54,9 +54,18 @@ internal object CoverUrlRegistry {
     fun resolve(slug: String?): String? = slug?.let { urlsBySlug[it] }
 }
 
+internal sealed interface RemoteImageState {
+    data object Loading : RemoteImageState
+
+    data class Success(val bitmap: ImageBitmap) : RemoteImageState
+
+    data object Error : RemoteImageState
+}
+
 internal object RemoteImageCache {
     private const val MAX_MEMORY_KB = 24 * 1024
     private const val MAX_IMAGE_BYTES = 5 * 1024 * 1024
+    private const val MAX_DISK_CACHE_BYTES = 100L * 1024L * 1024L
     private const val MAX_DECODE_DIM = 1024
 
     private val httpClient: OkHttpClient by lazy {
@@ -94,6 +103,7 @@ internal object RemoteImageCache {
                     val cacheFile = File(cacheDir, sha256(url))
 
                     if (cacheFile.exists() && cacheFile.length() > 0L) {
+                        cacheFile.setLastModified(System.currentTimeMillis())
                         decodeSampledFile(cacheFile)?.asImageBitmap()?.also { bmp ->
                             memoryCache.put(url, bmp)
                             return@runCatching bmp
@@ -119,6 +129,7 @@ internal object RemoteImageCache {
                             tmp.copyTo(cacheFile, overwrite = true)
                             tmp.delete()
                         }
+                        trimDiskCacheIfNeeded(cacheDir)
                     }
                     memoryCache.put(url, bmp)
                     bmp
@@ -154,6 +165,20 @@ internal object RemoteImageCache {
         return inSampleSize
     }
 
+    private fun trimDiskCacheIfNeeded(cacheDir: File) {
+        val files = cacheDir.listFiles()?.filter { it.isFile && !it.name.endsWith(".tmp") } ?: return
+        var totalSize = files.sumOf { it.length() }
+        if (totalSize <= MAX_DISK_CACHE_BYTES) return
+        val sortedByOldest = files.sortedBy { it.lastModified() }
+        for (file in sortedByOldest) {
+            if (totalSize <= MAX_DISK_CACHE_BYTES) break
+            val len = file.length()
+            if (file.delete()) {
+                totalSize -= len
+            }
+        }
+    }
+
     private fun sha256(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
@@ -174,15 +199,25 @@ fun GameCoverImage(
     val context = LocalContext.current
     val resolvedUrl = coverUrl?.takeIf { it.isNotBlank() } ?: CoverUrlRegistry.resolve(slug)
 
-    val bitmap by produceState<ImageBitmap?>(
-        initialValue = resolvedUrl?.let { RemoteImageCache.getFromMemory(it) },
+    val state by produceState<RemoteImageState>(
+        initialValue =
+            resolvedUrl
+                ?.let { RemoteImageCache.getFromMemory(it) }
+                ?.let { RemoteImageState.Success(it) }
+                ?: if (resolvedUrl.isNullOrBlank()) RemoteImageState.Error else RemoteImageState.Loading,
         resolvedUrl,
     ) {
         if (resolvedUrl.isNullOrBlank()) {
-            value = null
+            value = RemoteImageState.Error
             return@produceState
         }
-        value = RemoteImageCache.load(context, resolvedUrl)
+        RemoteImageCache.getFromMemory(resolvedUrl)?.let {
+            value = RemoteImageState.Success(it)
+            return@produceState
+        }
+        value = RemoteImageState.Loading
+        val loaded = RemoteImageCache.load(context, resolvedUrl)
+        value = if (loaded != null) RemoteImageState.Success(loaded) else RemoteImageState.Error
     }
 
     Box(
@@ -193,20 +228,25 @@ fun GameCoverImage(
                 .then(if (showBorder) Modifier.border(1.dp, CharcoalBorder, shape) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        val img = bitmap
-        if (img != null) {
-            Image(
-                bitmap = img,
-                contentDescription = contentDescription,
-                contentScale = contentScale,
-                modifier = Modifier.matchParentSize(),
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.SportsEsports,
-                contentDescription = contentDescription,
-                tint = MutedGray,
-            )
+        when (val current = state) {
+            is RemoteImageState.Success -> {
+                Image(
+                    bitmap = current.bitmap,
+                    contentDescription = contentDescription,
+                    contentScale = contentScale,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            RemoteImageState.Loading -> {
+                SkeletonBox(modifier = Modifier.matchParentSize(), shape = shape)
+            }
+            RemoteImageState.Error -> {
+                Icon(
+                    imageVector = Icons.Default.SportsEsports,
+                    contentDescription = contentDescription,
+                    tint = MutedGray,
+                )
+            }
         }
     }
 }
