@@ -245,6 +245,58 @@ fn main() {
         run_scan(&mut core, args.get(8).map(String::as_str), boot, steps);
         return;
     }
+    if args.get(5).map(String::as_str) == Some("--audit") {
+        let def = args.get(6).expect("Falta lboard_def");
+        let out_ppm = args.get(7).map(String::as_str).unwrap_or("/tmp/audit_frame.ppm");
+        let mut lb = LeaderboardEngine::new(def).expect("Definición rcheevos inválida");
+        let mut flickers = 0u32;
+        let mut was_active = false;
+        let mut max_score = 0u64;
+        let mut last_active = false;
+        let mut last_score = 0u64;
+        let mut step_eval = |c: &mut LibretroCore, mask: u16, hold: u32, wait: u32| {
+            c.set_inputs([mask, 0, 0, 0]);
+            for _ in 0..hold {
+                c.run_frame();
+                if let Some(ram) = c.system_ram() {
+                    let out = lb.evaluate_frame(ram);
+                    if was_active && !out.active { flickers += 1; }
+                    was_active = out.active;
+                    last_active = out.active;
+                    last_score = out.current_score;
+                    if out.current_score > max_score { max_score = out.current_score; }
+                }
+            }
+            c.set_inputs([0, 0, 0, 0]);
+            for _ in 0..wait {
+                c.run_frame();
+                if let Some(ram) = c.system_ram() {
+                    let out = lb.evaluate_frame(ram);
+                    if was_active && !out.active { flickers += 1; }
+                    was_active = out.active;
+                    last_active = out.active;
+                    last_score = out.current_score;
+                    if out.current_score > max_score { max_score = out.current_score; }
+                }
+            }
+        };
+        step_eval(&mut core, 0, 0, 1000);
+        step_eval(&mut core, 1 << 2, 6, 30); // COIN
+        step_eval(&mut core, BTN_START, 6, 120);
+        step_eval(&mut core, BTN_START, 6, 300);
+        for _ in 0..40 {
+            step_eval(&mut core, BTN_RIGHT | BTN_B | BTN_Y, 8, 12);
+        }
+        core.take_video_frame(|w, h, data| {
+            let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
+            for px in data.chunks_exact(4) {
+                ppm.extend_from_slice(&[px[2], px[1], px[0]]);
+            }
+            let _ = std::fs::write(out_ppm, ppm);
+        });
+        println!("AUDIT_RESULT active={last_active} score={last_score} max_score={max_score} flickers={flickers} ppm={out_ppm}");
+        return;
+    }
 
     let frames: u32 = args.get(5).and_then(|s| s.parse().ok()).unwrap_or(600);
     let lboard_def = args.get(6).map(String::as_str);

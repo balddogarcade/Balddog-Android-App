@@ -15,13 +15,13 @@ Para cada juego se contrasta:
 
 | # | Slug | Título | Sistema | `score_config` | Estado | Modificación / Notas |
 |---|------|--------|---------|----------------|--------|----------------------|
-| 1 | `altbeast` | Altered Beast | Sega System 16B | Sí | PENDIENTE | - |
+| 1 | `altbeast` | Altered Beast | Sega System 16B | Sí | OK (con advertencia) | Puntaje pantalla `500` = memoria `500`, pero `STA:0xH0820=1` tuvo `flickers=10` durante boot/attract. |
 | 2 | `btoads` | Battletoads Arcade | Arcade | No | SIN_SCORE_CONFIG | - |
-| 3 | `captcomm` | Captain Commando | CPS1 | Sí | PENDIENTE | - |
+| 3 | `captcomm` | Captain Commando | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 4 | `dbz2` | Dragon Ball Z 2: Super Battle | Banpresto | Sí | PENDIENTE | - |
 | 5 | `ddragon2` | Double Dragon II: The Revenge | Technos Japan | Sí | PENDIENTE | - |
 | 6 | `ddtod` | Dungeons & Dragons: Tower of Doom | CPS2 | Sí | PENDIENTE | - |
-| 7 | `dino` | Cadillacs and Dinosaurs | CPS1 | Sí | PENDIENTE | - |
+| 7 | `dino` | Cadillacs and Dinosaurs | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 8 | `ffight` | Final Fight | CPS1 | Sí | PENDIENTE | - |
 | 9 | `ghouls` | Ghouls 'n Ghosts | CPS1 | Sí | PENDIENTE | - |
 | 10 | `knights` | Knights of the Round | CPS1 | Sí | PENDIENTE | - |
@@ -33,8 +33,8 @@ Para cada juego se contrasta:
 | 16 | `pbobble` | Puzzle Bobble / Bust-A-Move | NEOGEO | No | SIN_SCORE_CONFIG | - |
 | 17 | `powerins` | Power Instinct | Atlus | Sí | PENDIENTE | - |
 | 18 | `punisher` | The Punisher | CPS1 | Sí | PENDIENTE | - |
-| 19 | `robocop` | RoboCop | Data East | Sí | PENDIENTE | - |
-| 20 | `simpsons` | The Simpsons | Konami | Sí | PENDIENTE | - |
+| 19 | `robocop` | RoboCop | Data East | Sí | OK | Puntaje pantalla `1000` = memoria `1000`, `flickers=0`. |
+| 20 | `simpsons` | The Simpsons | Konami | Sí | OK | Puntaje pantalla `1` = memoria `1`, `flickers=0`. |
 | 21 | `snowbro2` | Snow Bros. 2: With New Elves | Toaplan | No | SIN_SCORE_CONFIG | - |
 | 22 | `snowbros` | Snow Bros.: Nick & Tom | Toaplan | Sí | PENDIENTE | - |
 | 23 | `spidman` | Spider-Man: The Videogame | Sega System 32 | No | SIN_SCORE_CONFIG | - |
