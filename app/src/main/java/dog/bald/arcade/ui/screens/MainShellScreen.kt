@@ -271,25 +271,36 @@ fun MainShellScreen(
                 }
                 try {
                     runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
-                    games = repo.fetchGames()
-                    biosList = repo.fetchBios()
-                    rooms = repo.fetchOpenRooms()
-                    runCatching { repo.fetchMyProfile() }.getOrNull()?.let { fetchedProfile ->
-                        profile = fetchedProfile
+                    kotlinx.coroutines.coroutineScope {
+                        val gamesDef = async { repo.fetchGames() }
+                        val biosDef = async { repo.fetchBios() }
+                        val roomsDef = async { repo.fetchOpenRooms() }
+                        val profileDef = async { runCatching { repo.fetchMyProfile() }.getOrNull() }
+                        val scoresDef = async { runCatching { repo.fetchMyHighScores() } }
+                        val historyDef = async { runCatching { repo.fetchMyMatchHistory() }.getOrDefault(emptyList()) }
+                        val statsDef = async { runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList()) }
+                        val publicDef = async {
+                            repo.currentUserId()?.let { uid -> runCatching { repo.fetchPublicProfile(uid) }.getOrNull() }
+                        }
+                        val summariesDef = async {
+                            runCatching { repo.fetchGamesRankingSummary().associateBy { it.gameId } }.getOrDefault(emptyMap())
+                        }
+                        val followingDef = async { runCatching { repo.fetchMyFollowingIds() }.getOrDefault(emptySet()) }
+
+                        games = gamesDef.await()
+                        biosList = biosDef.await()
+                        rooms = roomsDef.await()
+                        profileDef.await()?.let { profile = it }
+                        scoresDef.await().onSuccess { fetchedScores ->
+                            myHighScores = fetchedScores
+                            hasLoadedInitialScores = true
+                        }
+                        myMatchHistory = historyDef.await()
+                        myGameStats = statsDef.await()
+                        myPublicProfile = publicDef.await()
+                        rankingSummaries = summariesDef.await()
+                        myFollowingIds = followingDef.await()
                     }
-                    runCatching { repo.fetchMyHighScores() }.onSuccess { fetchedScores ->
-                        myHighScores = fetchedScores
-                        hasLoadedInitialScores = true
-                    }
-                    myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(emptyList())
-                    myGameStats = runCatching { repo.fetchMyGameStats() }.getOrDefault(emptyList())
-                    myPublicProfile = repo.currentUserId()?.let { uid ->
-                        runCatching { repo.fetchPublicProfile(uid) }.getOrNull()
-                    }
-                    rankingSummaries = runCatching {
-                        repo.fetchGamesRankingSummary().associateBy { it.gameId }
-                    }.getOrDefault(emptyMap())
-                    myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(emptySet())
                     pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                     refreshLocalState()
                 } catch (t: Throwable) {
@@ -848,6 +859,10 @@ fun MainShellScreen(
                         refreshLocalState()
                     },
                     onSignOut = {
+                        performSignOut()
+                    },
+                    onDeleteAccount = {
+                        repo.deleteAccount()
                         performSignOut()
                     }
                 )
