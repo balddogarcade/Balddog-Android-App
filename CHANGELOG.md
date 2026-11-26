@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Updated GitHub Actions dependencies in `.github/workflows/release.yml` (`gradle/actions` v6, `actions/cache` v6, `actions/setup-java` v6, `actions/attest-build-provenance` v4, `softprops/action-gh-release` v3) and `cc` crate (`1.11.3`) in `rust/Cargo.lock`.
 - Replaced horizontal scrolling `LazyRow` catalog filters with a full-width non-scrolling `Row` of square-bordered `CatalogFilterChip` items (`Nuevos`, `Más descargados`, `Más jugados`, `Biblioteca`) in `MainShellScreen.kt`.
 - Removed residual anonymous/guest accounts (`is_anonymous = true`) and enforced registered-only user accounts across the platform (`028_public_web_stats_rpc.sql`).
 
