@@ -49,7 +49,11 @@ private class EncryptedSessionManager(context: Context) : SessionManager {
         prefs.edit().putString("session_json", json.encodeToString(session)).apply()
     }
 
-    override suspend fun loadSession(): UserSession? {
+    override suspend fun loadSession(): UserSession {
+        return loadSessionOrNull() ?: throw NoSuchElementException("No saved session")
+    }
+
+    override suspend fun loadSessionOrNull(): UserSession? {
         val raw = prefs.getString("session_json", null) ?: return null
         return runCatching { json.decodeFromString<UserSession>(raw) }.getOrNull()
     }
