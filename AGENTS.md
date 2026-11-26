@@ -320,3 +320,19 @@ Al modificar workflows de CI, dependencias Gradle/Rust o código Kotlin/Rust:
    - **Detekt / ktlint / Qodana / SonarCloud:** Excluyen `app/src/main/java/uniffi/**` (bindings autogenerados).
    - Antes de pushear cambios en Rust, ejecuta `cargo fmt --manifest-path rust/Cargo.toml --all -- --check` y `cargo clippy --manifest-path rust/Cargo.toml --all-targets`.
 4. **Referencia:** Consultar [docs/CI_QUALITY_AND_SECURITY.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/CI_QUALITY_AND_SECURITY.md).
+
+---
+
+## Protocolo: Enriquecimiento de Metadatos (Arcade Database + IPFS)
+
+Al agregar nuevos juegos al catálogo (`public.games`), ejecuta el seeder para poblar los 22 campos de metadatos desde `adb.arcadeitalia.net` y subir sus 6 imágenes a Pinata/IPFS:
+
+1. **Referencia de campos y endpoints:** [docs/ARCADE_DATABASE_API_REFERENCE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/ARCADE_DATABASE_API_REFERENCE.md).
+2. **Ejecución por ROM nueva:**
+   ```bash
+   python3 scripts/enrich-games-metadata.py --rom <slug>
+   ```
+3. **Invariantes:**
+   - La respuesta de `adb.arcadeitalia.net` viene comprimida en **GZIP** (`\x1f\x8b`).
+   - El seeder preserva intactos `cover_url` y `title` actuales del catálogo (el título de ADB se guarda en `adb_title`).
+   - Requiere `SUPABASE_PROJECT_ID`, `SUPABASE_ACCESS_TOKEN` y credenciales de Pinata (`PINATA_JWT` o `PINATA_API_KEY` + `PINATA_SECRET_API_KEY`) en `local.properties` o entorno.
