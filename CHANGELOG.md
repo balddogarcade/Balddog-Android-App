@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public read-only Supabase RPC `get_public_arcade_stats()` for aggregated landing page metrics and Top 6 game rankings (`028_public_web_stats_rpc.sql`).
 
 ### Fixed
+- Fixed *The Simpsons* (`simpsons`) leaderboard `score_config` to read the 16-bit Big-Endian BCD enemy-defeat counter at `0x11D4..0x11D5` (`VAL:A:b0xH11D4*100_M:b0xH11D5`) instead of the spurious `0xX1B04` address, and cleared prior invalid scores (`032_fix_simpsons_score_config.sql`).
 - Reactive Supabase `SessionStatus` observation in `MainActivity` with `ProfileCache` persistence and neutral `ArcadeAvatarOrPlaceholder` fallback, preventing wrong avatars or lost user data when minimizing/reopening the app.
 - Google OAuth flow in `AuthScreen` now waits for the `dog.bald.arcade://login-callback` deeplink instead of navigating prematurely to the catalog without an active session.
 - `NewRecordDialog` now triggers only when returning from `GameActivity` (`ActivityResultContracts.StartActivityForResult`) with initial scores loaded, preventing false-positive record modals on Google login or app resume.
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-app updater (`AppUpdateManager`) with SHA-256 verification and Profile screen integration.
 
 ### Fixed
+- Fixed *The Simpsons* (`simpsons`) leaderboard `score_config` to read the 16-bit Big-Endian BCD enemy-defeat counter at `0x11D4..0x11D5` (`VAL:A:b0xH11D4*100_M:b0xH11D5`) instead of the spurious `0xX1B04` address, and cleared prior invalid scores (`032_fix_simpsons_score_config.sql`).
 - Bottom navigation bar tab switching desynchronization with `HorizontalPager` in `MainShellScreen.kt`.
 
 ## [0.1.0] - 2026-11-25

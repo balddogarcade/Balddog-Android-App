@@ -381,6 +381,46 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_simpsons_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xH1050=1::CAN:0=1::SUB:0xH1050=0::VAL:A:b0xH11D4*100_M:b0xH11D5",
+        )
+        .expect("simpsons lboard válido");
+
+        let mut ram = vec![0u8; 22530];
+        // 1. Boot / Attract: 0x1050=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x1050=1, puntaje=9 (0x00, 0x09)
+        ram[0x1050] = 1;
+        ram[0x11D4] = 0x00;
+        ram[0x11D5] = 0x09;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 9);
+
+        // 3. Supera 9 -> 10 en BCD (0x00, 0x10) y luego 123 (0x01, 0x23)
+        ram[0x11D5] = 0x10;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 10);
+
+        ram[0x11D4] = 0x01;
+        ram[0x11D5] = 0x23;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 123);
+
+        // 4. Game Over / Continue: 0x1050=0 -> dispara SUB con 123
+        ram[0x1050] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(123));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
             "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
@@ -400,7 +440,7 @@ mod tests {
             "STA:0xH02D4=1::CAN:0=1::SUB:0xH02D4=0::VAL:A:b0x 07F2*10000_M:b0x 07F4",
             "STA:0xH14E3B>0_0xH1117E>0::CAN:0=1::SUB:0xH14E3B=0_0xH1117E=0::VAL:A:b0xH14E37*1000000_A:b0xH14E36*10000_A:b0xH14E35*100_M:b0xH14E34",
             "STA:0xH000F=1::CAN:0=1::SUB:0xH000F=0::VAL:A:b0xH03EE*1000000_A:b0xH03ED*10000_A:b0xH03EC*100_M:b0xH03EB",
-            "STA:0xH1050=1::CAN:0=1::SUB:0xH1050=0::VAL:0xX1B04",
+            "STA:0xH1050=1::CAN:0=1::SUB:0xH1050=0::VAL:A:b0xH11D4*100_M:b0xH11D5",
             "STA:0xH04A1=1::CAN:0=1::SUB:0xH04A1=0::VAL:A:b0x 3214*10000_M:b0x 3216",
             "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0x ED18*10000_M:b0x ED1A",
             "STA:0xH0053=1::CAN:0=1::SUB:0xH0053=0::VAL:A:b0x 0810*10000_M:b0x 0812",
