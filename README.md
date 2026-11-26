@@ -148,6 +148,7 @@ Apply the migrations located in `supabase/migrations/` to your Supabase project:
 - **[Gamification & Rankings System](docs/GAMIFICATION.md)**: Complete guide to global points, rebalanced ArcadeRank tiers, badges, and desync tie-breakers.
 - **[Replays, History & Anti-Cheat](docs/REPLAYS_AND_HISTORY.md)**: Specifications for BSV1 deterministic recording, headless server verification, and match history.
 - **[Brand Manual](docs/BRAND_MANUAL.md)**: Design guidelines, color palette, typography, and logo usage.
+- **[Transactional Emails & Cloudflare DNS](docs/EMAIL_AND_CLOUDFLARE.md)**: Resend setup (`noreply@bald.dog`), Cloudflare DNS records (DKIM/SPF/DMARC), and idempotent welcome email flow.
 
 ---
 

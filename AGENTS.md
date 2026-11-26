@@ -289,6 +289,15 @@ Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, 
    - Guías técnicas: [docs/RELEASES_AND_UPDATES.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/RELEASES_AND_UPDATES.md) y [docs/SECURITY_AND_SIGNING.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/SECURITY_AND_SIGNING.md).
    - Runbook operativo de releases: `.agents/skills/release-management/SKILL.md`.
 
+---
+
+## Protocolo Obligatorio: Correos Transaccionales (Resend + Cloudflare)
+
+1. **Remitente oficial:** Todos los correos transaccionales se envían desde `noreply@bald.dog` vía Resend (`EMAIL_FROM`).
+2. **Invariante DNS en Cloudflare:** Nunca activar el proxy naranja (`proxied=true`) sobre los registros de correo (`resend._domainkey.bald.dog`, `send.bald.dog`, `rsend.bald.dog`, `_dmarc.bald.dog`).
+3. **Idempotencia de bienvenida:** Toda modificación a `supabase/functions/send-welcome-email/index.ts` debe preservar la validación por JWT, el chequeo/actualización de `public.profiles.welcome_email_sent` y redesplegarse en Supabase.
+4. **Referencia:** Consultar [docs/EMAIL_AND_CLOUDFLARE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/EMAIL_AND_CLOUDFLARE.md).
+
 
 
 
