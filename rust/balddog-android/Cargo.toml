@@ -3,6 +3,7 @@ name = "balddog-android"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+publish = false
 description = "UniFFI Android bridge for bald.dog ARCADE"
 
 [lib]

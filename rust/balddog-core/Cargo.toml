@@ -3,6 +3,7 @@ name = "balddog-core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+publish = false
 description = "Core arcade emulation engine for bald.dog ARCADE Android"
 
 [dependencies]

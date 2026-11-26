@@ -3,6 +3,7 @@ name = "balddog-netplay"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
+publish = false
 description = "LAN and GGRS P2P rollback netplay transport for bald.dog ARCADE Android"
 
 [dependencies]

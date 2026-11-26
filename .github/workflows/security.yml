@@ -8,9 +8,7 @@ on:
   schedule:
     - cron: '0 6 * * 1'
 
-permissions:
-  contents: read
-  security-events: write
+permissions: read-all
 
 jobs:
   rust-audit:
@@ -50,6 +48,9 @@ jobs:
   trivy-scan:
     name: Trivy Vulnerability & Config Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -97,6 +98,9 @@ jobs:
   codeql:
     name: CodeQL Analysis (Kotlin / Java)
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
