@@ -113,7 +113,7 @@ fn main() -> ExitCode {
     };
 
     let expected_crc = match compute_expected_rom_crc(&args.rom) {
-        Ok(crc) => Some(crc),
+        Ok(crc) => crc,
         Err(reason) => {
             print_result(false, 0, 0, 0, 0, 0, Some(&reason));
             return ExitCode::from(2);
@@ -130,7 +130,7 @@ fn main() -> ExitCode {
     let _ = std::fs::create_dir_all(&system_dir);
     clear_deterministic_nvram(&save_dir, &args.rom);
 
-    let mut player = match ReplayPlayer::from_gzip_file(&args.replay, expected_crc) {
+    let mut player = match ReplayPlayer::from_gzip_file_strict(&args.replay, expected_crc) {
         Ok(p) => p,
         Err(e) => {
             if own_temp_dir {

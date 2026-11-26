@@ -166,6 +166,8 @@ def verify_item(
                 return
 
         try:
+            sys_dir = tmp_dir / "system"
+            sys_dir.mkdir(parents=True, exist_ok=True)
             proc = subprocess.run(
                 [
                     str(verifier_bin),
@@ -178,7 +180,7 @@ def verify_item(
                     "--lboard",
                     lboard_expr,
                     "--system-dir",
-                    str(roms_dir),
+                    str(sys_dir),
                     "--save-dir",
                     str(tmp_dir / "saves"),
                     "--expected-score",
@@ -194,20 +196,23 @@ def verify_item(
             verified_score = int(verdict.get("verified_score", 0))
             reason = verdict.get("reason")
 
-            if verdict.get("valid") is True:
+            if proc.returncode == 2:
+                status = "error"
+                verified_score = None
+            elif verdict.get("valid") is True:
                 status = "verified"
             else:
                 status = "rejected"
         except subprocess.TimeoutExpired:
-            status = "rejected"
-            verified_score = 0
+            status = "error"
+            verified_score = None
             reason = "timeout_exceeded"
         except Exception as e:
-            status = "rejected"
-            verified_score = 0
+            status = "error"
+            verified_score = None
             reason = f"verifier_error: {str(e)[:200]}"
 
-        rpc_call(
+        accepted = rpc_call(
             base_url,
             service_key,
             "complete_replay_verification",
@@ -217,11 +222,13 @@ def verify_item(
                 "p_verified_score": verified_score,
                 "p_verifier_version": verifier_version,
                 "p_error": reason,
+                "p_expected_replay_path": replay_path,
+                "p_replay_sha256": expected_replay_sha or None,
             },
         )
         print(
             f"[{status.upper()}] score_id={score_id} claimed={claimed_score} "
-            f"verified={verified_score} reason={reason}"
+            f"verified={verified_score} accepted={accepted} reason={reason}"
         )
 
 

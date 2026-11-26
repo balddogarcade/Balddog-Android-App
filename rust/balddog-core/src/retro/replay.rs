@@ -12,7 +12,8 @@ use thiserror::Error;
 
 const BSV_MAGIC: [u8; 4] = *b"BSV1";
 const BSV_HEADER_LEN: usize = 16;
-const BYTES_PER_FRAME: usize = 8; // [u16; 4] little-endian
+const BYTES_PER_FRAME: usize = 8;
+const MAX_DECOMPRESSED_BSV_BYTES: usize = 16 * 1024 * 1024; // 16 MiB cap against gzip bombs // [u16; 4] little-endian
 
 /// Calcula el CRC32 IEEE-802.3 leyendo en streaming desde cualquier `Read` (chunks de 64 KiB).
 pub fn compute_crc32_reader<R: Read>(mut reader: R) -> Result<u32, std::io::Error> {
@@ -164,10 +165,30 @@ impl ReplayPlayer {
         gz: &[u8],
         expected_rom_crc32: Option<u32>,
     ) -> Result<Self, ReplayError> {
-        let mut decoder = GzDecoder::new(gz);
+        let mut decoder = GzDecoder::new(gz).take((MAX_DECOMPRESSED_BSV_BYTES + 1) as u64);
         let mut raw = Vec::new();
         decoder.read_to_end(&mut raw)?;
+        if raw.len() > MAX_DECOMPRESSED_BSV_BYTES {
+            return Err(ReplayError::InvalidHeader);
+        }
         Self::from_bsv_bytes(&raw, expected_rom_crc32)
+    }
+
+    pub fn from_gzip_file_strict(
+        path: &Path,
+        expected_rom_crc32: u32,
+    ) -> Result<Self, ReplayError> {
+        let player = Self::from_gzip_file(path, Some(expected_rom_crc32))?;
+        if !player.initial_state.is_empty() {
+            return Err(ReplayError::InvalidHeader);
+        }
+        if expected_rom_crc32 != 0 && player.rom_crc32 != expected_rom_crc32 {
+            return Err(ReplayError::RomCrcMismatch {
+                expected: expected_rom_crc32,
+                actual: player.rom_crc32,
+            });
+        }
+        Ok(player)
     }
 
     pub fn from_gzip_file(
