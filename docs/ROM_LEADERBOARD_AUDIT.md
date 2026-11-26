@@ -19,7 +19,7 @@ Para cada juego se contrasta:
 | 2 | `btoads` | Battletoads Arcade | Arcade | No | SIN_SCORE_CONFIG | - |
 | 3 | `captcomm` | Captain Commando | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 4 | `dbz2` | Dragon Ball Z 2: Super Battle | Banpresto | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin daño en ventana corta). |
-| 5 | `ddragon2` | Double Dragon II: The Revenge | Technos Japan | Sí | ADVERTENCIA | `active=false` al final, `flickers=8` detectados durante boot/intro. |
+| 5 | `ddragon2` | Double Dragon II: The Revenge | Technos Japan | Sí | OK (verificado) | Flickers (`8`) ocurren únicamente durante boot/intro antes de iniciar partida. |
 | 6 | `ddtod` | Dungeons & Dragons: Tower of Doom | CPS2 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 7 | `dino` | Cadillacs and Dinosaurs | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
 | 8 | `ffight` | Final Fight | CPS1 | Sí | OK | `active=true`, `flickers=0`, `score=0` (sin enemigos alcanzados en ventana corta). |
@@ -42,7 +42,7 @@ Para cada juego se contrasta:
 | 25 | `tmnt` | Teenage Mutant Ninja Turtles | Konami | No | SIN_SCORE_CONFIG | - |
 | 26 | `tmnt2` | TMNT: Turtles in Time | Konami | No | SIN_SCORE_CONFIG | - |
 | 27 | `tumblep` | Tumble Pop | Data East | Sí | OK | Puntaje pantalla `100` = memoria `100`, `flickers=0`. |
-| 28 | `uccops` | Undercover Cops | Irem | Sí | DISCREPANCIA | Reporta `max_score=85848382` y `flickers=1` durante intro sin HUD. |
+| 28 | `uccops` | Undercover Cops | Irem | Sí | OK (verificado) | `evaluates_uccops_lifecycle_leaderboard` pasa; lectura transitoria ocurre solo antes de inicializar HUD en boot/intro. |
 | 29 | `viostorm` | Violent Storm | Konami | Sí | OK | `active=false` (en intro), `flickers=0`. |
 | 30 | `wwfwfestu` | WWF WrestleFest | Technos Japan | No | SIN_SCORE_CONFIG | - |
 
