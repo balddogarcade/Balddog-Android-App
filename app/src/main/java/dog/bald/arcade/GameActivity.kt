@@ -74,6 +74,7 @@ import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.PendingScoreSubmission
 import dog.bald.arcade.diagnostics.AnalyticsHelper
 import dog.bald.arcade.diagnostics.CrashlyticsHelper
+import dog.bald.arcade.diagnostics.PerformanceHelper
 import kotlinx.serialization.json.Json
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
@@ -335,6 +336,8 @@ class GameActivity : ComponentActivity() {
         )
         CrashlyticsHelper.log("GameActivity start: mode=$crashNetplayMode gameId=$gameId rom=$romSlug")
         AnalyticsHelper.logGameLaunch(gameId = gameId, romSlug = romSlug, mode = crashNetplayMode)
+        val startupTrace = PerformanceHelper.startTrace("rom_startup_trace")
+        var netplaySyncTrace = if (isNetplay) PerformanceHelper.startTrace("netplay_sync_trace") else null
 
         try {
             if (romPath.isBlank()) {
@@ -444,6 +447,11 @@ class GameActivity : ComponentActivity() {
                                     logFromAndroid("INFO", "Netplay sincronizado exitosamente! Ping=${netplayHud.pingMs}ms")
                                     CrashlyticsHelper.setNetplayState("running", netplayRoomId, netplayHud.pingMs)
                                     CrashlyticsHelper.log("GGRS synchronized ping=${netplayHud.pingMs}ms")
+                                    PerformanceHelper.stopTrace(
+                                        netplaySyncTrace,
+                                        mapOf("rom_slug" to gameId, "mode" to crashNetplayMode)
+                                    )
+                                    netplaySyncTrace = null
                                 }
                                 netplaySynchronized = true
                             }

@@ -6,7 +6,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
     id("com.google.firebase.crashlytics")
-    id("com.google.firebase.firebase-perf")
     id("io.gitlab.arturbosch.detekt")
 }
 
