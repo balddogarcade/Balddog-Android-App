@@ -1197,7 +1197,11 @@ class GameActivity : ComponentActivity() {
         if ((!hud.rankingEligible || credits > 1) && !rankingNoticeShown) {
             rankingNoticeShown = true
             voiceNoticeMsg = if (credits > 1) {
-                "Ranking 1-Crédito desactivado (usaste Continue)"
+                if (lastSubmittedSessionScore > 0L) {
+                    "Récord 1CC guardado · Continue bloqueado para nuevos puntos"
+                } else {
+                    "Ranking 1-Crédito desactivado (usaste Continue)"
+                }
             } else {
                 "Ranking desactivado en esta sesión (Save State)"
             }
