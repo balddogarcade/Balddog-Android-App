@@ -422,7 +422,8 @@ fn run_voice_loop(
                 for (&handle, peer) in remote_peers.iter_mut() {
                     match peer.jitter.pop() {
                         JitterPop::Frame(opus_pkt) => {
-                            if let Ok(decoded) = peer.decoder.decode(&opus_pkt, &mut decode_buf, false)
+                            if let Ok(decoded) =
+                                peer.decoder.decode(&opus_pkt, &mut decode_buf, false)
                             {
                                 let n = decoded.min(VOICE_FRAME_SAMPLES);
                                 for i in 0..n {

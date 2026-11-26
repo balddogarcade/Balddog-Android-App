@@ -1094,7 +1094,9 @@ impl EmulationSession {
 
     pub fn score_hud_stats(&self) -> ScoreHudStats {
         let pending = self.stats.pending_submit_score.load(Ordering::Acquire);
-        self.stats.last_read_pending_submit.store(pending, Ordering::Release);
+        self.stats
+            .last_read_pending_submit
+            .store(pending, Ordering::Release);
         ScoreHudStats {
             current_score: self.stats.current_score.load(Ordering::Relaxed),
             best_session_score: self.stats.best_session_score.load(Ordering::Relaxed),
