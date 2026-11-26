@@ -15,15 +15,16 @@ on:
         required: false
         type: string
 
-permissions:
-  contents: write
-  id-token: write
-  attestations: write
+permissions: read-all
 
 jobs:
   build-and-release:
     name: Build, Sign, Attest & Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     timeout-minutes: 45
 
     steps:
