@@ -118,6 +118,7 @@ fun ProfileScreen(
     onOpenDiagnostics: () -> Unit,
     onClearCache: () -> Unit,
     onSignOut: () -> Unit,
+    onDeleteAccount: (suspend () -> Unit)? = null,
     publicProfile: dog.bald.arcade.data.PublicProfileDto? = null,
     onOpenFollowers: () -> Unit = {},
     onOpenFollowing: () -> Unit = {},
@@ -146,6 +147,10 @@ fun ProfileScreen(
 
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var deletingAccount by remember { mutableStateOf(false) }
+    var deleteAccountError by remember { mutableStateOf<String?>(null) }
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var syncingScores by remember { mutableStateOf(false) }
     var loadingReplayGameId by remember { mutableStateOf<String?>(null) }
 
@@ -533,6 +538,57 @@ fun ProfileScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                if (onDeleteAccount != null) {
+                    OutlinedButton(
+                        onClick = {
+                            deleteAccountError = null
+                            showDeleteAccountDialog = true
+                        },
+                        shape = RectangleShape,
+                        border = BorderStroke(1.dp, dog.bald.arcade.ui.theme.DangerRedBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = null,
+                            tint = DangerRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "ELIMINAR CUENTA",
+                            color = DangerRed,
+                            fontSize = 11.sp,
+                            fontFamily = JetBrainsMonoFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Privacidad",
+                        color = MutedGray,
+                        fontSize = 11.sp,
+                        modifier = Modifier
+                            .clickable { uriHandler.openUri("https://bald.dog/privacy") }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                    Text(text = "·", color = MutedGray, fontSize = 11.sp)
+                    Text(
+                        text = "Términos",
+                        color = MutedGray,
+                        fontSize = 11.sp,
+                        modifier = Modifier
+                            .clickable { uriHandler.openUri("https://bald.dog/terms") }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
 
@@ -809,6 +865,74 @@ fun ProfileScreen(
             onConfirm = {
                 showSignOutDialog = false
                 onSignOut()
+            }
+        )
+    }
+
+    if (showDeleteAccountDialog && onDeleteAccount != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!deletingAccount) showDeleteAccountDialog = false },
+            containerColor = CarbonSurface,
+            shape = RectangleShape,
+            title = {
+                Text(
+                    text = "ELIMINAR CUENTA",
+                    color = DangerRed,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Esta acción es irreversible. Se eliminarán tu perfil, récords, replays y datos asociados.",
+                        color = SilverGray,
+                        fontSize = 12.sp
+                    )
+                    if (deleteAccountError != null) {
+                        Text(
+                            text = deleteAccountError ?: "",
+                            color = DangerRed,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    enabled = !deletingAccount,
+                    onClick = {
+                        scope.launch {
+                            deletingAccount = true
+                            deleteAccountError = null
+                            runCatching { onDeleteAccount() }
+                                .onSuccess {
+                                    deletingAccount = false
+                                    showDeleteAccountDialog = false
+                                }
+                                .onFailure { err ->
+                                    deletingAccount = false
+                                    deleteAccountError = err.toUserMessage("No se pudo eliminar la cuenta")
+                                }
+                        }
+                    }
+                ) {
+                    Text(
+                        text = if (deletingAccount) "ELIMINANDO..." else "ELIMINAR",
+                        color = DangerRed,
+                        fontFamily = JetBrainsMonoFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    enabled = !deletingAccount,
+                    onClick = { showDeleteAccountDialog = false }
+                ) {
+                    Text("CANCELAR", color = SilverGray, fontFamily = JetBrainsMonoFamily)
+                }
             }
         )
     }

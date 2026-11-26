@@ -674,4 +674,28 @@ class ArcadeRepository(context: Context) {
         if (currentUserId() == null) return emptyList()
         return client.postgrest.rpc("get_games_ranking_summary").decodeList<GameRankingSummaryDto>()
     }
+
+    suspend fun deleteAccount() {
+        val jwt = client.auth.currentSessionOrNull()?.accessToken
+            ?: throw IllegalStateException("No hay sesión activa")
+        val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/functions/v1/delete-account"
+        withContext(Dispatchers.IO) {
+            val conn = (java.net.URL(endpoint).openConnection() as java.net.HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("Authorization", "Bearer $jwt")
+                setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                setRequestProperty("Content-Type", "application/json")
+                doOutput = true
+            }
+            conn.outputStream.use { it.write("{}".toByteArray()) }
+            val code = conn.responseCode
+            conn.disconnect()
+            if (code !in 200..299) {
+                throw IllegalStateException("No se pudo eliminar la cuenta (HTTP $code)")
+            }
+        }
+        runCatching { client.auth.signOut() }
+    }
 }
