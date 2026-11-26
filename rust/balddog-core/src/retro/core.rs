@@ -603,7 +603,9 @@ impl LibretroCore {
     pub fn take_audio_samples<R>(&self, f: impl FnOnce(&[i16]) -> R) -> Option<R> {
         with_ctx(|ctx| {
             if !ctx.audio_scratch.is_empty() {
-                Some(f(&ctx.audio_scratch))
+                let res = f(&ctx.audio_scratch);
+                ctx.audio_scratch.clear();
+                Some(res)
             } else {
                 None
             }

@@ -173,6 +173,7 @@ struct SharedStats {
     current_score: AtomicU64,
     best_session_score: AtomicU64,
     pending_submit_score: AtomicU64,
+    last_read_pending_submit: AtomicU64,
     credits_used: AtomicU8,
     is_replay: AtomicBool,
     replay_current_frame: AtomicU64,
@@ -440,7 +441,7 @@ impl EmulationSession {
         let thread = std::thread::Builder::new()
             .name("balddog-emu".to_string())
             .spawn(move || {
-                if is_replay_mode || (netplay.is_none() && score_def.is_some()) {
+                if is_replay_mode || netplay.is_some() || score_def.is_some() {
                     clear_deterministic_nvram(&save_dir, &rom_path);
                 }
                 let mut core = match LibretroCore::load(&core_path, &system_dir, &save_dir) {
@@ -666,13 +667,14 @@ impl EmulationSession {
                                         };
                                         core.set_inputs(frame_inputs);
                                         core.run_frame();
-                                    }
-                                    if let Some(ref mut lb) = leaderboard {
-                                        if let Some(ram) = core.system_ram() {
-                                            let out = lb.evaluate_frame(ram);
-                                            stats_clone.current_score.store(out.current_score, Ordering::Relaxed);
-                                            if out.current_score > 0 {
-                                                stats_clone.best_session_score.fetch_max(out.current_score, Ordering::Relaxed);
+                                        if let Some(ref mut lb) = leaderboard {
+                                            if let Some(ram) = core.system_ram() {
+                                                let out = lb.evaluate_frame(ram);
+                                                coin_tracker.observe_frame(out.active, &frame_inputs);
+                                                stats_clone.current_score.store(out.current_score, Ordering::Relaxed);
+                                                if out.current_score > 0 {
+                                                    stats_clone.best_session_score.fetch_max(out.current_score, Ordering::Relaxed);
+                                                }
                                             }
                                         }
                                     }
@@ -936,13 +938,16 @@ impl EmulationSession {
                             stats_clone.replay_finished.store(true, Ordering::Release);
                         }
                     } else {
-                        if let Some(ref mut rec) = recorder {
-                            rec.push_frame(inputs);
+                        let eligible = stats_clone.ranking_eligible.load(Ordering::Acquire);
+                        if eligible {
+                            if let Some(ref mut rec) = recorder {
+                                rec.push_frame(inputs);
+                            }
                         }
                         core.set_inputs(inputs);
                         core.run_frame();
                         if let Some(ref mut lb) = leaderboard {
-                            if stats_clone.ranking_eligible.load(Ordering::Acquire) {
+                            if eligible {
                                 if let Some(ram) = core.system_ram() {
                                     let out = lb.evaluate_frame(ram);
                                     apply_leaderboard_frame(
@@ -1086,17 +1091,27 @@ impl EmulationSession {
     }
 
     pub fn score_hud_stats(&self) -> ScoreHudStats {
+        let pending = self.stats.pending_submit_score.load(Ordering::Acquire);
+        self.stats.last_read_pending_submit.store(pending, Ordering::Release);
         ScoreHudStats {
             current_score: self.stats.current_score.load(Ordering::Relaxed),
             best_session_score: self.stats.best_session_score.load(Ordering::Relaxed),
-            pending_submit_score: self.stats.pending_submit_score.load(Ordering::Acquire),
+            pending_submit_score: pending,
             ranking_eligible: self.stats.ranking_eligible.load(Ordering::Acquire),
             credits_used: self.stats.credits_used.load(Ordering::Acquire),
         }
     }
 
     pub fn acknowledge_score_submit(&self) {
-        self.stats.pending_submit_score.store(0, Ordering::Release);
+        let expected = self.stats.last_read_pending_submit.load(Ordering::Acquire);
+        if expected > 0 {
+            let _ = self.stats.pending_submit_score.compare_exchange(
+                expected,
+                0,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
+        }
     }
 
     pub fn set_replay_speed(&self, speed: u8) {
