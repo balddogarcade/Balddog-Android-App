@@ -7,14 +7,18 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.Button
@@ -131,7 +135,7 @@ fun AuthScreen(
                     text = when {
                         isRecovery -> "RECUPERAR CONTRASEÑA"
                         isRegister -> "CREAR CUENTA"
-                        else -> "INSERT COIN · LOGIN"
+                        else -> "INICIAR SESIÓN"
                     },
                     color = PureWhite,
                     fontFamily = SpaceGroteskFamily,
@@ -283,10 +287,13 @@ fun AuthScreen(
                 }
 
                 if (!isRecovery) {
-                    OutlinedButton(
+                    Button(
                         enabled = !loading,
                         shape = RectangleShape,
-                        border = BorderStroke(1.dp, SteelBorder),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PureWhite,
+                            contentColor = androidx.compose.ui.graphics.Color.Black
+                        ),
                         onClick = {
                             scope.launch {
                                 loading = true
@@ -305,49 +312,63 @@ fun AuthScreen(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_google),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
                         Text(
                             text = "CONTINUAR CON GOOGLE",
-                            color = PureWhite,
+                            color = androidx.compose.ui.graphics.Color.Black,
                             fontFamily = SpaceGroteskFamily,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                if (!isRegister && !isRecovery) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (!isRegister && !isRecovery) {
+                        TextButton(
+                            onClick = {
+                                isRecovery = true
+                                errorMsg = null
+                                infoMsg = null
+                            },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.heightIn(min = 32.dp)
+                        ) {
+                            Text("¿Olvidaste tu contraseña?", color = MutedGray, fontSize = 12.sp)
+                        }
+                    }
+
                     TextButton(
                         onClick = {
-                            isRecovery = true
+                            if (isRecovery) {
+                                isRecovery = false
+                            } else {
+                                isRegister = !isRegister
+                            }
                             errorMsg = null
                             infoMsg = null
                         },
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.heightIn(min = 32.dp)
                     ) {
-                        Text("¿Olvidaste tu contraseña?", color = MutedGray, fontSize = 12.sp)
+                        Text(
+                            text = when {
+                                isRecovery -> "Volver al login"
+                                isRegister -> "¿Ya tienes cuenta? Inicia sesión"
+                                else -> "¿Nuevo aquí? Crea una cuenta"
+                            },
+                            color = MutedGray,
+                            fontSize = 12.sp
+                        )
                     }
-                }
-
-                TextButton(
-                    onClick = {
-                        if (isRecovery) {
-                            isRecovery = false
-                        } else {
-                            isRegister = !isRegister
-                        }
-                        errorMsg = null
-                        infoMsg = null
-                    },
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                ) {
-                    Text(
-                        text = when {
-                            isRecovery -> "Volver al login"
-                            isRegister -> "¿Ya tienes cuenta? Inicia sesión"
-                            else -> "¿Nuevo aquí? Crea una cuenta"
-                        },
-                        color = MutedGray,
-                        fontSize = 12.sp
-                    )
                 }
             }
         }
