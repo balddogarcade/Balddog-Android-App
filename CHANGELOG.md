@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added in-app **Eliminar cuenta** flow in `ProfileScreen` and legal links (`https://bald.dog/privacy`, `https://bald.dog/terms`).
 
 ### Changed
+- Aligned `DiceBearPixelArtAvatar` with DiceBear `11.x/pixel-art` (`api.dicebear.com/11.x/pixel-art/svg`) using `ktor-client-okhttp` with in-memory + disk SVG caching and offline v9.4.2 fallback so avatars match `bald.dog` identically.
 - Migrated all game cover images (`cover_url`) from bundled `assets/covers/*.webp` to Pinata IPFS (`public.games.cover_url`), refactored `GameCoverImage` and `RemoteImage` to share a unified memory + disk cache (`RemoteImageCache`), and removed local cover assets from the APK.
 
 ### Added

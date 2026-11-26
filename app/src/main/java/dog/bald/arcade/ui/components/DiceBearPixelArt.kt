@@ -2,7 +2,11 @@ package dog.bald.arcade.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -10,20 +14,51 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.platform.LocalContext
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.URLEncoder
+import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.floor
 
+private val diceBearHttpClient by lazy { HttpClient(OkHttp) }
+private val diceBearMemoryCache = ConcurrentHashMap<String, List<ResolvedLayer>>()
+
 /**
- * Offline implementation of DiceBear Pixel Art (v9.4.2, CC0 / MIT)
- * Generates deterministic 16x16 pixel-art avatars from a seed (e.g. user email)
- * with zero network requests.
+ * DiceBear Pixel Art (11.x) avatar with local disk/memory cache and offline v9.4.2 fallback.
+ * Fetches deterministic 16x16 SVG from api.dicebear.com/11.x/pixel-art/svg so avatars match
+ * the web client identically for any given seed.
  */
 @Composable
 fun DiceBearPixelArtAvatar(
     seed: String,
     modifier: Modifier = Modifier,
 ) {
-    val layers = remember(seed) { buildPixelArtLayers(seed) }
+    val context = LocalContext.current
+    val fallbackLayers = remember(seed) { buildPixelArtLayers(seed) }
+    var layers by remember(seed) {
+        mutableStateOf(diceBearMemoryCache[seed] ?: fallbackLayers)
+    }
+
+    LaunchedEffect(seed) {
+        if (seed.isBlank() || diceBearMemoryCache.containsKey(seed)) return@LaunchedEffect
+        val remoteLayers = withContext(Dispatchers.IO) {
+            fetchOrLoadCachedDiceBearLayers(context.cacheDir, seed)
+        }
+        if (remoteLayers != null && remoteLayers.isNotEmpty()) {
+            diceBearMemoryCache[seed] = remoteLayers
+            layers = remoteLayers
+        }
+    }
+
     Canvas(modifier = modifier) {
         scale(
             scaleX = size.width / 16f,
@@ -38,6 +73,73 @@ fun DiceBearPixelArtAvatar(
                 )
             }
         }
+    }
+}
+
+private suspend fun fetchOrLoadCachedDiceBearLayers(
+    cacheDir: File,
+    seed: String,
+): List<ResolvedLayer>? {
+    val avatarDir = File(cacheDir, "avatars_11x").apply { mkdirs() }
+    val key = MessageDigest.getInstance("SHA-256")
+        .digest(seed.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+    val cacheFile = File(avatarDir, "$key.svg")
+
+    val svg = if (cacheFile.exists() && cacheFile.length() > 0L) {
+        runCatching { cacheFile.readText(Charsets.UTF_8) }.getOrNull()
+    } else {
+        null
+    } ?: runCatching {
+        val encoded = URLEncoder.encode(seed, "UTF-8")
+        val response = diceBearHttpClient.get("https://api.dicebear.com/11.x/pixel-art/svg?seed=$encoded")
+        if (response.status.isSuccess()) {
+            response.bodyAsText().also { body ->
+                runCatching { cacheFile.writeText(body, Charsets.UTF_8) }
+            }
+        } else {
+            null
+        }
+    }.getOrNull()
+
+    return svg?.let(::parseDiceBearSvgLayers)
+}
+
+private val svgPathTagRegex = Regex("""<path\b([^>]*)/?>""")
+private val svgAttrRegex = Regex("""(\w[\w-]*)\s*=\s*"([^"]*)"""")
+
+private fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
+    val result = mutableListOf<ResolvedLayer>()
+    for (match in svgPathTagRegex.findAll(svg)) {
+        val attrs = svgAttrRegex.findAll(match.groupValues[1])
+            .associate { it.groupValues[1] to it.groupValues[2] }
+        val d = attrs["d"] ?: continue
+        val fill = attrs["fill"] ?: continue
+        if (fill.equals("none", ignoreCase = true)) continue
+        val color = parseHexColor(fill) ?: continue
+        val alpha = attrs["fill-opacity"]?.toFloatOrNull() ?: 1f
+        val path = runCatching {
+            PathParser().parsePathString(d).toPath().apply {
+                fillType = PathFillType.EvenOdd
+            }
+        }.getOrNull() ?: continue
+        result.add(ResolvedLayer(path = path, color = color, alpha = alpha))
+    }
+    return result
+}
+
+private fun parseHexColor(hex: String): Color? {
+    val clean = hex.removePrefix("#")
+    return when (clean.length) {
+        6 -> clean.toLongOrNull(16)?.let { Color(0xFF000000L or it) }
+        8 -> clean.toLongOrNull(16)?.let { Color(it) }
+        3 -> {
+            val r = clean[0].digitToIntOrNull(16) ?: return null
+            val g = clean[1].digitToIntOrNull(16) ?: return null
+            val b = clean[2].digitToIntOrNull(16) ?: return null
+            Color((r * 17 shl 16) or (g * 17 shl 8) or (b * 17) or (0xFF shl 24))
+        }
+        else -> null
     }
 }
 
