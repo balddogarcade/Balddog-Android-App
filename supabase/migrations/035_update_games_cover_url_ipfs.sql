@@ -1,0 +1,32 @@
+-- Migración 035: Actualiza cover_url en public.games con las portadas .webp subidas a IPFS (Pinata)
+
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmRQesmyi3eor5YokAQKRB7i6wRzYz2FgoH9FUnDjaK5y3' WHERE slug = 'altbeast';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/Qmf9N3q5U5Ux4HbgSeaLqKj2PWzxpFrPhYpK2eLpPofMpY' WHERE slug = 'btoads';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmZXarTrW9LXpUN7uNFx72UmPVRCycwcAW17sPehzx7uTS' WHERE slug = 'captcomm';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmT8gwMrZCkqzj8YwwUDdAcDa2a1ph5ZPyd1Y6HkkxmrqL' WHERE slug = 'dbz2';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmXCECPFEkQ2pRNRH2pgsowG3fQaxijbnuVX7Nzq99uL6P' WHERE slug = 'ddragon2';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmUY5Hd7Ae1f2E5n9c7x3sJzG8z8AUq2qLz5QEj1nKHeV7' WHERE slug = 'ddtod';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmbUUnwMprtxN9kbN31z7TdgcwfiRQrWAt5gkQe42NL9ZP' WHERE slug = 'dino';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmZfeERdLKT6mrGoU89RCjt53e8evZqKgATcj3GtBcXkfX' WHERE slug = 'ffight';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmVAdNYViwehtC6CEPGXDGMcv2fiWp5puuc7GZnjvM5asq' WHERE slug = 'ghouls';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmRp9Aj75KhiCNGRvsZ3nPqRoFQsUEAdGYVijZWN1zbnTj' WHERE slug = 'knights';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmYbjMy4kyvSmhkuPkUREV5qDAUp6gBQ2vDPX5J3kT2PVH' WHERE slug = 'kod';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmNi3R5uSzrJSVtA5294Thc1c8ATvDJwzJkQ18FpTyQDT2' WHERE slug = 'mslug';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmRCNgXNjnjtmLBM9okwLTnMccCtJvs5XdauBz2uExsbzU' WHERE slug = 'mslug3';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmeCgNUAuwdiWX8kHCoseZrpqNgm6KqvNLb33V9gNCSe1j' WHERE slug = 'nbajam';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmXYQ4zgr2shcxw5VyvjSfdazNs56qJBj9D8DPFB3fTsDr' WHERE slug = 'nbbatman';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/Qmb9FM5mVyiqMJE3e2z2oHteUysPneMz9iP293GrRBzTtK' WHERE slug = 'pbobble';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmeYiSQ2L5MSsDQVZB6kzcEfJfBU1aKVpxPhxqes2cVQx5' WHERE slug = 'powerins';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmVHgYftMrJrVKRNFWA4gaNa8cQDGij3eVKhsDkCvzSih5' WHERE slug = 'punisher';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmVz2YV2jnuHySzG8tkVjfLh43GuHXpVueDg72crjNKy6D' WHERE slug = 'robocop';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmNwDaE4MdVixYV12pmddJMw18GJjErZ8xe6QKorTCZNTm' WHERE slug = 'simpsons';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/Qmf8czz3Y7tJnYKLdJkiRUietkSr4MZtZUdjeoJu58N98U' WHERE slug = 'snowbro2';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/Qmep7erCpFSZXh43SpQZjosSQ8TfLN1DK8qe5S3Nr86JRr' WHERE slug = 'snowbros';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmRJwgAJrCH25rq1iMYsB9VzU1xSM9jL7EJynr1eCWfQDD' WHERE slug = 'spidman';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmaPeugKUPJmX4uoeNRBu4iq3vFQrr7XjWhih81GRBL9J2' WHERE slug = 'ssriders';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmXsJiWcRXxKrNFR3ESTi5vNGarnzGJ2Re5zs1oUoUDcb9' WHERE slug = 'tmnt';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmQyEV7hrT4j5jB9h2Ka9XZhiVzvkve9UTXjBcqrYEqyKk' WHERE slug = 'tmnt2';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmawwQFXYWHEDfHw1GvofUqNG4QL8RzBXALjQwyS4P747x' WHERE slug = 'tumblep';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmdwzALCpKFAQs8CZ2cG9mxcvEDTJfh6ZFzp9GqfAv7Q7P' WHERE slug = 'uccops';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/QmY8FUL6K9f23ubsb8MKMQ6PMaQpLhJVxpYXRUq49mxeiF' WHERE slug = 'viostorm';
+UPDATE public.games SET cover_url = 'https://gateway.pinata.cloud/ipfs/Qmd1ckBMckLxWv6S296SfcCYFp7xCbf5kad5ncR6eqb7E8' WHERE slug = 'wwfwfestu';
