@@ -75,7 +75,6 @@ import dog.bald.arcade.data.PendingScoreSubmission
 import dog.bald.arcade.diagnostics.AnalyticsHelper
 import dog.bald.arcade.diagnostics.CrashlyticsHelper
 import dog.bald.arcade.diagnostics.PerformanceHelper
-import kotlinx.serialization.json.Json
 import dog.bald.arcade.engine.NativeSurfaceBridge
 import dog.bald.arcade.input.ControllerManager
 import dog.bald.arcade.input.TouchLayoutConfig
@@ -101,6 +100,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import uniffi.balddog_android.NetplayHudInfo
 import uniffi.balddog_android.ReplayHudInfo
 import uniffi.balddog_android.ScoreHudInfo
@@ -118,8 +118,8 @@ import uniffi.balddog_android.logFromAndroid
 import uniffi.balddog_android.pullVoicePlaybackPcm
 import uniffi.balddog_android.pushVoiceCapturePcm
 import uniffi.balddog_android.restartReplay
-import uniffi.balddog_android.seekReplay
 import uniffi.balddog_android.saveGameState
+import uniffi.balddog_android.seekReplay
 import uniffi.balddog_android.setAudioDucking
 import uniffi.balddog_android.setGamePaused
 import uniffi.balddog_android.setPlayerInput
@@ -196,6 +196,7 @@ class GameActivity : ComponentActivity() {
     private var lastSubmittedSessionScore: Long = 0L
     private var isReplayMode by mutableStateOf(false)
     private var replayManuallyPaused by mutableStateOf(false)
+
     @Volatile
     private var audioFocusDucked: Boolean = false
     private var replayPath: String = ""
@@ -244,26 +245,28 @@ class GameActivity : ComponentActivity() {
     private var touchMaskP1: Int = 0
     private val physicalMasks = IntArray(4)
 
-    private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        val action = GameSessionPolicy.resolveAudioFocusChange(
-            focusChange = change,
-            isNetplay = isNetplay,
-            showMenu = showMenu,
-            isReplayMode = isReplayMode,
-            replayManuallyPaused = replayManuallyPaused,
-            voiceListenEnabled = voiceListenEnabled,
-            remoteSpeakingMask = voiceHud.remoteSpeakingMask.toInt()
-        )
-        action.audioFocusDucked?.let { ducked ->
-            audioFocusDucked = ducked
+    private val audioFocusListener =
+        AudioManager.OnAudioFocusChangeListener { change ->
+            val action =
+                GameSessionPolicy.resolveAudioFocusChange(
+                    focusChange = change,
+                    isNetplay = isNetplay,
+                    showMenu = showMenu,
+                    isReplayMode = isReplayMode,
+                    replayManuallyPaused = replayManuallyPaused,
+                    voiceListenEnabled = voiceListenEnabled,
+                    remoteSpeakingMask = voiceHud.remoteSpeakingMask.toInt(),
+                )
+            action.audioFocusDucked?.let { ducked ->
+                audioFocusDucked = ducked
+            }
+            action.setDucking?.let { ducking ->
+                setAudioDucking(ducking)
+            }
+            action.setPaused?.let { paused ->
+                updateEnginePaused(paused)
+            }
         }
-        action.setDucking?.let { ducking ->
-            setAudioDucking(ducking)
-        }
-        action.setPaused?.let { paused ->
-            updateEnginePaused(paused)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -273,9 +276,10 @@ class GameActivity : ComponentActivity() {
         enableImmersiveMode()
 
         touchConfig = TouchLayoutPrefs.load(this)
-        voiceVolume = getSharedPreferences("balddog_voice_prefs", MODE_PRIVATE)
-            .getFloat("voice_volume", 1.0f)
-            .coerceIn(0f, 1.5f)
+        voiceVolume =
+            getSharedPreferences("balddog_voice_prefs", MODE_PRIVATE)
+                .getFloat("voice_volume", 1.0f)
+                .coerceIn(0f, 1.5f)
 
         val romPath = intent.getStringExtra(EXTRA_ROM_PATH).orEmpty()
         val systemDir = intent.getStringExtra(EXTRA_SYSTEM_DIR).orEmpty()
@@ -286,14 +290,15 @@ class GameActivity : ComponentActivity() {
         val romSlug = File(romPath).nameWithoutExtension.ifBlank { "default" }
         val stateFile = File(stateDir, "$romSlug.state")
 
-        controllerManager = ControllerManager(
-            context = this,
-            onControllerPresenceChanged = { present -> hasPhysicalController = present },
-            onPortMaskChanged = { port, mask ->
-                physicalMasks[port] = mask
-                pushInputToEngine(port)
-            }
-        ).also { it.start() }
+        controllerManager =
+            ControllerManager(
+                context = this,
+                onControllerPresenceChanged = { present -> hasPhysicalController = present },
+                onPortMaskChanged = { port, mask ->
+                    physicalMasks[port] = mask
+                    pushInputToEngine(port)
+                },
+            ).also { it.start() }
 
         requestAudioFocus()
 
@@ -303,12 +308,18 @@ class GameActivity : ComponentActivity() {
         roomIsPrivate = intent.getBooleanExtra(EXTRA_ROOM_IS_PRIVATE, false)
         roomPlayersJson = intent.getStringExtra(EXTRA_ROOM_PLAYERS_JSON).orEmpty().ifBlank { "[]" }
         isNetplayHost = intent.getBooleanExtra(EXTRA_IS_HOST, false)
-        matchSessionId = if (isNetplay && netplayRoomId.isNotBlank()) {
-            netplayRoomId
-        } else {
-            java.util.UUID.randomUUID().toString()
-        }
-        matchStartedAtIso = java.time.Instant.now().toString()
+        matchSessionId =
+            if (isNetplay && netplayRoomId.isNotBlank()) {
+                netplayRoomId
+            } else {
+                java.util.UUID
+                    .randomUUID()
+                    .toString()
+            }
+        matchStartedAtIso =
+            java.time.Instant
+                .now()
+                .toString()
         gameId = intent.getStringExtra(EXTRA_GAME_ID).orEmpty()
         romSha256 = intent.getStringExtra(EXTRA_ROM_SHA256).orEmpty()
         scoreDef = intent.getStringExtra(EXTRA_SCORE_DEF)?.takeIf { it.isNotBlank() }
@@ -317,22 +328,23 @@ class GameActivity : ComponentActivity() {
         replayPlayerName = intent.getStringExtra(EXTRA_REPLAY_PLAYER_NAME).orEmpty()
         replayTargetScore = intent.getLongExtra(EXTRA_REPLAY_TARGET_SCORE, 0L)
 
-        val crashNetplayMode = when {
-            isReplayMode -> "replay"
-            isNetplay && isNetplayHost -> "host"
-            isNetplay -> "client"
-            else -> "offline"
-        }
+        val crashNetplayMode =
+            when {
+                isReplayMode -> "replay"
+                isNetplay && isNetplayHost -> "host"
+                isNetplay -> "client"
+                else -> "offline"
+            }
         CrashlyticsHelper.setGameContext(
             gameId = gameId,
             gameTitle = gameTitle,
             romSlug = romSlug,
             romSha256 = romSha256,
-            netplayMode = crashNetplayMode
+            netplayMode = crashNetplayMode,
         )
         CrashlyticsHelper.setNetplayState(
             state = if (isNetplay) "synchronizing" else "running",
-            roomId = netplayRoomId
+            roomId = netplayRoomId,
         )
         CrashlyticsHelper.log("GameActivity start: mode=$crashNetplayMode gameId=$gameId rom=$romSlug")
         AnalyticsHelper.logGameLaunch(gameId = gameId, romSlug = romSlug, mode = crashNetplayMode)
@@ -349,7 +361,7 @@ class GameActivity : ComponentActivity() {
                     systemDir = systemDir,
                     saveDir = saveDir,
                     replayPath = replayPath,
-                    scoreDef = scoreDef
+                    scoreDef = scoreDef,
                 )
             } else if (isNetplay) {
                 val localPort = intent.getIntExtra(EXTRA_LOCAL_PORT, 7000)
@@ -362,7 +374,7 @@ class GameActivity : ComponentActivity() {
                 val inputDelay = intent.getIntExtra(EXTRA_INPUT_DELAY, 2)
                 logFromAndroid(
                     "INFO",
-                    "startNetplayGame: localPort=$localPort, localHandle=$localHandle, numPlayers=$numPlayers, peerHandles=${peerHandles.toList()}, peerAddrs=$peerAddrs"
+                    "startNetplayGame: localPort=$localPort, localHandle=$localHandle, numPlayers=$numPlayers, peerHandles=${peerHandles.toList()}, peerAddrs=$peerAddrs",
                 )
                 startNetplayGame(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
@@ -374,7 +386,7 @@ class GameActivity : ComponentActivity() {
                     numPlayers = numPlayers.toUByte(),
                     peerHandles = peerHandles,
                     peerAddrs = peerAddrs,
-                    inputDelay = inputDelay.toUByte()
+                    inputDelay = inputDelay.toUByte(),
                 )
                 val voiceLocalPort = intent.getIntExtra(EXTRA_VOICE_LOCAL_PORT, localPort + 1000)
                 val rawVoiceHandles = intent.getIntArrayExtra(EXTRA_VOICE_PEER_HANDLES) ?: intArrayOf()
@@ -386,31 +398,32 @@ class GameActivity : ComponentActivity() {
                         roomId = netplayRoomId.ifBlank { "default-room" },
                         localPlayerHandle = localHandle.toUByte(),
                         peerHandles = voicePeerHandles,
-                        peerAddrs = voicePeerAddrs
+                        peerAddrs = voicePeerAddrs,
                     )
                     setVoiceControls(
                         micEnabled = false,
                         listenEnabled = false,
                         volume = voiceVolume,
-                        paused = false
+                        paused = false,
                     )
-                    voiceAudioManager = VoiceAudioManager(
-                        context = this,
-                        onCapturePcm = { frame -> pushVoiceCapturePcm(frame.toList()) },
-                        onPullPlaybackPcm = { maxSamples -> pullVoicePlaybackPcm(maxSamples.toUInt()).toShortArray() }
-                    )
+                    voiceAudioManager =
+                        VoiceAudioManager(
+                            context = this,
+                            onCapturePcm = { frame -> pushVoiceCapturePcm(frame.toList()) },
+                            onPullPlaybackPcm = { maxSamples -> pullVoicePlaybackPcm(maxSamples.toUInt()).toShortArray() },
+                        )
                 }
             } else {
                 logFromAndroid(
                     "INFO",
-                    "Iniciando juego solo gameId=$gameId hasScoreDef=${scoreDef != null}"
+                    "Iniciando juego solo gameId=$gameId hasScoreDef=${scoreDef != null}",
                 )
                 startGameWithScore(
                     nativeLibDir = applicationInfo.nativeLibraryDir,
                     romPath = romPath,
                     systemDir = systemDir,
                     saveDir = saveDir,
-                    scoreDef = scoreDef
+                    scoreDef = scoreDef,
                 )
             }
         } catch (t: Throwable) {
@@ -449,7 +462,7 @@ class GameActivity : ComponentActivity() {
                                     CrashlyticsHelper.log("GGRS synchronized ping=${netplayHud.pingMs}ms")
                                     PerformanceHelper.stopTrace(
                                         netplaySyncTrace,
-                                        mapOf("rom_slug" to gameId, "mode" to crashNetplayMode)
+                                        mapOf("rom_slug" to gameId, "mode" to crashNetplayMode),
                                     )
                                     netplaySyncTrace = null
                                 }
@@ -536,52 +549,55 @@ class GameActivity : ComponentActivity() {
                 }
 
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(ObsidianBlack)
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(ObsidianBlack),
                 ) {
                     if (engineError == null) {
                         AndroidView(
                             factory = { ctx ->
                                 SurfaceView(ctx).apply {
                                     var attached = false
-                                    holder.addCallback(object : SurfaceHolder.Callback {
-                                        override fun surfaceCreated(holder: SurfaceHolder) {
-                                            val rect = holder.surfaceFrame
-                                            if (rect.width() > 1 && rect.height() > 1) {
-                                                NativeSurfaceBridge.attachSurface(
-                                                    holder.surface,
-                                                    rect.width(),
-                                                    rect.height()
-                                                )
-                                                attached = true
+                                    holder.addCallback(
+                                        object : SurfaceHolder.Callback {
+                                            override fun surfaceCreated(holder: SurfaceHolder) {
+                                                val rect = holder.surfaceFrame
+                                                if (rect.width() > 1 && rect.height() > 1) {
+                                                    NativeSurfaceBridge.attachSurface(
+                                                        holder.surface,
+                                                        rect.width(),
+                                                        rect.height(),
+                                                    )
+                                                    attached = true
+                                                }
                                             }
-                                        }
 
-                                        override fun surfaceChanged(
-                                            holder: SurfaceHolder,
-                                            format: Int,
-                                            width: Int,
-                                            height: Int
-                                        ) {
-                                            if (!attached && width > 0 && height > 0) {
-                                                NativeSurfaceBridge.attachSurface(holder.surface, width, height)
-                                                attached = true
-                                            } else {
-                                                NativeSurfaceBridge.resizeSurface(width, height)
+                                            override fun surfaceChanged(
+                                                holder: SurfaceHolder,
+                                                format: Int,
+                                                width: Int,
+                                                height: Int,
+                                            ) {
+                                                if (!attached && width > 0 && height > 0) {
+                                                    NativeSurfaceBridge.attachSurface(holder.surface, width, height)
+                                                    attached = true
+                                                } else {
+                                                    NativeSurfaceBridge.resizeSurface(width, height)
+                                                }
                                             }
-                                        }
 
-                                        override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                            attached = false
-                                            startupTrace?.stop()
-        startupTrace = null
-        NativeSurfaceBridge.detachSurface()
-                                        }
-                                    })
+                                            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                                attached = false
+                                                startupTrace?.stop()
+                                                startupTrace = null
+                                                NativeSurfaceBridge.detachSurface()
+                                            }
+                                        },
+                                    )
                                 }
                             },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
                         )
 
                         val shouldShowTouch = !isReplayMode && (!hasPhysicalController || touchConfig.forceShowTouch || editLayoutMode)
@@ -593,7 +609,7 @@ class GameActivity : ComponentActivity() {
                                 onMaskChanged = { mask ->
                                     touchMaskP1 = mask
                                     pushInputToEngine(0)
-                                }
+                                },
                             )
                         }
                         if (isReplayMode && !showMenu) {
@@ -631,7 +647,7 @@ class GameActivity : ComponentActivity() {
                                         romPath = romPath,
                                         systemDir = systemDir,
                                         saveDir = saveDir,
-                                        title = gameTitle.ifBlank { "arcade" }
+                                        title = gameTitle.ifBlank { "arcade" },
                                     )
                                 },
                                 onExit = {
@@ -642,165 +658,183 @@ class GameActivity : ComponentActivity() {
                                     menuStatusMsg = null
                                     showMenu = true
                                     updateEnginePaused(true)
-                                }
+                                },
                             )
                         }
 
                         if (!showMenu) {
                             if (!isReplayMode) {
                                 Row(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = 16.dp, end = 20.dp),
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(top = 16.dp, end = 20.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                if (isNetplay) {
-                                    val speakerMask = voiceHud.remoteSpeakingMask.toInt()
-                                    if (voiceListenEnabled && speakerMask != 0) {
-                                        val speakingPlayers = (0 until 4)
-                                            .filter { (speakerMask and (1 shl it)) != 0 }
-                                            .joinToString("·") { "P${it + 1}" }
-                                        if (speakingPlayers.isNotEmpty()) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(PureWhite.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text = speakingPlayers,
-                                                    color = PureBlack,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.ExtraBold
-                                                )
+                                    if (isNetplay) {
+                                        val speakerMask = voiceHud.remoteSpeakingMask.toInt()
+                                        if (voiceListenEnabled && speakerMask != 0) {
+                                            val speakingPlayers =
+                                                (0 until 4)
+                                                    .filter { (speakerMask and (1 shl it)) != 0 }
+                                                    .joinToString("·") { "P${it + 1}" }
+                                            if (speakingPlayers.isNotEmpty()) {
+                                                Box(
+                                                    modifier =
+                                                        Modifier
+                                                            .background(PureWhite.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                ) {
+                                                    Text(
+                                                        text = speakingPlayers,
+                                                        color = PureBlack,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                    )
+                                                }
                                             }
+                                        }
+
+                                        // Toggle Micrófono (Mute / Unmute)
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .background(
+                                                        if (voiceMicEnabled) {
+                                                            PureWhite.copy(
+                                                                alpha = 0.18f,
+                                                            )
+                                                        } else {
+                                                            CarbonSurface.copy(alpha = 0.8f)
+                                                        },
+                                                        RoundedCornerShape(12.dp),
+                                                    ).border(
+                                                        width = if (voiceHud.localSpeaking) 2.dp else 1.dp,
+                                                        color =
+                                                            when {
+                                                                voiceHud.localSpeaking -> PureWhite
+                                                                voiceMicEnabled -> SilverGray
+                                                                else -> SteelBorder
+                                                            },
+                                                        shape = RoundedCornerShape(12.dp),
+                                                    ).clickable { toggleVoiceMic() }
+                                                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = if (voiceMicEnabled) Icons.Default.Mic else Icons.Default.MicOff,
+                                                contentDescription = if (voiceMicEnabled) "Silenciar micrófono" else "Activar micrófono",
+                                                tint = if (voiceMicEnabled) PureWhite else SilverGray,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+
+                                        // Toggle Audio de otros jugadores (Deafen / Undeafen)
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .background(
+                                                        if (voiceListenEnabled) {
+                                                            PureWhite.copy(
+                                                                alpha = 0.18f,
+                                                            )
+                                                        } else {
+                                                            CarbonSurface.copy(alpha = 0.8f)
+                                                        },
+                                                        RoundedCornerShape(12.dp),
+                                                    ).border(
+                                                        width = 1.dp,
+                                                        color = if (voiceListenEnabled) SilverGray else SteelBorder,
+                                                        shape = RoundedCornerShape(12.dp),
+                                                    ).clickable { toggleVoiceListen() }
+                                                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = if (voiceListenEnabled) Icons.Default.Headset else Icons.Default.HeadsetOff,
+                                                contentDescription = if (voiceListenEnabled) "Silenciar a los demás" else "Escuchar a los demás",
+                                                tint = if (voiceListenEnabled) PureWhite else SilverGray,
+                                                modifier = Modifier.size(16.dp),
+                                            )
                                         }
                                     }
 
-                                    // Toggle Micrófono (Mute / Unmute)
                                     Box(
-                                        modifier = Modifier
-                                            .background(
-                                                if (voiceMicEnabled) PureWhite.copy(alpha = 0.18f) else CarbonSurface.copy(alpha = 0.8f),
-                                                RoundedCornerShape(12.dp)
-                                            )
-                                            .border(
-                                                width = if (voiceHud.localSpeaking) 2.dp else 1.dp,
-                                                color = when {
-                                                    voiceHud.localSpeaking -> PureWhite
-                                                    voiceMicEnabled -> SilverGray
-                                                    else -> SteelBorder
+                                        modifier =
+                                            Modifier
+                                                .background(CarbonSurface.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                                                .border(1.dp, if (editLayoutMode) PureWhite else SteelBorder, RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    if (editLayoutMode) {
+                                                        editLayoutMode = false
+                                                        TouchLayoutPrefs.save(this@GameActivity, touchConfig)
+                                                    } else {
+                                                        menuStatusMsg = null
+                                                        showMenu = true
+                                                        updateEnginePaused(true)
+                                                    }
+                                                }.padding(horizontal = 14.dp, vertical = 5.dp),
+                                    ) {
+                                        Text(
+                                            text =
+                                                when {
+                                                    editLayoutMode -> "GUARDAR LAYOUT"
+                                                    isNetplay -> {
+                                                        val pingLabel = if (netplayHud.pingMs > 0u) "${netplayHud.pingMs} ms" else "-- ms"
+                                                        "MENU · ${"%.0f".format(currentFps)} FPS · $pingLabel"
+                                                    }
+                                                    else -> "MENU · ${"%.0f".format(currentFps)} FPS"
                                                 },
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { toggleVoiceMic() }
-                                            .padding(horizontal = 9.dp, vertical = 5.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (voiceMicEnabled) Icons.Default.Mic else Icons.Default.MicOff,
-                                            contentDescription = if (voiceMicEnabled) "Silenciar micrófono" else "Activar micrófono",
-                                            tint = if (voiceMicEnabled) PureWhite else SilverGray,
-                                            modifier = Modifier.size(16.dp)
+                                            color = if (editLayoutMode) PureWhite else SilverGray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
                                         )
                                     }
-
-                                    // Toggle Audio de otros jugadores (Deafen / Undeafen)
-                                    Box(
-                                        modifier = Modifier
-                                            .background(
-                                                if (voiceListenEnabled) PureWhite.copy(alpha = 0.18f) else CarbonSurface.copy(alpha = 0.8f),
-                                                RoundedCornerShape(12.dp)
-                                            )
-                                            .border(
-                                                width = 1.dp,
-                                                color = if (voiceListenEnabled) SilverGray else SteelBorder,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                            .clickable { toggleVoiceListen() }
-                                            .padding(horizontal = 9.dp, vertical = 5.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (voiceListenEnabled) Icons.Default.Headset else Icons.Default.HeadsetOff,
-                                            contentDescription = if (voiceListenEnabled) "Silenciar a los demás" else "Escuchar a los demás",
-                                            tint = if (voiceListenEnabled) PureWhite else SilverGray,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .background(CarbonSurface.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                                        .border(1.dp, if (editLayoutMode) PureWhite else SteelBorder, RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            if (editLayoutMode) {
-                                                editLayoutMode = false
-                                                TouchLayoutPrefs.save(this@GameActivity, touchConfig)
-                                            } else {
-                                                menuStatusMsg = null
-                                                showMenu = true
-                                                updateEnginePaused(true)
-                                            }
-                                        }
-                                        .padding(horizontal = 14.dp, vertical = 5.dp)
-                                ) {
-                                    Text(
-                                        text = when {
-                                            editLayoutMode -> "GUARDAR LAYOUT"
-                                            isNetplay -> {
-                                                val pingLabel = if (netplayHud.pingMs > 0u) "${netplayHud.pingMs} ms" else "-- ms"
-                                                "MENU · ${"%.0f".format(currentFps)} FPS · $pingLabel"
-                                            }
-                                            else -> "MENU · ${"%.0f".format(currentFps)} FPS"
-                                        },
-                                        color = if (editLayoutMode) PureWhite else SilverGray,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                                 }
                             }
                             val notice = voiceNoticeMsg
                             if (notice != null) {
                                 Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = if (isReplayMode) 68.dp else 52.dp, end = 20.dp)
-                                        .background(CarbonSurface.copy(alpha = 0.92f), RoundedCornerShape(8.dp))
-                                        .border(1.dp, SteelBorder, RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(top = if (isReplayMode) 68.dp else 52.dp, end = 20.dp)
+                                            .background(CarbonSurface.copy(alpha = 0.92f), RoundedCornerShape(8.dp))
+                                            .border(1.dp, SteelBorder, RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
                                 ) {
                                     Text(text = notice, color = PureWhite, fontSize = 11.sp)
                                 }
                             }
                             if (isNetplay && netplayHud.reconnecting) {
                                 Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopCenter)
-                                        .padding(top = 16.dp)
-                                        .background(PureWhite.copy(alpha = 0.94f), RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    modifier =
+                                        Modifier
+                                            .align(Alignment.TopCenter)
+                                            .padding(top = 16.dp)
+                                            .background(PureWhite.copy(alpha = 0.94f), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 14.dp, vertical = 6.dp),
                                 ) {
                                     Text(
                                         text = "RECONECTANDO PAR... ${netplayHud.reconnectSecsLeft}s",
                                         color = PureBlack,
                                         fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold
+                                        fontWeight = FontWeight.ExtraBold,
                                     )
                                 }
                             }
                         } else {
-                            val scoreLabel = GameSessionPolicy.scoreStatusLabel(
-                                isNetplay = isNetplay,
-                                isReplayMode = isReplayMode,
-                                scoreDef = scoreDef,
-                                rankingEligible = scoreHud.rankingEligible,
-                                creditsUsed = scoreHud.creditsUsed.toInt(),
-                                currentScore = scoreHud.currentScore.toLong(),
-                                bestSessionScore = scoreHud.bestSessionScore.toLong()
-                            )
+                            val scoreLabel =
+                                GameSessionPolicy.scoreStatusLabel(
+                                    isNetplay = isNetplay,
+                                    isReplayMode = isReplayMode,
+                                    scoreDef = scoreDef,
+                                    rankingEligible = scoreHud.rankingEligible,
+                                    creditsUsed = scoreHud.creditsUsed.toInt(),
+                                    currentScore = scoreHud.currentScore.toLong(),
+                                    bestSessionScore = scoreHud.bestSessionScore.toLong(),
+                                )
                             InGameQuickMenu(
                                 gameTitle = gameTitle,
                                 fps = currentFps,
@@ -861,35 +895,36 @@ class GameActivity : ComponentActivity() {
                                     }
                                     updateEnginePaused(false)
                                 },
-                                onExit = { finish() }
+                                onExit = { finish() },
                             )
                         }
                     } else {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(24.dp)
+                            modifier =
+                                Modifier
+                                    .align(Alignment.Center)
+                                    .padding(24.dp),
                         ) {
                             Text(
                                 text = "ERROR INICIANDO EMULADOR",
                                 color = PureWhite,
                                 fontFamily = SpaceGroteskFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
                             )
                             Text(
                                 text = engineError ?: "Error desconocido",
                                 color = SilverGray,
                                 fontSize = 12.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             )
                             OutlinedButton(
                                 onClick = { finish() },
                                 shape = RectangleShape,
                                 border = BorderStroke(1.dp, SteelBorder),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray),
                             ) {
                                 Text("VOLVER", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
@@ -898,15 +933,16 @@ class GameActivity : ComponentActivity() {
 
                     if (isNetplay && !netplaySynchronized && !showMenu && netplayEndReason == null && engineError == null) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(ObsidianBlack.copy(alpha = 0.90f)),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(ObsidianBlack.copy(alpha = 0.90f)),
+                            contentAlignment = Alignment.Center,
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(14.dp),
-                                modifier = Modifier.padding(24.dp)
+                                modifier = Modifier.padding(24.dp),
                             ) {
                                 if (syncTimedOut) {
                                     Text(
@@ -914,13 +950,13 @@ class GameActivity : ComponentActivity() {
                                         color = PureWhite,
                                         fontFamily = SpaceGroteskFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
+                                        fontSize = 14.sp,
                                     )
                                     Text(
                                         text = "No se pudo establecer la conexión P2P con el otro jugador tras 25 segundos.\nVerifica que ambos dispositivos estén conectados a internet y reintenta.",
                                         color = SilverGray,
                                         fontSize = 12.sp,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                                     )
                                     OutlinedButton(
                                         onClick = {
@@ -929,7 +965,7 @@ class GameActivity : ComponentActivity() {
                                         },
                                         shape = RectangleShape,
                                         border = BorderStroke(1.dp, SteelBorder),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray),
                                     ) {
                                         Text("VOLVER A LA SALA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
@@ -937,24 +973,25 @@ class GameActivity : ComponentActivity() {
                                     CircularProgressIndicator(
                                         color = PureWhite,
                                         strokeWidth = 3.dp,
-                                        modifier = Modifier.size(36.dp)
+                                        modifier = Modifier.size(36.dp),
                                     )
                                     Text(
                                         text = "CONECTANDO Y SINCRONIZANDO SALA (${syncSecondsElapsed}s)...",
                                         color = PureWhite,
                                         fontFamily = SpaceGroteskFamily,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
+                                        fontSize = 13.sp,
                                     )
-                                    val targetDetail = if (netplayPeerAddrs.isNotEmpty()) {
-                                        "Conectando a: ${netplayPeerAddrs.joinToString(", ")}"
-                                    } else {
-                                        "Estableciendo conexión P2P entre jugadores..."
-                                    }
+                                    val targetDetail =
+                                        if (netplayPeerAddrs.isNotEmpty()) {
+                                            "Conectando a: ${netplayPeerAddrs.joinToString(", ")}"
+                                        } else {
+                                            "Estableciendo conexión P2P entre jugadores..."
+                                        }
                                     Text(
                                         text = targetDetail,
                                         color = SilverGray,
-                                        fontSize = 11.sp
+                                        fontSize = 11.sp,
                                     )
                                     OutlinedButton(
                                         onClick = {
@@ -963,7 +1000,7 @@ class GameActivity : ComponentActivity() {
                                         },
                                         shape = RectangleShape,
                                         border = BorderStroke(1.dp, SteelBorder),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray)
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = SilverGray),
                                     ) {
                                         Text("CANCELAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
@@ -975,26 +1012,27 @@ class GameActivity : ComponentActivity() {
                     val endMsg = netplayEndReason
                     if (endMsg != null) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(ObsidianBlack.copy(alpha = 0.84f)),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(ObsidianBlack.copy(alpha = 0.84f)),
+                            contentAlignment = Alignment.Center,
                         ) {
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = CarbonSurface),
                                 shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.padding(24.dp)
+                                modifier = Modifier.padding(24.dp),
                             ) {
                                 Column(
                                     modifier = Modifier.padding(20.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                 ) {
                                     Text("PARTIDA FINALIZADA", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                                     Text(endMsg, color = MutedGray, fontSize = 13.sp)
                                     Button(
                                         onClick = { finish() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack)
+                                        colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                                     ) {
                                         Text("VOLVER A SALAS", fontWeight = FontWeight.Bold)
                                     }
@@ -1008,11 +1046,12 @@ class GameActivity : ComponentActivity() {
     }
 
     private fun pushInputToEngine(port: Int) {
-        val mask = if (port == 0) {
-            touchMaskP1 or physicalMasks[0]
-        } else {
-            physicalMasks[port]
-        }
+        val mask =
+            if (port == 0) {
+                touchMaskP1 or physicalMasks[0]
+            } else {
+                physicalMasks[port]
+            }
         setPlayerInput(port.toUByte(), mask.toUShort())
     }
 
@@ -1041,14 +1080,18 @@ class GameActivity : ComponentActivity() {
     private fun requestAudioFocus() {
         val manager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager = manager
-        val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_GAME)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-            .setAudioAttributes(attrs)
-            .setOnAudioFocusChangeListener(audioFocusListener)
-            .build()
+        val attrs =
+            AudioAttributes
+                .Builder()
+                .setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        val req =
+            AudioFocusRequest
+                .Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(attrs)
+                .setOnAudioFocusChangeListener(audioFocusListener)
+                .build()
         focusRequest = req
         manager.requestAudioFocus(req)
     }
@@ -1098,11 +1141,20 @@ class GameActivity : ComponentActivity() {
             pausePlayTimer()
             flushPlayTime(force = true)
             if (isFinishing) {
-                val mode = if (isNetplay) if (isNetplayHost) "host" else "client" else "offline"
+                val mode =
+                    if (isNetplay) {
+                        if (isNetplayHost) {
+                            "host"
+                        } else {
+                            "client"
+                        }
+                    } else {
+                        "offline"
+                    }
                 AnalyticsHelper.logGameSessionEnd(
                     romSlug = gameId,
                     durationSec = 0L,
-                    mode = mode
+                    mode = mode,
                 )
             }
         }
@@ -1142,7 +1194,7 @@ class GameActivity : ComponentActivity() {
             micEnabled = voiceMicEnabled,
             listenEnabled = voiceListenEnabled,
             volume = voiceVolume,
-            paused = false
+            paused = false,
         )
         voiceAudioManager?.setCaptureEnabled(voiceMicEnabled)
         voiceAudioManager?.setPlaybackEnabled(voiceListenEnabled)
@@ -1230,15 +1282,16 @@ class GameActivity : ComponentActivity() {
         val credits = hud.creditsUsed.toInt()
         if ((!hud.rankingEligible || credits > 1) && !rankingNoticeShown) {
             rankingNoticeShown = true
-            voiceNoticeMsg = if (credits > 1) {
-                if (lastSubmittedSessionScore > 0L) {
-                    "Récord 1CC guardado · Continue bloqueado para nuevos puntos"
+            voiceNoticeMsg =
+                if (credits > 1) {
+                    if (lastSubmittedSessionScore > 0L) {
+                        "Récord 1CC guardado · Continue bloqueado para nuevos puntos"
+                    } else {
+                        "Ranking 1-Crédito desactivado (usaste Continue)"
+                    }
                 } else {
-                    "Ranking 1-Crédito desactivado (usaste Continue)"
+                    "Ranking desactivado en esta sesión (Save State)"
                 }
-            } else {
-                "Ranking desactivado en esta sesión (Save State)"
-            }
         }
 
         val pending = hud.pendingSubmitScore.toLong()
@@ -1246,7 +1299,7 @@ class GameActivity : ComponentActivity() {
         acknowledgeScoreSubmit()
         logFromAndroid(
             "INFO",
-            "Score trigger recibido: score=$pending eligible=${hud.rankingEligible} credits=$credits"
+            "Score trigger recibido: score=$pending eligible=${hud.rankingEligible} credits=$credits",
         )
 
         if (!hud.rankingEligible || credits > 1) return
@@ -1264,7 +1317,7 @@ class GameActivity : ComponentActivity() {
         acknowledgeScoreSubmit()
         logFromAndroid(
             "INFO",
-            "Envío de score al salir: score=$candidate credits=$credits"
+            "Envío de score al salir: score=$candidate credits=$credits",
         )
         submitOrQueueScore(score = candidate, credits = credits, notifyUi = false)
     }
@@ -1275,81 +1328,100 @@ class GameActivity : ComponentActivity() {
         val gid = gameId
         if (gid.isBlank() || matchSessionId.isBlank()) return
 
-        val totalSeconds = synchronized(playTimerLock) {
-            (accumulatedActiveMs / 1000L).toInt()
-        }
+        val totalSeconds =
+            synchronized(playTimerLock) {
+                (accumulatedActiveMs / 1000L).toInt()
+            }
         if (totalSeconds < 5) return
         matchHistoryRecorded = true
 
         val mode = if (isNetplay) netplayMode else "local"
         val roomId = if (isNetplay && netplayRoomId.isNotBlank()) netplayRoomId else null
-        val startedIso = matchStartedAtIso.ifBlank { java.time.Instant.now().toString() }
-        val endedIso = java.time.Instant.now().toString()
+        val startedIso =
+            matchStartedAtIso.ifBlank {
+                java.time.Instant
+                    .now()
+                    .toString()
+            }
+        val endedIso =
+            java.time.Instant
+                .now()
+                .toString()
         val latestSessionBest = runCatching { getScoreHudInfo().bestSessionScore.toLong() }.getOrDefault(0L)
-        val bestScore = if (!isNetplay) {
-            maxOf(lastSubmittedSessionScore, scoreHud.bestSessionScore.toLong(), latestSessionBest).takeIf { it > 0L }
-        } else {
-            null
-        }
+        val bestScore =
+            if (!isNetplay) {
+                maxOf(lastSubmittedSessionScore, scoreHud.bestSessionScore.toLong(), latestSessionBest).takeIf { it > 0L }
+            } else {
+                null
+            }
         val playersJsonStr = roomPlayersJson
         val appCtx = applicationContext
         val sessionId = matchSessionId
-        val initialPlayers = if (isNetplay) {
-            runCatching {
-                jsonFormat.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
-            }.getOrDefault(emptyList())
-        } else {
-            emptyList()
-        }
+        val initialPlayers =
+            if (isNetplay) {
+                runCatching {
+                    jsonFormat.decodeFromString<List<MatchHistoryPlayerDto>>(playersJsonStr)
+                }.getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
 
         val repo = ArcadeRepository(appCtx)
         val uid = repo.currentUserId() ?: return
 
         // Write-ahead enqueue so match history is never lost if offline or killed mid-exit
-        val pendingEntry = PendingMatchHistoryEntry(
-            userId = uid,
-            clientSessionId = sessionId,
-            gameId = gid,
-            mode = mode,
-            roomId = roomId,
-            isPrivate = false,
-            players = initialPlayers,
-            startedAtIso = startedIso,
-            endedAtIso = endedIso,
-            durationSeconds = totalSeconds,
-            score = bestScore
-        )
+        val pendingEntry =
+            PendingMatchHistoryEntry(
+                userId = uid,
+                clientSessionId = sessionId,
+                gameId = gid,
+                mode = mode,
+                roomId = roomId,
+                isPrivate = false,
+                players = initialPlayers,
+                startedAtIso = startedIso,
+                endedAtIso = endedIso,
+                durationSeconds = totalSeconds,
+                score = bestScore,
+            )
         PendingMatchHistoryQueue.enqueue(appCtx, pendingEntry)
 
-        val syncJob = CoroutineScope(Dispatchers.IO).launch {
-            val players = if (isNetplay) {
-                initialPlayers
-            } else {
-                val username = runCatching { repo.fetchMyProfile()?.username }.getOrNull() ?: "Jugador"
-                listOf(MatchHistoryPlayerDto(userId = uid, username = username, slot = 0))
+        val syncJob =
+            CoroutineScope(Dispatchers.IO).launch {
+                val players =
+                    if (isNetplay) {
+                        initialPlayers
+                    } else {
+                        val username = runCatching { repo.fetchMyProfile()?.username }.getOrNull() ?: "Jugador"
+                        listOf(MatchHistoryPlayerDto(userId = uid, username = username, slot = 0))
+                    }
+                val result =
+                    runCatching {
+                        repo.recordMatchHistory(
+                            clientSessionId = sessionId,
+                            gameId = gid,
+                            mode = mode,
+                            roomId = roomId,
+                            isPrivate = false,
+                            players = players,
+                            startedAtIso = startedIso,
+                            endedAtIso = endedIso,
+                            durationSeconds = totalSeconds,
+                            score = bestScore,
+                        )
+                    }
+                if (result.isSuccess) {
+                    PendingMatchHistoryQueue.removeBySessionId(appCtx, sessionId, uid)
+                }
             }
-            val result = runCatching {
-                repo.recordMatchHistory(
-                    clientSessionId = sessionId,
-                    gameId = gid,
-                    mode = mode,
-                    roomId = roomId,
-                    isPrivate = false,
-                    players = players,
-                    startedAtIso = startedIso,
-                    endedAtIso = endedIso,
-                    durationSeconds = totalSeconds,
-                    score = bestScore
-                )
-            }
-            if (result.isSuccess) {
-                PendingMatchHistoryQueue.removeBySessionId(appCtx, sessionId, uid)
-            }
-        }
         ExitSyncCoordinator.register(syncJob)
     }
 
-    private fun submitOrQueueScore(score: Long, credits: Int, notifyUi: Boolean) {
+    private fun submitOrQueueScore(
+        score: Long,
+        credits: Int,
+        notifyUi: Boolean,
+    ) {
         if (score <= 0L || gameId.isBlank() || romSha256.isBlank()) return
         if (score <= lastSubmittedSessionScore) return
         lastSubmittedSessionScore = score
@@ -1358,89 +1430,57 @@ class GameActivity : ComponentActivity() {
         val gid = gameId
         val sha = romSha256
         val pendingDir = File(filesDir, "pending_replays")
-        val replayFile = File(
-            pendingDir,
-            "${gid}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.bsv.gz"
-        )
+        val replayFile =
+            File(
+                pendingDir,
+                "${gid}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.bsv.gz",
+            )
         val exportDone = CompletableDeferred<Unit>()
         synchronized(pendingExportLock) {
             pendingReplayExports.add(exportDone)
         }
 
-        val scoreJob = CoroutineScope(Dispatchers.IO).launch {
-            val exportedReplay = try {
-                runCatching {
-                    pendingDir.mkdirs()
-                    exportRecordedReplay(replayFile.absolutePath)
-                    replayFile.takeIf { it.exists() && it.length() > 0L }
-                }.getOrNull()
-            } finally {
-                synchronized(pendingExportLock) {
-                    pendingReplayExports.remove(exportDone)
-                }
-                exportDone.complete(Unit)
-            }
+        val scoreJob =
+            CoroutineScope(Dispatchers.IO).launch {
+                val exportedReplay =
+                    try {
+                        runCatching {
+                            pendingDir.mkdirs()
+                            exportRecordedReplay(replayFile.absolutePath)
+                            replayFile.takeIf { it.exists() && it.length() > 0L }
+                        }.getOrNull()
+                    } finally {
+                        synchronized(pendingExportLock) {
+                            pendingReplayExports.remove(exportDone)
+                        }
+                        exportDone.complete(Unit)
+                    }
 
-            if (exportedReplay == null) {
-                logFromAndroid("WARN", "exportRecordedReplay vacío o fallido para score=$score; omitiendo envío")
-                return@launch
-            }
-
-            val repo = ArcadeRepository(appCtx)
-            val uid = repo.currentUserId()
-            if (uid.isNullOrBlank()) {
-                exportedReplay.delete()
-                return@launch
-            }
-
-            val rankResult = runCatching { repo.fetchMyGameRank(gid) }
-            if (rankResult.isSuccess) {
-                val currentBest = rankResult.getOrNull()?.score
-                if (currentBest != null && score < currentBest) {
-                    exportedReplay.delete()
-                    logFromAndroid("INFO", "Score $score < mejor online ($currentBest); replay descartado")
+                if (exportedReplay == null) {
+                    logFromAndroid("WARN", "exportRecordedReplay vacío o fallido para score=$score; omitiendo envío")
                     return@launch
                 }
-            }
 
-            val uploadedReplay = runCatching { repo.uploadReplay(gid, exportedReplay) }.getOrNull()
-            if (uploadedReplay == null) {
-                logFromAndroid("WARN", "uploadReplay falló transitoriamente, encolando offline score=$score")
-                PendingScoreQueue.enqueue(
-                    appCtx,
-                    PendingScoreSubmission(
-                        userId = uid,
-                        gameId = gid,
-                        score = score,
-                        romSha256 = sha,
-                        creditsUsed = credits,
-                        isHardcore = true,
-                        replayLocalPath = exportedReplay.absolutePath
-                    )
-                )
-                if (notifyUi && !isFinishing && !isDestroyed) {
-                    voiceNoticeMsg = "Récord guardado offline ($score)"
-                }
-                return@launch
-            }
-
-            val result = runCatching {
-                repo.submitHighScore(
-                    gameId = gid,
-                    score = score,
-                    romSha256 = sha,
-                    creditsUsed = credits,
-                    isHardcore = true,
-                    replayPath = uploadedReplay.first,
-                    replaySizeBytes = uploadedReplay.second,
-                    replaySha256 = uploadedReplay.third
-                )
-            }
-            val dto = result.getOrNull()
-            if (result.isSuccess && dto != null) {
-                if (dto.accepted || PendingScoreQueue.isPermanentRejection(dto.reason)) {
+                val repo = ArcadeRepository(appCtx)
+                val uid = repo.currentUserId()
+                if (uid.isNullOrBlank()) {
                     exportedReplay.delete()
-                } else {
+                    return@launch
+                }
+
+                val rankResult = runCatching { repo.fetchMyGameRank(gid) }
+                if (rankResult.isSuccess) {
+                    val currentBest = rankResult.getOrNull()?.score
+                    if (currentBest != null && score < currentBest) {
+                        exportedReplay.delete()
+                        logFromAndroid("INFO", "Score $score < mejor online ($currentBest); replay descartado")
+                        return@launch
+                    }
+                }
+
+                val uploadedReplay = runCatching { repo.uploadReplay(gid, exportedReplay) }.getOrNull()
+                if (uploadedReplay == null) {
+                    logFromAndroid("WARN", "uploadReplay falló transitoriamente, encolando offline score=$score")
                     PendingScoreQueue.enqueue(
                         appCtx,
                         PendingScoreSubmission(
@@ -1450,50 +1490,85 @@ class GameActivity : ComponentActivity() {
                             romSha256 = sha,
                             creditsUsed = credits,
                             isHardcore = true,
-                            replayLocalPath = exportedReplay.absolutePath
+                            replayLocalPath = exportedReplay.absolutePath,
+                        ),
+                    )
+                    if (notifyUi && !isFinishing && !isDestroyed) {
+                        voiceNoticeMsg = "Récord guardado offline ($score)"
+                    }
+                    return@launch
+                }
+
+                val result =
+                    runCatching {
+                        repo.submitHighScore(
+                            gameId = gid,
+                            score = score,
+                            romSha256 = sha,
+                            creditsUsed = credits,
+                            isHardcore = true,
+                            replayPath = uploadedReplay.first,
+                            replaySizeBytes = uploadedReplay.second,
+                            replaySha256 = uploadedReplay.third,
                         )
+                    }
+                val dto = result.getOrNull()
+                if (result.isSuccess && dto != null) {
+                    if (dto.accepted || PendingScoreQueue.isPermanentRejection(dto.reason)) {
+                        exportedReplay.delete()
+                    } else {
+                        PendingScoreQueue.enqueue(
+                            appCtx,
+                            PendingScoreSubmission(
+                                userId = uid,
+                                gameId = gid,
+                                score = score,
+                                romSha256 = sha,
+                                creditsUsed = credits,
+                                isHardcore = true,
+                                replayLocalPath = exportedReplay.absolutePath,
+                            ),
+                        )
+                    }
+                    logFromAndroid(
+                        "INFO",
+                        "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}",
                     )
-                }
-                logFromAndroid(
-                    "INFO",
-                    "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}"
-                )
-                if (notifyUi && !isFinishing && !isDestroyed && dto.accepted && dto.isNewRecord) {
-                    val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
-                    voiceNoticeMsg = "¡Nuevo récord personal: $score$rankText!"
-                } else if (!dto.accepted) {
-                    Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
-                }
-            } else {
-                val errMsg = result.exceptionOrNull()?.message ?: "unknown"
-                logFromAndroid("WARN", "submit_high_score falló ($errMsg), encolando offline")
-                PendingScoreQueue.enqueue(
-                    appCtx,
-                    PendingScoreSubmission(
-                        userId = uid,
-                        gameId = gid,
-                        score = score,
-                        romSha256 = sha,
-                        creditsUsed = credits,
-                        isHardcore = true,
-                        replayLocalPath = exportedReplay.absolutePath
+                    if (notifyUi && !isFinishing && !isDestroyed && dto.accepted && dto.isNewRecord) {
+                        val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
+                        voiceNoticeMsg = "¡Nuevo récord personal: $score$rankText!"
+                    } else if (!dto.accepted) {
+                        Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
+                    }
+                } else {
+                    val errMsg = result.exceptionOrNull()?.message ?: "unknown"
+                    logFromAndroid("WARN", "submit_high_score falló ($errMsg), encolando offline")
+                    PendingScoreQueue.enqueue(
+                        appCtx,
+                        PendingScoreSubmission(
+                            userId = uid,
+                            gameId = gid,
+                            score = score,
+                            romSha256 = sha,
+                            creditsUsed = credits,
+                            isHardcore = true,
+                            replayLocalPath = exportedReplay.absolutePath,
+                        ),
                     )
-                )
-                if (notifyUi && !isFinishing && !isDestroyed) {
-                    voiceNoticeMsg = "Récord guardado offline ($score)"
+                    if (notifyUi && !isFinishing && !isDestroyed) {
+                        voiceNoticeMsg = "Récord guardado offline ($score)"
+                    }
                 }
             }
-        }
         ExitSyncCoordinator.register(scoreJob)
     }
 
-    private fun hasLegacyWriteStoragePermission(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+    private fun hasLegacyWriteStoragePermission(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
             ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
             ) == PackageManager.PERMISSION_GRANTED
-    }
 
     private fun ensureLegacyWriteStoragePermission(onGranted: () -> Unit): Boolean {
         if (hasLegacyWriteStoragePermission()) {
@@ -1509,23 +1584,25 @@ class GameActivity : ComponentActivity() {
         val appCtx = applicationContext
         val tmpPng = File(cacheDir, "screenshots/shot_${System.currentTimeMillis()}.png")
         lifecycleScope.launch(Dispatchers.IO) {
-            val captured = try {
-                tmpPng.parentFile?.mkdirs()
-                captureScreenshotPng(tmpPng.absolutePath)
-                MediaExportHelper.savePngToGallery(appCtx, tmpPng, title)
-            } catch (ce: CancellationException) {
-                throw ce
-            } catch (t: Throwable) {
-                Result.failure(t)
-            } finally {
-                tmpPng.delete()
-            }
-            if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
-                voiceNoticeMsg = if (captured.isSuccess) {
-                    "Captura guardada: ${captured.getOrNull()}"
-                } else {
-                    "Error al capturar pantalla"
+            val captured =
+                try {
+                    tmpPng.parentFile?.mkdirs()
+                    captureScreenshotPng(tmpPng.absolutePath)
+                    MediaExportHelper.savePngToGallery(appCtx, tmpPng, title)
+                } catch (ce: CancellationException) {
+                    throw ce
+                } catch (t: Throwable) {
+                    Result.failure(t)
+                } finally {
+                    tmpPng.delete()
                 }
+            if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
+                voiceNoticeMsg =
+                    if (captured.isSuccess) {
+                        "Captura guardada: ${captured.getOrNull()}"
+                    } else {
+                        "Error al capturar pantalla"
+                    }
             }
         }
     }
@@ -1551,20 +1628,21 @@ class GameActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 stopGame()
-                val res = ReplayVideoExporter.exportToGallery(
-                    context = appCtx,
-                    nativeLibDir = nativeDir,
-                    romPath = romPath,
-                    systemDir = systemDir,
-                    saveDir = saveDir,
-                    replayPath = rPath,
-                    gameTitle = title,
-                    onProgress = { pct ->
-                        if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
-                            exportProgressPct = pct
-                        }
-                    }
-                )
+                val res =
+                    ReplayVideoExporter.exportToGallery(
+                        context = appCtx,
+                        nativeLibDir = nativeDir,
+                        romPath = romPath,
+                        systemDir = systemDir,
+                        saveDir = saveDir,
+                        replayPath = rPath,
+                        gameTitle = title,
+                        onProgress = { pct ->
+                            if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
+                                exportProgressPct = pct
+                            }
+                        },
+                    )
                 if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
                     exportProgressPct = null
                     replayManuallyPaused = false
@@ -1575,14 +1653,15 @@ class GameActivity : ComponentActivity() {
                             systemDir = systemDir,
                             saveDir = saveDir,
                             replayPath = rPath,
-                            scoreDef = sDef
+                            scoreDef = sDef,
                         )
                     }
-                    voiceNoticeMsg = if (res.isSuccess) {
-                        "Clip MP4 guardado en Movies/balddog ARCADE"
-                    } else {
-                        "Error exportando MP4: ${res.exceptionOrNull()?.message ?: "desconocido"}"
-                    }
+                    voiceNoticeMsg =
+                        if (res.isSuccess) {
+                            "Clip MP4 guardado en Movies/balddog ARCADE"
+                        } else {
+                            "Error exportando MP4: ${res.exceptionOrNull()?.message ?: "desconocido"}"
+                        }
                 }
             } finally {
                 if (!isFinishing && !isDestroyed) {
@@ -1596,7 +1675,7 @@ class GameActivity : ComponentActivity() {
 internal data class AudioFocusAction(
     val audioFocusDucked: Boolean? = null,
     val setDucking: Boolean? = null,
-    val setPaused: Boolean? = null
+    val setPaused: Boolean? = null,
 )
 
 internal object GameSessionPolicy {
@@ -1607,28 +1686,30 @@ internal object GameSessionPolicy {
         isReplayMode: Boolean,
         replayManuallyPaused: Boolean,
         voiceListenEnabled: Boolean,
-        remoteSpeakingMask: Int
-    ): AudioFocusAction {
-        return when (focusChange) {
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> AudioFocusAction(
-                audioFocusDucked = true,
-                setDucking = true,
-                setPaused = null
-            )
+        remoteSpeakingMask: Int,
+    ): AudioFocusAction =
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
+                AudioFocusAction(
+                    audioFocusDucked = true,
+                    setDucking = true,
+                    setPaused = null,
+                )
 
             AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            -> {
                 if (isNetplay) {
                     AudioFocusAction(
                         audioFocusDucked = true,
                         setDucking = true,
-                        setPaused = null
+                        setPaused = null,
                     )
                 } else {
                     AudioFocusAction(
                         audioFocusDucked = false,
                         setDucking = false,
-                        setPaused = true
+                        setPaused = true,
                     )
                 }
             }
@@ -1639,29 +1720,28 @@ internal object GameSessionPolicy {
                 AudioFocusAction(
                     audioFocusDucked = false,
                     setDucking = someoneSpeaking,
-                    setPaused = if (resumeEngine) false else null
+                    setPaused = if (resumeEngine) false else null,
                 )
             }
 
             else -> AudioFocusAction()
         }
-    }
 
     fun shouldResumeEngine(
         showMenu: Boolean,
         isReplayMode: Boolean,
-        replayManuallyPaused: Boolean
+        replayManuallyPaused: Boolean,
     ): Boolean = !showMenu && !(isReplayMode && replayManuallyPaused)
 
     fun shouldTrackPlayTime(
         isReplayMode: Boolean,
         engineError: String?,
-        gameId: String
+        gameId: String,
     ): Boolean = !isReplayMode && engineError == null && gameId.isNotBlank()
 
     fun shouldFlushPlayTime(
         isReplayMode: Boolean,
-        gameId: String
+        gameId: String,
     ): Boolean = !isReplayMode && gameId.isNotBlank()
 
     fun scoreStatusLabel(
@@ -1671,14 +1751,13 @@ internal object GameSessionPolicy {
         rankingEligible: Boolean,
         creditsUsed: Int,
         currentScore: Long,
-        bestSessionScore: Long
-    ): String? {
-        return when {
+        bestSessionScore: Long,
+    ): String? =
+        when {
             isNetplay || isReplayMode -> null
             scoreDef == null -> "Ranking: Sin configuración para este juego"
             creditsUsed > 1 -> "Ranking: Desactivado ($creditsUsed créditos)"
             !rankingEligible -> "Ranking: Desactivado (Save State)"
             else -> "Ranking: 1 Crédito · Score $currentScore (Máx $bestSessionScore)"
         }
-    }
 }

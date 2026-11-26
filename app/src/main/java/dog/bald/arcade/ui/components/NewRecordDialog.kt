@@ -42,34 +42,34 @@ data class PostMatchRecordBannerData(
     val game: GameDto,
     val score: Long,
     val previousRank: Long?,
-    val newRank: Long?
+    val newRank: Long?,
 )
 
 internal fun detectImprovedHighScore(
     prevScoresByGameId: Map<String, MyHighScoreDto>,
-    updatedScores: List<MyHighScoreDto>
-): MyHighScoreDto? {
-    return updatedScores.firstOrNull { curr ->
+    updatedScores: List<MyHighScoreDto>,
+): MyHighScoreDto? =
+    updatedScores.firstOrNull { curr ->
         val prev = prevScoresByGameId[curr.gameId]
         prev == null || curr.score > prev.score || curr.rank < prev.rank
     }
-}
 
 @Composable
 fun NewRecordDialog(
     data: PostMatchRecordBannerData,
     onDismiss: () -> Unit,
-    onViewRanking: (GameDto) -> Unit
+    onViewRanking: (GameDto) -> Unit,
 ) {
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
-    val rankJumpText = when {
-        data.previousRank != null && data.newRank != null && data.newRank < data.previousRank ->
-            "SUBISTE DE #${data.previousRank} A #${data.newRank}"
-        data.newRank != null ->
-            "PUESTO ACTUAL: #${data.newRank}"
-        else ->
-            "¡NUEVO RÉCORD PERSONAL 1CC!"
-    }
+    val rankJumpText =
+        when {
+            data.previousRank != null && data.newRank != null && data.newRank < data.previousRank ->
+                "SUBISTE DE #${data.previousRank} A #${data.newRank}"
+            data.newRank != null ->
+                "PUESTO ACTUAL: #${data.newRank}"
+            else ->
+                "¡NUEVO RÉCORD PERSONAL 1CC!"
+        }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -78,60 +78,61 @@ fun NewRecordDialog(
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
                     imageVector = Icons.Default.EmojiEvents,
                     contentDescription = null,
                     tint = PureWhite,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
                 )
                 Text(
                     text = "NUEVO RÉCORD 1CC",
                     color = PureWhite,
                     fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
                 )
             }
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
                     text = data.game.title,
                     color = SilverGray,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
                 )
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(ObsidianBlack, RectangleShape)
-                        .border(1.dp, CharcoalBorder, RectangleShape)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(ObsidianBlack, RectangleShape)
+                            .border(1.dp, CharcoalBorder, RectangleShape)
+                            .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
                         text = numberFmt.format(data.score),
                         color = PureWhite,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp
+                        fontSize = 22.sp,
                     )
                     Text(
                         text = rankJumpText,
                         color = PureWhite,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                     Text(
                         text = "Puntaje validado con 1 crédito (Hardcore).",
                         color = MutedGray,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
             }
@@ -140,15 +141,16 @@ fun NewRecordDialog(
             Button(
                 onClick = { onViewRanking(data.game) },
                 shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PureWhite,
-                    contentColor = PureBlack
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = PureWhite,
+                        contentColor = PureBlack,
+                    ),
             ) {
                 Text(
                     text = "VER RANKING",
                     fontFamily = JetBrainsMonoFamily,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
             }
         },
@@ -156,6 +158,6 @@ fun NewRecordDialog(
             TextButton(onClick = onDismiss) {
                 Text("CERRAR", color = SilverGray)
             }
-        }
+        },
     )
 }

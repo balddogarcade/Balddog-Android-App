@@ -8,12 +8,13 @@ import android.net.Uri
 import android.widget.Toast
 
 object SocialValidation {
-
     fun validateUsername(username: String): String? {
         val clean = username.trim()
         return if (!clean.matches(Regex("^[a-zA-Z0-9_]{3,20}$"))) {
             "3 a 20 caracteres (solo letras, números y _)"
-        } else null
+        } else {
+            null
+        }
     }
 
     fun validateSocialLinks(links: SocialLinksDto): Map<String, String> {
@@ -51,16 +52,19 @@ object SocialValidation {
         return errors
     }
 
-    private fun extractHost(url: String): String {
-        return url.substringAfter("://")
+    private fun extractHost(url: String): String =
+        url
+            .substringAfter("://")
             .substringBefore("/")
             .substringBefore("?")
             .substringBefore("#")
             .substringBefore(":")
             .lowercase()
-    }
 
-    private fun checkDomain(raw: String?, allowedHosts: Set<String>): String? {
+    private fun checkDomain(
+        raw: String?,
+        allowedHosts: Set<String>,
+    ): String? {
         val v = raw?.trim().orEmpty()
         if (v.isEmpty()) return null
         if (!v.startsWith("https://", ignoreCase = true)) {
@@ -86,7 +90,11 @@ object SocialValidation {
         return null
     }
 
-    fun openSocialLinkOrCopy(context: Context, key: String, rawValue: String) {
+    fun openSocialLinkOrCopy(
+        context: Context,
+        key: String,
+        rawValue: String,
+    ) {
         val value = rawValue.trim()
         if (value.isEmpty()) return
         if (key == "discord" && !value.startsWith("https://", ignoreCase = true)) {
@@ -110,9 +118,10 @@ object SocialValidation {
             return
         }
         runCatching {
-            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+            val intent =
+                Intent(Intent.ACTION_VIEW, uri).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
             context.startActivity(intent)
         }.onFailure {
             Toast.makeText(context, "No se pudo abrir el enlace", Toast.LENGTH_SHORT).show()

@@ -28,16 +28,16 @@ import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.MutedGray
-import java.io.File
-import java.security.MessageDigest
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 internal object CoverUrlRegistry {
     private val urlsBySlug = ConcurrentHashMap<String, String>()
@@ -60,7 +60,8 @@ internal object RemoteImageCache {
     private const val MAX_DECODE_DIM = 1024
 
     private val httpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient
+            .Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .build()
@@ -68,14 +69,20 @@ internal object RemoteImageCache {
 
     private val inFlightLocks = ConcurrentHashMap<String, Mutex>()
 
-    private val memoryCache = object : LruCache<String, ImageBitmap>(MAX_MEMORY_KB) {
-        override fun sizeOf(key: String, value: ImageBitmap): Int =
-            ((value.width.toLong() * value.height.toLong() * 4L) / 1024L).toInt().coerceAtLeast(1)
-    }
+    private val memoryCache =
+        object : LruCache<String, ImageBitmap>(MAX_MEMORY_KB) {
+            override fun sizeOf(
+                key: String,
+                value: ImageBitmap,
+            ): Int = ((value.width.toLong() * value.height.toLong() * 4L) / 1024L).toInt().coerceAtLeast(1)
+        }
 
     fun getFromMemory(url: String): ImageBitmap? = memoryCache.get(url)
 
-    suspend fun load(context: Context, url: String): ImageBitmap? {
+    suspend fun load(
+        context: Context,
+        url: String,
+    ): ImageBitmap? {
         if (!url.startsWith("https://") && !url.startsWith("http://")) return null
         memoryCache.get(url)?.let { return it }
         val lock = inFlightLocks.computeIfAbsent(url) { Mutex() }
@@ -94,14 +101,15 @@ internal object RemoteImageCache {
                     }
 
                     val req = Request.Builder().url(url).build()
-                    val bytes = httpClient.newCall(req).execute().use { resp ->
-                        if (!resp.isSuccessful) return@use null
-                        val body = resp.body ?: return@use null
-                        if (body.contentLength() > MAX_IMAGE_BYTES) return@use null
-                        val raw = body.bytes()
-                        if (raw.size > MAX_IMAGE_BYTES) return@use null
-                        raw
-                    } ?: return@runCatching null
+                    val bytes =
+                        httpClient.newCall(req).execute().use { resp ->
+                            if (!resp.isSuccessful) return@use null
+                            val body = resp.body ?: return@use null
+                            if (body.contentLength() > MAX_IMAGE_BYTES) return@use null
+                            val raw = body.bytes()
+                            if (raw.size > MAX_IMAGE_BYTES) return@use null
+                            raw
+                        } ?: return@runCatching null
 
                     val bmp = decodeSampledBytes(bytes)?.asImageBitmap() ?: return@runCatching null
                     runCatching {
@@ -135,7 +143,10 @@ internal object RemoteImageCache {
         return BitmapFactory.decodeFile(file.absolutePath, opts)
     }
 
-    private fun calculateInSampleSize(width: Int, height: Int): Int {
+    private fun calculateInSampleSize(
+        width: Int,
+        height: Int,
+    ): Int {
         var inSampleSize = 1
         while (width / inSampleSize > MAX_DECODE_DIM || height / inSampleSize > MAX_DECODE_DIM) {
             inSampleSize *= 2
@@ -158,14 +169,14 @@ fun GameCoverImage(
     contentScale: ContentScale = ContentScale.Crop,
     shape: Shape = RectangleShape,
     backgroundColor: Color = GraphiteSurface,
-    showBorder: Boolean = true
+    showBorder: Boolean = true,
 ) {
     val context = LocalContext.current
     val resolvedUrl = coverUrl?.takeIf { it.isNotBlank() } ?: CoverUrlRegistry.resolve(slug)
 
     val bitmap by produceState<ImageBitmap?>(
         initialValue = resolvedUrl?.let { RemoteImageCache.getFromMemory(it) },
-        resolvedUrl
+        resolvedUrl,
     ) {
         if (resolvedUrl.isNullOrBlank()) {
             value = null
@@ -175,11 +186,12 @@ fun GameCoverImage(
     }
 
     Box(
-        modifier = modifier
-            .clip(shape)
-            .background(backgroundColor)
-            .then(if (showBorder) Modifier.border(1.dp, CharcoalBorder, shape) else Modifier),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .clip(shape)
+                .background(backgroundColor)
+                .then(if (showBorder) Modifier.border(1.dp, CharcoalBorder, shape) else Modifier),
+        contentAlignment = Alignment.Center,
     ) {
         val img = bitmap
         if (img != null) {
@@ -187,13 +199,13 @@ fun GameCoverImage(
                 bitmap = img,
                 contentDescription = contentDescription,
                 contentScale = contentScale,
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier.matchParentSize(),
             )
         } else {
             Icon(
                 imageVector = Icons.Default.SportsEsports,
                 contentDescription = contentDescription,
-                tint = MutedGray
+                tint = MutedGray,
             )
         }
     }

@@ -38,7 +38,7 @@ fun GameDetailScreen(
     game: GameDto,
     onBack: () -> Unit,
     onPlayClick: (GameDto) -> Unit,
-    onRankingClick: (GameDto) -> Unit
+    onRankingClick: (GameDto) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -61,35 +61,36 @@ fun GameDetailScreen(
                     Text(
                         text = game.shortTitle ?: game.title,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
                     }
-                }
+                },
             )
-        }
+        },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             GameDetailHeader(
                 game = game,
                 onPlayClick = { onPlayClick(game) },
-                onRankingClick = { onRankingClick(game) }
+                onRankingClick = { onRankingClick(game) },
             )
             GameDetailGallery(
                 game = game,
                 onImageOpened = { imageType ->
                     AnalyticsHelper.logGameGalleryOpened(game.slug, imageType)
-                }
+                },
             )
             GameDetailSpecsCard(game = game)
             GameDetailHistoryCard(
@@ -97,15 +98,16 @@ fun GameDetailScreen(
                 onWatchTrailer = { videoId ->
                     AnalyticsHelper.logGameTrailerOpened(game.slug)
                     runCatching {
-                        val intent = Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://www.youtube.com/watch?v=$videoId")
-                        )
+                        val intent =
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://www.youtube.com/watch?v=$videoId"),
+                            )
                         context.startActivity(intent)
                     }.onFailure { err ->
                         CrashlyticsHelper.logGameDetailError(game.slug, err)
                     }
-                }
+                },
             )
         }
     }

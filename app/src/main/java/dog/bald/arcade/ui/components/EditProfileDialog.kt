@@ -60,6 +60,7 @@ import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
+
 @Composable
 fun EditProfileDialog(
     profile: ProfileDto,
@@ -73,8 +74,8 @@ fun EditProfileDialog(
         countryCode: String?,
         avatarSeed: String,
         isPrivate: Boolean,
-        socialLinks: SocialLinksDto
-    ) -> Unit
+        socialLinks: SocialLinksDto,
+    ) -> Unit,
 ) {
     var username by remember(profile.id) { mutableStateOf(profile.username) }
     var bio by remember(profile.id) { mutableStateOf(profile.bio.orEmpty()) }
@@ -94,29 +95,31 @@ fun EditProfileDialog(
 
     var countryMenuExpanded by remember { mutableStateOf(false) }
 
-    val draftLinks = SocialLinksDto(
-        x = xUrl.trim().ifEmpty { null },
-        instagram = igUrl.trim().ifEmpty { null },
-        youtube = ytUrl.trim().ifEmpty { null },
-        twitch = twitchUrl.trim().ifEmpty { null },
-        discord = discordVal.trim().ifEmpty { null },
-        github = githubUrl.trim().ifEmpty { null },
-        website = webUrl.trim().ifEmpty { null }
-    )
+    val draftLinks =
+        SocialLinksDto(
+            x = xUrl.trim().ifEmpty { null },
+            instagram = igUrl.trim().ifEmpty { null },
+            youtube = ytUrl.trim().ifEmpty { null },
+            twitch = twitchUrl.trim().ifEmpty { null },
+            discord = discordVal.trim().ifEmpty { null },
+            github = githubUrl.trim().ifEmpty { null },
+            website = webUrl.trim().ifEmpty { null },
+        )
     val usernameError = SocialValidation.validateUsername(username)
     val socialErrors = remember(draftLinks) { SocialValidation.validateSocialLinks(draftLinks) }
     val bioError = if (bio.length > 140) "Máximo 140 caracteres" else null
     val formValid = usernameError == null && socialErrors.isEmpty() && bioError == null
 
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = PureWhite,
-        unfocusedTextColor = PureWhite,
-        focusedBorderColor = PureWhite,
-        unfocusedBorderColor = SteelBorder,
-        cursorColor = PureWhite,
-        focusedLabelColor = PureWhite,
-        unfocusedLabelColor = MutedGray
-    )
+    val fieldColors =
+        OutlinedTextFieldDefaults.colors(
+            focusedTextColor = PureWhite,
+            unfocusedTextColor = PureWhite,
+            focusedBorderColor = PureWhite,
+            unfocusedBorderColor = SteelBorder,
+            cursorColor = PureWhite,
+            focusedLabelColor = PureWhite,
+            unfocusedLabelColor = MutedGray,
+        )
 
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
@@ -128,37 +131,40 @@ fun EditProfileDialog(
                 color = PureWhite,
                 fontFamily = SpaceGroteskFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
+                fontSize = 16.sp,
             )
         },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 460.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 460.dp)
+                        .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(ObsidianBlack, RectangleShape)
-                        .border(1.dp, CharcoalBorder, RectangleShape)
-                        .padding(10.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(ObsidianBlack, RectangleShape)
+                            .border(1.dp, CharcoalBorder, RectangleShape)
+                            .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .background(CarbonSurface, RectangleShape)
-                            .border(1.dp, SteelBorder, RectangleShape)
-                            .padding(4.dp),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .size(52.dp)
+                                .background(CarbonSurface, RectangleShape)
+                                .border(1.dp, SteelBorder, RectangleShape)
+                                .padding(4.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         DiceBearPixelArtAvatar(
                             seed = avatarSeed,
-                            modifier = Modifier.size(44.dp)
+                            modifier = Modifier.size(44.dp),
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
@@ -167,25 +173,25 @@ fun EditProfileDialog(
                             color = PureWhite,
                             fontFamily = JetBrainsMonoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         )
                         Text(
                             text = "Generado al azar",
                             color = MutedGray,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         )
                     }
                     OutlinedButton(
                         enabled = !saving,
                         onClick = { avatarSeed = randomAvatarSeed(avatarSeed) },
                         shape = RectangleShape,
-                        border = BorderStroke(1.dp, SteelBorder)
+                        border = BorderStroke(1.dp, SteelBorder),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Casino,
                             contentDescription = null,
                             tint = PureWhite,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -193,7 +199,7 @@ fun EditProfileDialog(
                             color = PureWhite,
                             fontFamily = JetBrainsMonoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
                         )
                     }
                 }
@@ -206,7 +212,7 @@ fun EditProfileDialog(
                     label = { Text("Username (3–20 chars)") },
                     isError = usernameError != null,
                     colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 if (usernameError != null) {
                     Text(text = usernameError, color = DangerRedBorder, fontSize = 11.sp)
@@ -219,49 +225,52 @@ fun EditProfileDialog(
                     enabled = !saving,
                     label = { Text("Bio (${bio.length}/140)") },
                     colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     val selectedCountry = CountryCatalog.findByCode(countryCode)
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(ObsidianBlack, RectangleShape)
-                            .border(1.dp, SteelBorder, RectangleShape)
-                            .clickable(enabled = !saving) { countryMenuExpanded = true }
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .background(ObsidianBlack, RectangleShape)
+                                .border(1.dp, SteelBorder, RectangleShape)
+                                .clickable(enabled = !saving) { countryMenuExpanded = true }
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
-                            text = if (selectedCountry != null) {
-                                "${selectedCountry.flagEmoji()}  ${selectedCountry.name} (${selectedCountry.code})"
-                            } else {
-                                "País: Sin especificar"
-                            },
+                            text =
+                                if (selectedCountry != null) {
+                                    "${selectedCountry.flagEmoji()}  ${selectedCountry.name} (${selectedCountry.code})"
+                                } else {
+                                    "País: Sin especificar"
+                                },
                             color = PureWhite,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
                         )
                         Icon(
                             imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = null,
-                            tint = SilverGray
+                            tint = SilverGray,
                         )
                     }
                     DropdownMenu(
                         expanded = countryMenuExpanded,
                         onDismissRequest = { countryMenuExpanded = false },
-                        modifier = Modifier
-                            .background(CarbonSurface)
-                            .heightIn(max = 260.dp)
+                        modifier =
+                            Modifier
+                                .background(CarbonSurface)
+                                .heightIn(max = 260.dp),
                     ) {
                         DropdownMenuItem(
                             text = { Text("Sin especificar", color = MutedGray, fontSize = 12.sp) },
                             onClick = {
                                 countryCode = null
                                 countryMenuExpanded = false
-                            }
+                            },
                         )
                         CountryCatalog.countries.forEach { option ->
                             DropdownMenuItem(
@@ -269,47 +278,49 @@ fun EditProfileDialog(
                                     Text(
                                         text = "${option.flagEmoji()}  ${option.name} (${option.code})",
                                         color = PureWhite,
-                                        fontSize = 12.sp
+                                        fontSize = 12.sp,
                                     )
                                 },
                                 onClick = {
                                     countryCode = option.code
                                     countryMenuExpanded = false
-                                }
+                                },
                             )
                         }
                     }
                 }
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(ObsidianBlack, RectangleShape)
-                        .border(1.dp, CharcoalBorder, RectangleShape)
-                        .clickable(enabled = !saving) { isPrivate = !isPrivate }
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(ObsidianBlack, RectangleShape)
+                            .border(1.dp, CharcoalBorder, RectangleShape)
+                            .clickable(enabled = !saving) { isPrivate = !isPrivate }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Checkbox(
                         checked = isPrivate,
                         onCheckedChange = { if (!saving) isPrivate = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = PureWhite,
-                            checkmarkColor = PureBlack,
-                            uncheckedColor = SteelBorder
-                        )
+                        colors =
+                            CheckboxDefaults.colors(
+                                checkedColor = PureWhite,
+                                checkmarkColor = PureBlack,
+                                uncheckedColor = SteelBorder,
+                            ),
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Perfil privado",
                             color = PureWhite,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
                         )
                         Text(
                             text = "Oculta redes sociales, tiempo e historial a otros jugadores",
                             color = MutedGray,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
                         )
                     }
                 }
@@ -321,22 +332,50 @@ fun EditProfileDialog(
                     color = SilverGray,
                     fontFamily = JetBrainsMonoFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp
+                    fontSize = 10.sp,
                 )
 
                 SocialLinkField("X / Twitter (https://x.com/...)", xUrl, { xUrl = it }, socialErrors["x"], !saving, fieldColors)
-                SocialLinkField("Instagram (https://instagram.com/...)", igUrl, { igUrl = it }, socialErrors["instagram"], !saving, fieldColors)
+                SocialLinkField(
+                    "Instagram (https://instagram.com/...)",
+                    igUrl,
+                    { igUrl = it },
+                    socialErrors["instagram"],
+                    !saving,
+                    fieldColors,
+                )
                 SocialLinkField("YouTube (https://youtube.com/...)", ytUrl, { ytUrl = it }, socialErrors["youtube"], !saving, fieldColors)
-                SocialLinkField("Twitch (https://twitch.tv/...)", twitchUrl, { twitchUrl = it }, socialErrors["twitch"], !saving, fieldColors)
-                SocialLinkField("Discord (https://discord.gg/... o tag)", discordVal, { discordVal = it }, socialErrors["discord"], !saving, fieldColors)
-                SocialLinkField("GitHub (https://github.com/...)", githubUrl, { githubUrl = it }, socialErrors["github"], !saving, fieldColors)
+                SocialLinkField(
+                    "Twitch (https://twitch.tv/...)",
+                    twitchUrl,
+                    { twitchUrl = it },
+                    socialErrors["twitch"],
+                    !saving,
+                    fieldColors,
+                )
+                SocialLinkField(
+                    "Discord (https://discord.gg/... o tag)",
+                    discordVal,
+                    { discordVal = it },
+                    socialErrors["discord"],
+                    !saving,
+                    fieldColors,
+                )
+                SocialLinkField(
+                    "GitHub (https://github.com/...)",
+                    githubUrl,
+                    { githubUrl = it },
+                    socialErrors["github"],
+                    !saving,
+                    fieldColors,
+                )
                 SocialLinkField("Web personal (https://...)", webUrl, { webUrl = it }, socialErrors["website"], !saving, fieldColors)
 
                 if (!errorMsg.isNullOrBlank()) {
                     Text(
                         text = errorMsg,
                         color = DangerRedBorder,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
             }
@@ -352,25 +391,26 @@ fun EditProfileDialog(
                         countryCode,
                         avatarSeed,
                         isPrivate,
-                        draftLinks
+                        draftLinks,
                     )
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PureWhite,
-                    contentColor = PureBlack
-                )
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = PureWhite,
+                        contentColor = PureBlack,
+                    ),
             ) {
                 if (saving) {
                     CircularProgressIndicator(
                         color = PureBlack,
                         strokeWidth = 2.dp,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(14.dp),
                     )
                 } else {
                     Text(
                         text = "GUARDAR",
                         fontFamily = JetBrainsMonoFamily,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -378,11 +418,11 @@ fun EditProfileDialog(
         dismissButton = {
             TextButton(
                 enabled = !saving,
-                onClick = onDismiss
+                onClick = onDismiss,
             ) {
                 Text("CANCELAR", color = SilverGray)
             }
-        }
+        },
     )
 }
 
@@ -393,7 +433,7 @@ private fun SocialLinkField(
     onValueChange: (String) -> Unit,
     error: String?,
     enabled: Boolean,
-    colors: androidx.compose.material3.TextFieldColors
+    colors: androidx.compose.material3.TextFieldColors,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         OutlinedTextField(
@@ -404,7 +444,7 @@ private fun SocialLinkField(
             isError = error != null,
             label = { Text(label, fontSize = 11.sp) },
             colors = colors,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         )
         if (error != null) {
             Text(text = error, color = DangerRedBorder, fontSize = 10.sp)

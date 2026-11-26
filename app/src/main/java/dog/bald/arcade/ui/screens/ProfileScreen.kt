@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -78,23 +77,25 @@ import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.DangerRed
 import dog.bald.arcade.ui.theme.DangerRedBorder
 import dog.bald.arcade.ui.theme.GraphiteSurface
-import dog.bald.arcade.ui.theme.ReadyGreen
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
 import dog.bald.arcade.ui.theme.ObsidianBlack
 import dog.bald.arcade.ui.theme.PureBlack
 import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.ReadyGreen
 import dog.bald.arcade.ui.theme.ReadyGreenAccent
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.launch
 import uniffi.balddog_android.EngineStatus
 
-private enum class ProfileActivitySection(val label: String) {
+private enum class ProfileActivitySection(
+    val label: String,
+) {
     RECORDS("RÉCORDS"),
     REPLAYS("REPLAYS"),
     HISTORY("HISTORIAL"),
-    ACTIVITY("TIEMPO")
+    ACTIVITY("TIEMPO"),
 }
 
 @Composable
@@ -123,7 +124,7 @@ fun ProfileScreen(
     onOpenFollowers: () -> Unit = {},
     onOpenFollowing: () -> Unit = {},
     onUpdateProfile: (suspend (String, String?, String?, String, Boolean, dog.bald.arcade.data.SocialLinksDto) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -154,26 +155,31 @@ fun ProfileScreen(
     var syncingScores by remember { mutableStateOf(false) }
     var loadingReplayGameId by remember { mutableStateOf<String?>(null) }
 
-    val myReplays = remember(myHighScores) {
-        myHighScores.filter { !it.replayPath.isNullOrBlank() }
-    }
-    val displayedRecords = remember(myHighScores, showAllItems) {
-        if (showAllItems) myHighScores else myHighScores.take(5)
-    }
-    val displayedReplays = remember(myReplays, showAllItems) {
-        if (showAllItems) myReplays else myReplays.take(5)
-    }
-    val displayedHistory = remember(myMatchHistory, showAllItems) {
-        if (showAllItems) myMatchHistory else myMatchHistory.take(5)
-    }
-    val displayedStats = remember(myGameStats, showAllItems) {
-        if (showAllItems) myGameStats else myGameStats.take(5)
-    }
+    val myReplays =
+        remember(myHighScores) {
+            myHighScores.filter { !it.replayPath.isNullOrBlank() }
+        }
+    val displayedRecords =
+        remember(myHighScores, showAllItems) {
+            if (showAllItems) myHighScores else myHighScores.take(5)
+        }
+    val displayedReplays =
+        remember(myReplays, showAllItems) {
+            if (showAllItems) myReplays else myReplays.take(5)
+        }
+    val displayedHistory =
+        remember(myMatchHistory, showAllItems) {
+            if (showAllItems) myMatchHistory else myMatchHistory.take(5)
+        }
+    val displayedStats =
+        remember(myGameStats, showAllItems) {
+            if (showAllItems) myGameStats else myGameStats.take(5)
+        }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 16.dp)
+        contentPadding = PaddingValues(bottom = 16.dp),
     ) {
         item(key = "hero") {
             ProfileHeroCard(
@@ -188,7 +194,7 @@ fun ProfileScreen(
                 },
                 publicProfile = publicProfile,
                 onOpenFollowers = onOpenFollowers,
-                onOpenFollowing = onOpenFollowing
+                onOpenFollowing = onOpenFollowing,
             )
         }
 
@@ -205,36 +211,38 @@ fun ProfileScreen(
                                 syncingScores = false
                             }
                         }
-                    }
+                    },
                 )
             }
         }
 
         item(key = "section_toggle") {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(ObsidianBlack, RectangleShape)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(ObsidianBlack, RectangleShape)
+                        .border(1.dp, CharcoalBorder, RectangleShape),
             ) {
                 ProfileActivitySection.entries.forEachIndexed { idx, section ->
                     val active = selectedSection == idx
-                    val count = when (section) {
-                        ProfileActivitySection.RECORDS -> myHighScores.size
-                        ProfileActivitySection.REPLAYS -> myReplays.size
-                        ProfileActivitySection.HISTORY -> myMatchHistory.size
-                        ProfileActivitySection.ACTIVITY -> myGameStats.size
-                    }
+                    val count =
+                        when (section) {
+                            ProfileActivitySection.RECORDS -> myHighScores.size
+                            ProfileActivitySection.REPLAYS -> myReplays.size
+                            ProfileActivitySection.HISTORY -> myMatchHistory.size
+                            ProfileActivitySection.ACTIVITY -> myGameStats.size
+                        }
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(if (active) PureWhite else CarbonSurface)
-                            .clickable {
-                                selectedSection = idx
-                                showAllItems = false
-                            }
-                            .padding(vertical = 10.dp, horizontal = 2.dp),
-                        contentAlignment = Alignment.Center
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .background(if (active) PureWhite else CarbonSurface)
+                                .clickable {
+                                    selectedSection = idx
+                                    showAllItems = false
+                                }.padding(vertical = 10.dp, horizontal = 2.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = "${section.label} ($count)",
@@ -243,7 +251,7 @@ fun ProfileScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 9.5.sp,
                             maxLines = 1,
-                            letterSpacing = 0.2.sp
+                            letterSpacing = 0.2.sp,
                         )
                     }
                 }
@@ -257,7 +265,7 @@ fun ProfileScreen(
                         ProfileEmptyCard(
                             icon = Icons.Default.EmojiEvents,
                             title = "Sin récords registrados",
-                            subtitle = "Juega en solitario con 1 crédito y sin Save States para entrar al ranking global."
+                            subtitle = "Juega en solitario con 1 crédito y sin Save States para entrar al ranking global.",
                         )
                     }
                 } else {
@@ -266,7 +274,7 @@ fun ProfileScreen(
                         ProfileRecordRow(
                             record = record,
                             game = game,
-                            onClick = game?.let { g -> { onOpenLeaderboard(g) } }
+                            onClick = game?.let { g -> { onOpenLeaderboard(g) } },
                         )
                     }
                     if (myHighScores.size > 5) {
@@ -274,7 +282,7 @@ fun ProfileScreen(
                             ExpandListButton(
                                 expanded = showAllItems,
                                 totalCount = myHighScores.size,
-                                onClick = { showAllItems = !showAllItems }
+                                onClick = { showAllItems = !showAllItems },
                             )
                         }
                     }
@@ -287,7 +295,7 @@ fun ProfileScreen(
                         ProfileEmptyCard(
                             icon = Icons.Default.PlayCircleOutline,
                             title = "Sin replays guardados",
-                            subtitle = "Tus récords en solitario (1 crédito) guardarán automáticamente su replay aquí."
+                            subtitle = "Tus récords en solitario (1 crédito) guardarán automáticamente su replay aquí.",
                         )
                     }
                 } else {
@@ -299,15 +307,16 @@ fun ProfileScreen(
                             game = game,
                             loading = itemLaunchState != null,
                             launchState = itemLaunchState,
-                            onWatchReplay = game?.let { g ->
-                                {
-                                    if (replayLaunchState == null) {
-                                        scope.launch {
-                                            runCatching { onWatchReplay(record, g) }
+                            onWatchReplay =
+                                game?.let { g ->
+                                    {
+                                        if (replayLaunchState == null) {
+                                            scope.launch {
+                                                runCatching { onWatchReplay(record, g) }
+                                            }
                                         }
                                     }
-                                }
-                            }
+                                },
                         )
                     }
                     if (myReplays.size > 5) {
@@ -315,7 +324,7 @@ fun ProfileScreen(
                             ExpandListButton(
                                 expanded = showAllItems,
                                 totalCount = myReplays.size,
-                                onClick = { showAllItems = !showAllItems }
+                                onClick = { showAllItems = !showAllItems },
                             )
                         }
                     }
@@ -328,7 +337,7 @@ fun ProfileScreen(
                         ProfileEmptyCard(
                             icon = Icons.Default.History,
                             title = "Sin historial de partidas",
-                            subtitle = "Tus partidas en solitario, LAN e Internet (salas públicas) aparecerán aquí."
+                            subtitle = "Tus partidas en solitario, LAN e Internet (salas públicas) aparecerán aquí.",
                         )
                     }
                 } else {
@@ -336,7 +345,7 @@ fun ProfileScreen(
                         ProfileMatchHistoryRow(
                             match = match,
                             game = gamesById[match.gameId],
-                            myUserId = myUserId
+                            myUserId = myUserId,
                         )
                     }
                     if (myMatchHistory.size > 5) {
@@ -344,7 +353,7 @@ fun ProfileScreen(
                             ExpandListButton(
                                 expanded = showAllItems,
                                 totalCount = myMatchHistory.size,
-                                onClick = { showAllItems = !showAllItems }
+                                onClick = { showAllItems = !showAllItems },
                             )
                         }
                     }
@@ -357,14 +366,14 @@ fun ProfileScreen(
                         ProfileEmptyCard(
                             icon = Icons.Default.Schedule,
                             title = "Sin actividad reciente",
-                            subtitle = "Tu tiempo jugado y número de partidas por juego aparecerán aquí."
+                            subtitle = "Tu tiempo jugado y número de partidas por juego aparecerán aquí.",
                         )
                     }
                 } else {
                     items(displayedStats, key = { "stat_${it.gameId}" }) { stat ->
                         ProfileActivityRow(
                             stat = stat,
-                            game = gamesById[stat.gameId]
+                            game = gamesById[stat.gameId],
                         )
                     }
                     if (myGameStats.size > 5) {
@@ -372,7 +381,7 @@ fun ProfileScreen(
                             ExpandListButton(
                                 expanded = showAllItems,
                                 totalCount = myGameStats.size,
-                                onClick = { showAllItems = !showAllItems }
+                                onClick = { showAllItems = !showAllItems },
                             )
                         }
                     }
@@ -382,50 +391,51 @@ fun ProfileScreen(
 
         item(key = "system_section") {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(CarbonSurface, RectangleShape)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(CarbonSurface, RectangleShape)
+                        .border(1.dp, CharcoalBorder, RectangleShape)
+                        .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
                     text = "SISTEMA Y CUENTA",
                     color = MutedGray,
                     fontSize = 11.sp,
                     fontFamily = JetBrainsMonoFamily,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.5.sp,
                 )
 
                 // Almacenamiento local
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Storage,
                             contentDescription = null,
                             tint = SilverGray,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Column {
                             Text(
                                 text = "Caché local",
                                 color = PureWhite,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
                             )
                             Text(
                                 text = "${"%.1f".format(cacheMb)} MB (ROMs, BIOS y States)",
                                 color = MutedGray,
                                 fontSize = 11.sp,
-                                fontFamily = JetBrainsMonoFamily
+                                fontFamily = JetBrainsMonoFamily,
                             )
                         }
                     }
@@ -435,20 +445,20 @@ fun ProfileScreen(
                         enabled = cacheBytes > 0L,
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = null,
                             tint = SilverGray,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "LIMPIAR",
                             color = SilverGray,
                             fontSize = 10.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                 }
@@ -460,42 +470,43 @@ fun ProfileScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Terminal,
                             contentDescription = null,
                             tint = SilverGray,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Column {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 Text(
                                     text = "Motor Rust v${engineStatus?.engineVersion ?: "?"}",
                                     color = PureWhite,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Medium,
                                 )
                                 Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(if (fbneoReady) ReadyGreenAccent else DangerRed)
+                                    modifier =
+                                        Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(if (fbneoReady) ReadyGreenAccent else DangerRed),
                                 )
                             }
                             Text(
                                 text = "${engineStatus?.targetArch ?: "?"} · FBNeo ${if (fbneoReady) "LISTO" else "NO DETECTADO"}",
                                 color = MutedGray,
                                 fontSize = 11.sp,
-                                fontFamily = JetBrainsMonoFamily
+                                fontFamily = JetBrainsMonoFamily,
                             )
                         }
                     }
@@ -504,13 +515,13 @@ fun ProfileScreen(
                         onClick = onOpenDiagnostics,
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     ) {
                         Text(
                             text = "DIAGNÓSTICO",
                             color = PureWhite,
                             fontSize = 10.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                 }
@@ -521,13 +532,13 @@ fun ProfileScreen(
                     onClick = { showSignOutDialog = true },
                     shape = RectangleShape,
                     border = BorderStroke(1.dp, CharcoalBorder),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Logout,
                         contentDescription = null,
                         tint = SilverGray,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -535,7 +546,7 @@ fun ProfileScreen(
                         color = SilverGray,
                         fontSize = 11.sp,
                         fontFamily = JetBrainsMonoFamily,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
 
@@ -547,13 +558,13 @@ fun ProfileScreen(
                         },
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, dog.bald.arcade.ui.theme.DangerRedBorder),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = null,
                             tint = DangerRed,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -561,7 +572,7 @@ fun ProfileScreen(
                             color = DangerRed,
                             fontSize = 11.sp,
                             fontFamily = JetBrainsMonoFamily,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
                         )
                     }
                 }
@@ -569,24 +580,26 @@ fun ProfileScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = "Privacidad",
                         color = MutedGray,
                         fontSize = 11.sp,
-                        modifier = Modifier
-                            .clickable { uriHandler.openUri("https://bald.dog/privacy") }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier =
+                            Modifier
+                                .clickable { uriHandler.openUri("https://bald.dog/privacy") }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                     Text(text = "·", color = MutedGray, fontSize = 11.sp)
                     Text(
                         text = "Términos",
                         color = MutedGray,
                         fontSize = 11.sp,
-                        modifier = Modifier
-                            .clickable { uriHandler.openUri("https://bald.dog/terms") }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier =
+                            Modifier
+                                .clickable { uriHandler.openUri("https://bald.dog/terms") }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
             }
@@ -594,39 +607,41 @@ fun ProfileScreen(
 
         item(key = "app_update_section") {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(CarbonSurface, RectangleShape)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(CarbonSurface, RectangleShape)
+                        .border(1.dp, CharcoalBorder, RectangleShape)
+                        .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = "VERSIÓN Y ACTUALIZACIONES",
                         color = MutedGray,
                         fontSize = 11.sp,
                         fontFamily = JetBrainsMonoFamily,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.5.sp,
                     )
                     if (updateState is AppUpdateState.Available) {
                         val info = (updateState as AppUpdateState.Available).info
                         Box(
-                            modifier = Modifier
-                                .background(ReadyGreen.copy(alpha = 0.2f), RectangleShape)
-                                .border(1.dp, ReadyGreenAccent, RectangleShape)
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier =
+                                Modifier
+                                    .background(ReadyGreen.copy(alpha = 0.2f), RectangleShape)
+                                    .border(1.dp, ReadyGreenAccent, RectangleShape)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
                         ) {
                             Text(
                                 text = "NUEVA v${info.versionName}",
                                 color = ReadyGreenAccent,
                                 fontSize = 10.sp,
                                 fontFamily = JetBrainsMonoFamily,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                     }
@@ -635,58 +650,59 @@ fun ProfileScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(
                             imageVector = Icons.Default.SystemUpdate,
                             contentDescription = null,
                             tint = SilverGray,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Column {
                             Text(
                                 text = "bald.dog ARCADE v${BuildConfig.VERSION_NAME}",
                                 color = PureWhite,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
                             )
                             Text(
                                 text = "Build ${BuildConfig.VERSION_CODE}",
                                 color = MutedGray,
                                 fontSize = 11.sp,
-                                fontFamily = JetBrainsMonoFamily
+                                fontFamily = JetBrainsMonoFamily,
                             )
                         }
                     }
 
-                    val isBusy = updateState is AppUpdateState.Checking ||
-                        updateState is AppUpdateState.Downloading ||
-                        updateState is AppUpdateState.Verifying
+                    val isBusy =
+                        updateState is AppUpdateState.Checking ||
+                            updateState is AppUpdateState.Downloading ||
+                            updateState is AppUpdateState.Verifying
 
                     OutlinedButton(
                         onClick = { scope.launch { updateManager.checkForUpdates() } },
                         enabled = !isBusy,
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = null,
                             tint = SilverGray,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (updateState is AppUpdateState.Checking) "BUSCANDO..." else "BUSCAR",
                             color = PureWhite,
                             fontSize = 10.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                 }
@@ -697,46 +713,47 @@ fun ProfileScreen(
                             text = "Tienes la última versión instalada.",
                             color = ReadyGreenAccent,
                             fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                     is AppUpdateState.Available -> {
                         HorizontalDivider(color = CharcoalBorder)
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(GraphiteSurface, RectangleShape)
-                                .border(1.dp, CharcoalBorder, RectangleShape)
-                                .padding(10.dp)
-                                .heightIn(max = 160.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(GraphiteSurface, RectangleShape)
+                                    .border(1.dp, CharcoalBorder, RectangleShape)
+                                    .padding(10.dp)
+                                    .heightIn(max = 160.dp)
+                                    .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
                                 text = "NOVEDADES v${st.info.versionName}",
                                 color = SilverGray,
                                 fontSize = 10.sp,
                                 fontFamily = JetBrainsMonoFamily,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 text = st.info.changelog,
                                 color = PureWhite,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
                             )
                         }
                         OutlinedButton(
                             onClick = { scope.launch { updateManager.downloadAndVerify(st.info) } },
                             shape = RectangleShape,
                             border = BorderStroke(1.dp, ReadyGreenAccent),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
                                 text = "ACTUALIZAR A v${st.info.versionName}",
                                 color = ReadyGreenAccent,
                                 fontSize = 11.sp,
                                 fontFamily = JetBrainsMonoFamily,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                     }
@@ -749,17 +766,18 @@ fun ProfileScreen(
                                 progress = { st.progress },
                                 modifier = Modifier.fillMaxWidth(),
                                 color = ReadyGreenAccent,
-                                trackColor = CharcoalBorder
+                                trackColor = CharcoalBorder,
                             )
                             Text(
-                                text = if (st.totalBytes > 0L) {
-                                    "Descargando: $pct% (${"%.1f".format(downloadedMb)} / ${"%.1f".format(totalMb)} MB)"
-                                } else {
-                                    "Descargando: ${"%.1f".format(downloadedMb)} MB"
-                                },
+                                text =
+                                    if (st.totalBytes > 0L) {
+                                        "Descargando: $pct% (${"%.1f".format(downloadedMb)} / ${"%.1f".format(totalMb)} MB)"
+                                    } else {
+                                        "Descargando: ${"%.1f".format(downloadedMb)} MB"
+                                    },
                                 color = SilverGray,
                                 fontSize = 11.sp,
-                                fontFamily = JetBrainsMonoFamily
+                                fontFamily = JetBrainsMonoFamily,
                             )
                         }
                     }
@@ -768,13 +786,13 @@ fun ProfileScreen(
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = ReadyGreenAccent,
-                                trackColor = CharcoalBorder
+                                trackColor = CharcoalBorder,
                             )
                             Text(
                                 text = "Verificando integridad SHA-256...",
                                 color = SilverGray,
                                 fontSize = 11.sp,
-                                fontFamily = JetBrainsMonoFamily
+                                fontFamily = JetBrainsMonoFamily,
                             )
                         }
                     }
@@ -783,14 +801,14 @@ fun ProfileScreen(
                             onClick = { updateManager.installApk(context, st.file) },
                             shape = RectangleShape,
                             border = BorderStroke(1.dp, ReadyGreenAccent),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(
                                 text = "INSTALAR ACTUALIZACIÓN",
                                 color = ReadyGreenAccent,
                                 fontSize = 11.sp,
                                 fontFamily = JetBrainsMonoFamily,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
                             )
                         }
                     }
@@ -799,7 +817,7 @@ fun ProfileScreen(
                             text = st.message,
                             color = DangerRedBorder,
                             fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                     else -> Unit
@@ -825,15 +843,14 @@ fun ProfileScreen(
                         } else {
                             onUpdateUsername(newName)
                         }
-                    }
-                        .onSuccess {
-                            savingUsername = false
-                            showEditNameDialog = false
-                        }
-                        .onFailure { err ->
-                            savingUsername = false
-                            val msg = err.toUserMessage("No se pudo actualizar el perfil")
-                            usernameError = if (msg.contains("unique", ignoreCase = true) ||
+                    }.onSuccess {
+                        savingUsername = false
+                        showEditNameDialog = false
+                    }.onFailure { err ->
+                        savingUsername = false
+                        val msg = err.toUserMessage("No se pudo actualizar el perfil")
+                        usernameError =
+                            if (msg.contains("unique", ignoreCase = true) ||
                                 msg.contains("duplicate", ignoreCase = true) ||
                                 msg.contains("en uso", ignoreCase = true)
                             ) {
@@ -841,9 +858,9 @@ fun ProfileScreen(
                             } else {
                                 msg
                             }
-                        }
+                    }
                 }
-            }
+            },
         )
     }
 
@@ -854,7 +871,7 @@ fun ProfileScreen(
             onConfirm = {
                 showClearCacheDialog = false
                 onClearCache()
-            }
+            },
         )
     }
 
@@ -865,7 +882,7 @@ fun ProfileScreen(
             onConfirm = {
                 showSignOutDialog = false
                 onSignOut()
-            }
+            },
         )
     }
 
@@ -880,7 +897,7 @@ fun ProfileScreen(
                     color = DangerRed,
                     fontFamily = JetBrainsMonoFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    fontSize = 14.sp,
                 )
             },
             text = {
@@ -888,13 +905,13 @@ fun ProfileScreen(
                     Text(
                         text = "Esta acción es irreversible. Se eliminarán tu perfil, récords, replays y datos asociados.",
                         color = SilverGray,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                     if (deleteAccountError != null) {
                         Text(
                             text = deleteAccountError ?: "",
                             color = DangerRed,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         )
                     }
                 }
@@ -910,30 +927,29 @@ fun ProfileScreen(
                                 .onSuccess {
                                     deletingAccount = false
                                     showDeleteAccountDialog = false
-                                }
-                                .onFailure { err ->
+                                }.onFailure { err ->
                                     deletingAccount = false
                                     deleteAccountError = err.toUserMessage("No se pudo eliminar la cuenta")
                                 }
                         }
-                    }
+                    },
                 ) {
                     Text(
                         text = if (deletingAccount) "ELIMINANDO..." else "ELIMINAR",
                         color = DangerRed,
                         fontFamily = JetBrainsMonoFamily,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             },
             dismissButton = {
                 androidx.compose.material3.TextButton(
                     enabled = !deletingAccount,
-                    onClick = { showDeleteAccountDialog = false }
+                    onClick = { showDeleteAccountDialog = false },
                 ) {
                     Text("CANCELAR", color = SilverGray, fontFamily = JetBrainsMonoFamily)
                 }
-            }
+            },
         )
     }
 }
@@ -942,33 +958,34 @@ fun ProfileScreen(
 private fun ProfileEmptyCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    subtitle: String
+    subtitle: String,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(CarbonSurface, RectangleShape)
-            .border(1.dp, CharcoalBorder, RectangleShape)
-            .padding(20.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(CarbonSurface, RectangleShape)
+                .border(1.dp, CharcoalBorder, RectangleShape)
+                .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = MutedGray,
-            modifier = Modifier.size(28.dp)
+            modifier = Modifier.size(28.dp),
         )
         Text(
             text = title,
             color = PureWhite,
             fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         Text(
             text = subtitle,
             color = MutedGray,
-            fontSize = 12.sp
+            fontSize = 12.sp,
         )
     }
 }
@@ -977,23 +994,24 @@ private fun ProfileEmptyCard(
 private fun ExpandListButton(
     expanded: Boolean,
     totalCount: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(GraphiteSurface, RectangleShape)
-            .border(1.dp, CharcoalBorder, RectangleShape)
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(GraphiteSurface, RectangleShape)
+                .border(1.dp, CharcoalBorder, RectangleShape)
+                .clickable(onClick = onClick)
+                .padding(vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
             text = if (expanded) "MOSTRAR MENOS" else "VER TODOS ($totalCount)",
             color = SilverGray,
             fontFamily = JetBrainsMonoFamily,
             fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
     }
 }

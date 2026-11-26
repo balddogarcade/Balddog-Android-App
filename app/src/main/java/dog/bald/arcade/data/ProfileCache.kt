@@ -7,17 +7,27 @@ import kotlinx.serialization.json.Json
 
 internal interface ProfileCacheStore {
     fun read(userId: String): String?
-    fun write(userId: String, payload: String)
+
+    fun write(
+        userId: String,
+        payload: String,
+    )
+
     fun clear()
 }
 
-private class SharedPrefsProfileCacheStore(context: Context) : ProfileCacheStore {
+private class SharedPrefsProfileCacheStore(
+    context: Context,
+) : ProfileCacheStore {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     override fun read(userId: String): String? = prefs.getString(keyFor(userId), null)
 
-    override fun write(userId: String, payload: String) {
+    override fun write(
+        userId: String,
+        payload: String,
+    ) {
         prefs.edit().putString(keyFor(userId), payload).apply()
     }
 
@@ -32,7 +42,9 @@ private class SharedPrefsProfileCacheStore(context: Context) : ProfileCacheStore
     }
 }
 
-internal class ProfileCacheEngine(private val store: ProfileCacheStore) {
+internal class ProfileCacheEngine(
+    private val store: ProfileCacheStore,
+) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun load(userId: String?): ProfileDto? {
@@ -41,7 +53,10 @@ internal class ProfileCacheEngine(private val store: ProfileCacheStore) {
         return runCatching { json.decodeFromString<ProfileDto>(raw) }.getOrNull()
     }
 
-    fun save(userId: String?, profile: ProfileDto) {
+    fun save(
+        userId: String?,
+        profile: ProfileDto,
+    ) {
         val cleanId = userId?.trim()?.takeIf { it.isNotEmpty() } ?: return
         runCatching { json.encodeToString(profile) }.getOrNull()?.let { encoded ->
             store.write(cleanId, encoded)
@@ -57,15 +72,21 @@ object ProfileCache {
     @Volatile
     private var engine: ProfileCacheEngine? = null
 
-    private fun engineFor(context: Context): ProfileCacheEngine {
-        return engine ?: synchronized(this) {
+    private fun engineFor(context: Context): ProfileCacheEngine =
+        engine ?: synchronized(this) {
             engine ?: ProfileCacheEngine(SharedPrefsProfileCacheStore(context)).also { engine = it }
         }
-    }
 
-    fun load(context: Context, userId: String?): ProfileDto? = engineFor(context).load(userId)
+    fun load(
+        context: Context,
+        userId: String?,
+    ): ProfileDto? = engineFor(context).load(userId)
 
-    fun save(context: Context, userId: String?, profile: ProfileDto) {
+    fun save(
+        context: Context,
+        userId: String?,
+        profile: ProfileDto,
+    ) {
         engineFor(context).save(userId, profile)
     }
 

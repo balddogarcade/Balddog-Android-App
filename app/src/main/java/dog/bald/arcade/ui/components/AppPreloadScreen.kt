@@ -30,41 +30,41 @@ import dog.bald.arcade.ui.theme.SilverGray
  * Full-screen preload overlay shown while the app restores session or loads initial data.
  */
 @Composable
-fun AppPreloadScreen(
-    message: String = "Cargando..."
-) {
+fun AppPreloadScreen(message: String = "Cargando...") {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ObsidianBlack)
-            .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(ObsidianBlack)
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 20.dp),
     ) {
         Image(
             painter = painterResource(id = R.drawable.logo_text),
             contentDescription = "Bald Dog",
             contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .height(42.dp)
+            modifier =
+                Modifier
+                    .align(Alignment.Center)
+                    .height(42.dp),
         )
 
         Row(
             modifier = Modifier.align(Alignment.BottomEnd),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
                 text = message,
                 color = SilverGray,
                 fontFamily = InterFamily,
-                fontSize = 13.sp
+                fontSize = 13.sp,
             )
             CircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
                 color = PureWhite,
                 trackColor = CharcoalBorder,
-                strokeWidth = 2.dp
+                strokeWidth = 2.dp,
             )
         }
     }

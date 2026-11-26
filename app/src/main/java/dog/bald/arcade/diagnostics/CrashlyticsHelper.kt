@@ -3,15 +3,14 @@ package dog.bald.arcade.diagnostics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 object CrashlyticsHelper {
-    private fun instance(): FirebaseCrashlytics? =
-        runCatching { FirebaseCrashlytics.getInstance() }.getOrNull()
+    private fun instance(): FirebaseCrashlytics? = runCatching { FirebaseCrashlytics.getInstance() }.getOrNull()
 
     fun setGameContext(
         gameId: String,
         gameTitle: String,
         romSlug: String,
         romSha256: String,
-        netplayMode: String
+        netplayMode: String,
     ) {
         instance()?.apply {
             setCustomKey("game_id", gameId.ifBlank { "unknown" })
@@ -22,7 +21,11 @@ object CrashlyticsHelper {
         }
     }
 
-    fun setNetplayState(state: String, roomId: String = "", pingMs: UInt = 0u) {
+    fun setNetplayState(
+        state: String,
+        roomId: String = "",
+        pingMs: UInt = 0u,
+    ) {
         instance()?.apply {
             setCustomKey("session_state", state)
             if (roomId.isNotBlank()) {
@@ -40,7 +43,10 @@ object CrashlyticsHelper {
         instance()?.recordException(throwable)
     }
 
-    fun setCurrentGameDetail(gameId: String, romSlug: String) {
+    fun setCurrentGameDetail(
+        gameId: String,
+        romSlug: String,
+    ) {
         instance()?.apply {
             setCustomKey("detail_game_id", gameId.ifBlank { "unknown" })
             setCustomKey("detail_rom_slug", romSlug.ifBlank { "unknown" })
@@ -48,7 +54,10 @@ object CrashlyticsHelper {
         }
     }
 
-    fun logGameDetailError(romSlug: String, throwable: Throwable) {
+    fun logGameDetailError(
+        romSlug: String,
+        throwable: Throwable,
+    ) {
         instance()?.apply {
             log("GameDetail error on $romSlug: ${throwable.message}")
             recordException(throwable)

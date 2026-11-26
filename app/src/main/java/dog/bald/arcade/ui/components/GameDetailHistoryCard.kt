@@ -29,7 +29,7 @@ import dog.bald.arcade.data.GameDto
 fun GameDetailHistoryCard(
     game: GameDto,
     onWatchTrailer: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val hasHistory = !game.history.isNullOrBlank()
     val hasVideo = !game.youtubeVideoId.isNullOrBlank()
@@ -41,7 +41,7 @@ fun GameDetailHistoryCard(
         if (hasVideo) {
             OutlinedButton(
                 onClick = { game.youtubeVideoId?.let(onWatchTrailer) },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Default.PlayCircle, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -56,14 +56,14 @@ fun GameDetailHistoryCard(
                     Text(
                         text = "Historia",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = game.history.orEmpty(),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = if (expanded) Int.MAX_VALUE else 6,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
                     )
                     TextButton(onClick = { expanded = !expanded }) {
                         Text(if (expanded) "Ver menos" else "Leer más")
@@ -72,7 +72,7 @@ fun GameDetailHistoryCard(
                         Text(
                             text = game.historyCopyrightLong,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }

@@ -8,23 +8,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -56,7 +52,6 @@ import dog.bald.arcade.ui.components.GameCoverImage
 import dog.bald.arcade.ui.components.RankingsMechanicsDialog
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
-import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
 import dog.bald.arcade.ui.theme.ObsidianBlack
@@ -69,9 +64,11 @@ import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
 
-private enum class RankingsSubTab(val label: String) {
+private enum class RankingsSubTab(
+    val label: String,
+) {
     GLOBAL("GLOBAL JUGADORES"),
-    GAMES("POR JUEGO")
+    GAMES("POR JUEGO"),
 }
 
 @Composable
@@ -80,7 +77,7 @@ fun RankingsScreen(
     games: List<GameDto>,
     onOpenPublicProfile: (String) -> Unit,
     onOpenGameRanking: (GameDto) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var selectedSubTab by remember { mutableIntStateOf(RankingsSubTab.GLOBAL.ordinal) }
     var onlyFollowing by remember { mutableStateOf(false) }
@@ -97,9 +94,10 @@ fun RankingsScreen(
     var gameSummaries by remember { mutableStateOf<Map<String, GameRankingSummaryDto>>(emptyMap()) }
 
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
-    val gamesWithLeaderboard = remember(games) {
-        games.filter { !it.scoreConfig?.lboard.isNullOrBlank() }
-    }
+    val gamesWithLeaderboard =
+        remember(games) {
+            games.filter { !it.scoreConfig?.lboard.isNullOrBlank() }
+        }
 
     LaunchedEffect(searchQuery) {
         delay(300L)
@@ -111,13 +109,11 @@ fun RankingsScreen(
         gamesErrorMsg = null
         runCatching {
             repo.fetchGamesRankingSummary().associateBy { it.gameId }
+        }.onSuccess { summaries ->
+            gameSummaries = summaries
+        }.onFailure {
+            gamesErrorMsg = it.toUserMessage("No se pudieron cargar los rankings")
         }
-            .onSuccess { summaries ->
-                gameSummaries = summaries
-            }
-            .onFailure {
-                gamesErrorMsg = it.toUserMessage("No se pudieron cargar los rankings")
-            }
         loadingGames = false
     }
 
@@ -129,100 +125,102 @@ fun RankingsScreen(
                 onlyFollowing = onlyFollowing,
                 search = debouncedSearch.takeIf { it.isNotBlank() },
                 limit = 100,
-                offset = 0
+                offset = 0,
             )
+        }.onSuccess { gList ->
+            globalEntries = gList
+        }.onFailure {
+            globalErrorMsg = it.toUserMessage("No se pudieron cargar los rankings")
         }
-            .onSuccess { gList ->
-                globalEntries = gList
-            }
-            .onFailure {
-                globalErrorMsg = it.toUserMessage("No se pudieron cargar los rankings")
-            }
         loadingGlobal = false
     }
 
     Column(
         modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 text = "RANKINGS 1CC",
                 color = PureWhite,
                 fontFamily = SpaceGroteskFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
+                fontSize = 18.sp,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(
-                    modifier = Modifier
-                        .background(CarbonSurface, RectangleShape)
-                        .border(1.dp, SteelBorder, RectangleShape)
-                        .clickable { showMechanicsDialog = true }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                    modifier =
+                        Modifier
+                            .background(CarbonSurface, RectangleShape)
+                            .border(1.dp, SteelBorder, RectangleShape)
+                            .clickable { showMechanicsDialog = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.HelpOutline,
                             contentDescription = "Mecánicas",
                             tint = PureWhite,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Text(
                             text = "REGLAS",
                             color = PureWhite,
                             fontFamily = JetBrainsMonoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
                         )
                     }
                 }
                 Box(
-                    modifier = Modifier
-                        .background(CarbonSurface, RectangleShape)
-                        .border(1.dp, SteelBorder, RectangleShape)
-                        .clickable { refreshKey++ }
-                        .padding(6.dp)
+                    modifier =
+                        Modifier
+                            .background(CarbonSurface, RectangleShape)
+                            .border(1.dp, SteelBorder, RectangleShape)
+                            .clickable { refreshKey++ }
+                            .padding(6.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Actualizar",
                         tint = PureWhite,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(ObsidianBlack, RectangleShape)
-                .border(1.dp, CharcoalBorder, RectangleShape)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, CharcoalBorder, RectangleShape),
         ) {
             RankingsSubTab.entries.forEachIndexed { idx, tab ->
                 val active = selectedSubTab == idx
                 Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(if (active) PureWhite else CarbonSurface)
-                        .clickable { selectedSubTab = idx }
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .background(if (active) PureWhite else CarbonSurface)
+                            .clickable { selectedSubTab = idx }
+                            .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = tab.label,
                         color = if (active) PureBlack else SilverGray,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
             }
@@ -232,7 +230,7 @@ fun RankingsScreen(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedTextField(
                     value = searchQuery,
@@ -244,38 +242,41 @@ fun RankingsScreen(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
                             tint = MutedGray,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp),
                         )
                     },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = PureWhite,
-                        unfocusedTextColor = PureWhite,
-                        focusedBorderColor = PureWhite,
-                        unfocusedBorderColor = CharcoalBorder,
-                        cursorColor = PureWhite
-                    ),
-                    modifier = Modifier.weight(1f)
+                    colors =
+                        OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PureWhite,
+                            unfocusedTextColor = PureWhite,
+                            focusedBorderColor = PureWhite,
+                            unfocusedBorderColor = CharcoalBorder,
+                            cursorColor = PureWhite,
+                        ),
+                    modifier = Modifier.weight(1f),
                 )
 
                 Row(
-                    modifier = Modifier
-                        .background(ObsidianBlack, RectangleShape)
-                        .border(1.dp, CharcoalBorder, RectangleShape)
+                    modifier =
+                        Modifier
+                            .background(ObsidianBlack, RectangleShape)
+                            .border(1.dp, CharcoalBorder, RectangleShape),
                 ) {
                     listOf(false to "TODOS", true to "SIGUIENDO").forEach { (flagVal, label) ->
                         val active = onlyFollowing == flagVal
                         Box(
-                            modifier = Modifier
-                                .background(if (active) PureWhite else CarbonSurface)
-                                .clickable { onlyFollowing = flagVal }
-                                .padding(horizontal = 10.dp, vertical = 14.dp)
+                            modifier =
+                                Modifier
+                                    .background(if (active) PureWhite else CarbonSurface)
+                                    .clickable { onlyFollowing = flagVal }
+                                    .padding(horizontal = 10.dp, vertical = 14.dp),
                         ) {
                             Text(
                                 text = label,
                                 color = if (active) PureBlack else SilverGray,
                                 fontFamily = JetBrainsMonoFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 10.sp
+                                fontSize = 10.sp,
                             )
                         }
                     }
@@ -301,7 +302,7 @@ fun RankingsScreen(
                             text = if (onlyFollowing) "Sin jugadores seguidos con récords 1CC." else "No se encontraron jugadores.",
                             color = MutedGray,
                             fontFamily = JetBrainsMonoFamily,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
                         )
                     }
                 }
@@ -309,13 +310,13 @@ fun RankingsScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+                        contentPadding = PaddingValues(bottom = 16.dp),
                     ) {
                         items(globalEntries, key = { it.userId }) { entry ->
                             GlobalRankRow(
                                 entry = entry,
                                 numberFmt = numberFmt,
-                                onClick = { onOpenPublicProfile(entry.userId) }
+                                onClick = { onOpenPublicProfile(entry.userId) },
                             )
                         }
                     }
@@ -337,7 +338,7 @@ fun RankingsScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+                        contentPadding = PaddingValues(bottom = 16.dp),
                     ) {
                         items(gamesWithLeaderboard, key = { it.id }) { game ->
                             GameRankingSummaryCard(
@@ -345,7 +346,7 @@ fun RankingsScreen(
                                 summary = gameSummaries[game.id],
                                 numberFmt = numberFmt,
                                 onOpenGameRanking = { onOpenGameRanking(game) },
-                                onOpenUserProfile = onOpenPublicProfile
+                                onOpenUserProfile = onOpenPublicProfile,
                             )
                         }
                     }
@@ -363,55 +364,58 @@ fun RankingsScreen(
 private fun GlobalRankRow(
     entry: GlobalLeaderboardEntryDto,
     numberFmt: NumberFormat,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     val rank = ArcadeRank.fromPoints(entry.globalPoints)
     val flag = CountryCatalog.flagEmoji(entry.countryCode)
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(CarbonSurface, RectangleShape)
-            .border(1.dp, CharcoalBorder, RectangleShape)
-            .clickable(onClick = onClick)
-            .padding(10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(CarbonSurface, RectangleShape)
+                .border(1.dp, CharcoalBorder, RectangleShape)
+                .clickable(onClick = onClick)
+                .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
-            modifier = Modifier
-                .width(38.dp)
-                .background(ObsidianBlack, RectangleShape)
-                .border(1.dp, SteelBorder, RectangleShape)
-                .padding(vertical = 6.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .width(38.dp)
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, SteelBorder, RectangleShape)
+                    .padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = "#${entry.globalRank}",
                 color = PureWhite,
                 fontFamily = JetBrainsMonoFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
+                fontSize = 11.sp,
             )
         }
 
         Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(ObsidianBlack, RectangleShape)
-                .border(1.dp, SteelBorder, RectangleShape)
-                .padding(3.dp),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .background(ObsidianBlack, RectangleShape)
+                    .border(1.dp, SteelBorder, RectangleShape)
+                    .padding(3.dp),
+            contentAlignment = Alignment.Center,
         ) {
             DiceBearPixelArtAvatar(
                 seed = entry.avatarSeed?.takeIf { it.isNotBlank() } ?: entry.username,
-                modifier = Modifier.size(34.dp)
+                modifier = Modifier.size(34.dp),
             )
         }
 
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 if (flag.isNotEmpty()) Text(text = flag, fontSize = 13.sp)
                 Text(
@@ -420,19 +424,19 @@ private fun GlobalRankRow(
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 ArcadeBadge(text = rank.title, style = ArcadeBadgeStyle.Outline)
                 Text(
                     text = "${entry.firstPlaces}×#1 · ${entry.podiums} podios",
                     color = MutedGray,
                     fontFamily = JetBrainsMonoFamily,
-                    fontSize = 10.sp
+                    fontSize = 10.sp,
                 )
             }
         }
@@ -443,13 +447,13 @@ private fun GlobalRankRow(
                 color = PureWhite,
                 fontFamily = JetBrainsMonoFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
+                fontSize = 14.sp,
             )
             Text(
                 text = "PTS",
                 color = MutedGray,
                 fontFamily = JetBrainsMonoFamily,
-                fontSize = 9.sp
+                fontSize = 9.sp,
             )
         }
     }
@@ -461,32 +465,34 @@ private fun GameRankingSummaryCard(
     summary: GameRankingSummaryDto?,
     numberFmt: NumberFormat,
     onOpenGameRanking: () -> Unit,
-    onOpenUserProfile: (String) -> Unit
+    onOpenUserProfile: (String) -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(CarbonSurface, RectangleShape)
-            .border(1.dp, CharcoalBorder, RectangleShape)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(CarbonSurface, RectangleShape)
+                .border(1.dp, CharcoalBorder, RectangleShape)
+                .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .background(ObsidianBlack, RectangleShape)
-                    .border(1.dp, SteelBorder, RectangleShape)
+                modifier =
+                    Modifier
+                        .size(54.dp)
+                        .background(ObsidianBlack, RectangleShape)
+                        .border(1.dp, SteelBorder, RectangleShape),
             ) {
                 GameCoverImage(
                     slug = game.slug,
                     contentDescription = game.title,
                     showBorder = false,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 
@@ -498,13 +504,13 @@ private fun GameRankingSummaryCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = "${game.system.uppercase()} · ${summary?.totalPlayers ?: 0} jugadores 1CC",
                     color = MutedGray,
                     fontFamily = JetBrainsMonoFamily,
-                    fontSize = 10.sp
+                    fontSize = 10.sp,
                 )
                 if (summary?.myRank != null && summary.myScore != null) {
                     Text(
@@ -512,23 +518,24 @@ private fun GameRankingSummaryCard(
                         color = PureWhite,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
                     )
                 }
             }
 
             Box(
-                modifier = Modifier
-                    .background(PureWhite, RectangleShape)
-                    .clickable(onClick = onOpenGameRanking)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                modifier =
+                    Modifier
+                        .background(PureWhite, RectangleShape)
+                        .clickable(onClick = onOpenGameRanking)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {
                 Text(
                     text = "VER RANKING",
                     color = PureBlack,
                     fontFamily = JetBrainsMonoFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp
+                    fontSize = 10.sp,
                 )
             }
         }
@@ -536,22 +543,24 @@ private fun GameRankingSummaryCard(
         val top3 = summary?.top3.orEmpty()
         if (top3.isNotEmpty()) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(ObsidianBlack, RectangleShape)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(ObsidianBlack, RectangleShape)
+                        .border(1.dp, CharcoalBorder, RectangleShape)
+                        .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 top3.forEach { item ->
                     val flag = CountryCatalog.flagEmoji(item.countryCode)
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenUserProfile(item.userId) }
-                            .padding(vertical = 2.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenUserProfile(item.userId) }
+                                .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
                             text = "#${item.rank}  ${if (flag.isNotEmpty()) "$flag " else ""}${item.username}",
@@ -560,14 +569,14 @@ private fun GameRankingSummaryCard(
                             fontSize = 11.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
                         )
                         Text(
                             text = numberFmt.format(item.score),
                             color = PureWhite,
                             fontFamily = JetBrainsMonoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         )
                     }
                 }

@@ -9,30 +9,32 @@ import androidx.compose.ui.unit.dp
 
 private val SquareCornerShape = RoundedCornerShape(0.dp)
 
-private val ArcadeShapes = Shapes(
-    extraSmall = SquareCornerShape,
-    small = SquareCornerShape,
-    medium = SquareCornerShape,
-    large = SquareCornerShape,
-    extraLarge = SquareCornerShape
-)
+private val ArcadeShapes =
+    Shapes(
+        extraSmall = SquareCornerShape,
+        small = SquareCornerShape,
+        medium = SquareCornerShape,
+        large = SquareCornerShape,
+        extraLarge = SquareCornerShape,
+    )
 
-private val ArcadeMonochromeColorScheme = darkColorScheme(
-    primary = PureWhite,
-    onPrimary = PureBlack,
-    secondary = SilverGray,
-    onSecondary = PureBlack,
-    tertiary = GraphiteSurface,
-    onTertiary = PureWhite,
-    background = ObsidianBlack,
-    onBackground = PureWhite,
-    surface = CarbonSurface,
-    onSurface = PureWhite,
-    surfaceVariant = GraphiteSurface,
-    onSurfaceVariant = MutedGray,
-    outline = SteelBorder,
-    outlineVariant = CharcoalBorder,
-)
+private val ArcadeMonochromeColorScheme =
+    darkColorScheme(
+        primary = PureWhite,
+        onPrimary = PureBlack,
+        secondary = SilverGray,
+        onSecondary = PureBlack,
+        tertiary = GraphiteSurface,
+        onTertiary = PureWhite,
+        background = ObsidianBlack,
+        onBackground = PureWhite,
+        surface = CarbonSurface,
+        onSurface = PureWhite,
+        surfaceVariant = GraphiteSurface,
+        onSurfaceVariant = MutedGray,
+        outline = SteelBorder,
+        outlineVariant = CharcoalBorder,
+    )
 
 @Composable
 fun BaldDogArcadeTheme(content: @Composable () -> Unit) {
@@ -40,6 +42,6 @@ fun BaldDogArcadeTheme(content: @Composable () -> Unit) {
         colorScheme = ArcadeMonochromeColorScheme,
         typography = BaldDogTypography,
         shapes = ArcadeShapes,
-        content = content
+        content = content,
     )
 }

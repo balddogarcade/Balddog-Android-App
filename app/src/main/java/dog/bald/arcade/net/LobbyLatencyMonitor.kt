@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 data class LobbyPeerTarget(
     val userId: String,
-    val endpoint: String
+    val endpoint: String,
 )
 
 /**
@@ -30,7 +30,7 @@ data class LobbyPeerTarget(
 class LobbyLatencyMonitor(
     private val localPort: Int,
     private val myUserId: String,
-    private val measureInternetPing: Boolean = false
+    private val measureInternetPing: Boolean = false,
 ) {
     private val _latenciesMs = MutableStateFlow<Map<String, Int>>(emptyMap())
     val latenciesMs: StateFlow<Map<String, Int>> = _latenciesMs.asStateFlow()
@@ -57,14 +57,16 @@ class LobbyLatencyMonitor(
     internal val activeJob: Job?
         get() = scopeJob
 
-    internal fun isSocketOpen(): Boolean = synchronized(socketLock) {
-        socket?.let { !it.isClosed } == true
-    }
+    internal fun isSocketOpen(): Boolean =
+        synchronized(socketLock) {
+            socket?.let { !it.isClosed } == true
+        }
 
     private fun closeSocket() {
-        val toClose = synchronized(socketLock) {
-            socket.also { socket = null }
-        }
+        val toClose =
+            synchronized(socketLock) {
+                socket.also { socket = null }
+            }
         runCatching { toClose?.close() }
     }
 
@@ -94,13 +96,14 @@ class LobbyLatencyMonitor(
         val ioScope = CoroutineScope(parentScope.coroutineContext + Dispatchers.IO + job)
 
         ioScope.launch {
-            val sock = runCatching {
-                DatagramSocket(null).apply {
-                    reuseAddress = true
-                    soTimeout = 400
-                    bind(InetSocketAddress(localPort))
-                }
-            }.getOrNull() ?: return@launch
+            val sock =
+                runCatching {
+                    DatagramSocket(null).apply {
+                        reuseAddress = true
+                        soTimeout = 400
+                        bind(InetSocketAddress(localPort))
+                    }
+                }.getOrNull() ?: return@launch
 
             synchronized(socketLock) {
                 if (closed || !job.isActive) {
@@ -110,69 +113,71 @@ class LobbyLatencyMonitor(
                 socket = sock
             }
 
-            val recvJob = launch {
-                val buf = ByteArray(256)
-                val packet = DatagramPacket(buf, buf.size)
-                while (isActive && !closed && !sock.isClosed) {
-                    try {
-                        packet.length = buf.size
-                        sock.receive(packet)
-                        handlePacket(sock, packet.socketAddress, packet.data, packet.length)
-                    } catch (_: SocketTimeoutException) {
-                        // Timeout periódico para evaluar cancelación
-                    } catch (_: Throwable) {
-                        if (closed || sock.isClosed) break
+            val recvJob =
+                launch {
+                    val buf = ByteArray(256)
+                    val packet = DatagramPacket(buf, buf.size)
+                    while (isActive && !closed && !sock.isClosed) {
+                        try {
+                            packet.length = buf.size
+                            sock.receive(packet)
+                            handlePacket(sock, packet.socketAddress, packet.data, packet.length)
+                        } catch (_: SocketTimeoutException) {
+                            // Timeout periódico para evaluar cancelación
+                        } catch (_: Throwable) {
+                            if (closed || sock.isClosed) break
+                        }
                     }
                 }
-            }
 
-            val sendJob = launch {
-                var stunTarget: InetSocketAddress? = null
-                while (isActive && !closed && !sock.isClosed) {
-                    val now = System.nanoTime()
-                    if (measureInternetPing && myUserId.isNotBlank()) {
-                        if (stunTarget == null) {
-                            stunTarget = resolveFirstStunTarget()
-                        }
-                        stunTarget?.let { target ->
-                            val (txKey, reqBytes) = buildStunBindingRequest()
-                            pendingStunPings[txKey] = now
-                            if (pendingStunPings.size > 16) {
-                                pendingStunPings.entries.removeIf { now - it.value > 10_000_000_000L }
+            val sendJob =
+                launch {
+                    var stunTarget: InetSocketAddress? = null
+                    while (isActive && !closed && !sock.isClosed) {
+                        val now = System.nanoTime()
+                        if (measureInternetPing && myUserId.isNotBlank()) {
+                            if (stunTarget == null) {
+                                stunTarget = resolveFirstStunTarget()
                             }
+                            stunTarget?.let { target ->
+                                val (txKey, reqBytes) = buildStunBindingRequest()
+                                pendingStunPings[txKey] = now
+                                if (pendingStunPings.size > 16) {
+                                    pendingStunPings.entries.removeIf { now - it.value > 10_000_000_000L }
+                                }
+                                runCatching {
+                                    sock.send(DatagramPacket(reqBytes, reqBytes.size, target))
+                                }
+                            }
+                        }
+                        val myPubIp = _publicEndpoint.value?.substringBefore('|')?.substringBefore(':')
+                        for (peer in peers) {
+                            if (peer.userId == myUserId) continue
+                            val effectiveEp = NetplayEndpointResolver.resolveEffectiveEndpoint(peer.endpoint, myPubIp)
+                            val addr = parseEndpoint(effectiveEp) ?: continue
+                            val payload = "BDPING|$myUserId|${peer.userId}|$now".toByteArray(Charsets.UTF_8)
                             runCatching {
-                                sock.send(DatagramPacket(reqBytes, reqBytes.size, target))
+                                sock.send(DatagramPacket(payload, payload.size, addr))
                             }
                         }
-                    }
-                    val myPubIp = _publicEndpoint.value?.substringBefore('|')?.substringBefore(':')
-                    for (peer in peers) {
-                        if (peer.userId == myUserId) continue
-                        val effectiveEp = NetplayEndpointResolver.resolveEffectiveEndpoint(peer.endpoint, myPubIp)
-                        val addr = parseEndpoint(effectiveEp) ?: continue
-                        val payload = "BDPING|$myUserId|${peer.userId}|$now".toByteArray(Charsets.UTF_8)
-                        runCatching {
-                            sock.send(DatagramPacket(payload, payload.size, addr))
-                        }
-                    }
 
-                    // Limpiar mediciones obsoletas (> 6 s sin respuesta)
-                    var staleRemoved = false
-                    lastSeenNanos.forEach { (uid, seenAt) ->
-                        if (now - seenAt > 6_000_000_000L) {
-                            if (currentLatencies.remove(uid) != null) {
-                                staleRemoved = true
+                        // Limpiar mediciones obsoletas (> 6 s sin respuesta)
+                        var staleRemoved = false
+                        lastSeenNanos.forEach { (uid, seenAt) ->
+                            if (now - seenAt > 6_000_000_000L) {
+                                if (currentLatencies.remove(uid) != null) {
+                                    staleRemoved = true
+                                }
+                                lastSeenNanos.remove(uid)
                             }
-                            lastSeenNanos.remove(uid)
                         }
-                    }
-                    if (staleRemoved) {
-                        _latenciesMs.value = currentLatencies.toMap()
-                    }
+                        if (staleRemoved) {
+                            _latenciesMs.value = currentLatencies.toMap()
+                        }
 
-                    delay(1500)
+                        delay(1500)
+                    }
                 }
-            }
 
             recvJob.join()
             sendJob.join()
@@ -183,7 +188,7 @@ class LobbyLatencyMonitor(
         sock: DatagramSocket,
         senderAddr: java.net.SocketAddress,
         data: ByteArray,
-        length: Int
+        length: Int,
     ) {
         if (length >= 20 &&
             data[0] == 0x01.toByte() &&
@@ -242,7 +247,10 @@ class LobbyLatencyMonitor(
         return null
     }
 
-    internal fun parseXorMappedAddress(data: ByteArray, length: Int): String? {
+    internal fun parseXorMappedAddress(
+        data: ByteArray,
+        length: Int,
+    ): String? {
         if (length < 20) return null
         val magic0 = 0x21.toByte()
         val magic1 = 0x12.toByte()

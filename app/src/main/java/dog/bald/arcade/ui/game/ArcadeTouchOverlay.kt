@@ -58,7 +58,7 @@ fun ArcadeTouchOverlay(
     editMode: Boolean,
     onConfigChange: (TouchLayoutConfig) -> Unit,
     onMaskChanged: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var dpadMask by remember { mutableIntStateOf(0) }
     var clusterMask by remember { mutableIntStateOf(0) }
@@ -82,7 +82,10 @@ fun ArcadeTouchOverlay(
         }
     }
 
-    fun updatePill(bit: Int, pressed: Boolean) {
+    fun updatePill(
+        bit: Int,
+        pressed: Boolean,
+    ) {
         val next = if (pressed) pillMask or bit else pillMask and bit.inv()
         if (pillMask != next) {
             pillMask = next
@@ -91,58 +94,60 @@ fun ArcadeTouchOverlay(
     }
 
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .alpha(if (editMode) 0.95f else config.opacity)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .alpha(if (editMode) 0.95f else config.opacity),
     ) {
         // COIN y START arriba a la izquierda
         Row(
             modifier = Modifier.align(Alignment.TopStart),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             ArcadePillButton(
                 label = "COIN",
                 accent = PureWhite,
                 editMode = editMode,
-                onPressChanged = { updatePill(RetroJoypad.COIN, it) }
+                onPressChanged = { updatePill(RetroJoypad.COIN, it) },
             )
             ArcadePillButton(
                 label = "START",
                 accent = SilverGray,
                 editMode = editMode,
-                onPressChanged = { updatePill(RetroJoypad.START, it) }
+                onPressChanged = { updatePill(RetroJoypad.START, it) },
             )
         }
 
         // D-pad 8 direcciones compacto (116.dp base)
         Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .offset { IntOffset(config.dpadOffsetX.roundToInt(), config.dpadOffsetY.roundToInt()) }
-                .then(
-                    if (editMode) {
-                        Modifier.pointerInput(config) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                onConfigChange(
-                                    config.copy(
-                                        dpadOffsetX = config.dpadOffsetX + dragAmount.x,
-                                        dpadOffsetY = config.dpadOffsetY + dragAmount.y
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .offset { IntOffset(config.dpadOffsetX.roundToInt(), config.dpadOffsetY.roundToInt()) }
+                    .then(
+                        if (editMode) {
+                            Modifier.pointerInput(config) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    onConfigChange(
+                                        config.copy(
+                                            dpadOffsetX = config.dpadOffsetX + dragAmount.x,
+                                            dpadOffsetY = config.dpadOffsetY + dragAmount.y,
+                                        ),
                                     )
-                                )
+                                }
                             }
-                        }
-                    } else {
-                        Modifier
-                    }
-                )
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             ArcadeEightWayDpad(
                 sizeDp = (116f * config.scale).dp,
                 activeMask = dpadMask,
                 editMode = editMode,
-                onDpadChanged = { updateDpad(it) }
+                onDpadChanged = { updateDpad(it) },
             )
         }
 
@@ -157,12 +162,12 @@ fun ArcadeTouchOverlay(
                 onConfigChange(
                     config.copy(
                         buttonsOffsetX = config.buttonsOffsetX + dx,
-                        buttonsOffsetY = config.buttonsOffsetY + dy
-                    )
+                        buttonsOffsetY = config.buttonsOffsetY + dy,
+                    ),
                 )
             },
             onMaskChanged = { updateCluster(it) },
-            modifier = Modifier.align(Alignment.BottomEnd)
+            modifier = Modifier.align(Alignment.BottomEnd),
         )
     }
 }
@@ -176,64 +181,66 @@ private fun ArcadeButtonCluster(
     offsetY: Float,
     onDrag: (Float, Float) -> Unit,
     onMaskChanged: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val buttonBounds = remember { mutableStateMapOf<Int, Rect>() }
     val btnSize = (54f * scale).dp
     val rowBounds = remember { mutableStateMapOf<Int, Rect>() }
 
     Box(
-        modifier = modifier
-            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-            .then(
-                if (editMode) {
-                    Modifier.pointerInput(offsetX, offsetY) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            onDrag(dragAmount.x, dragAmount.y)
-                        }
-                    }
-                } else {
-                    Modifier.pointerInput(scale) {
-                        awaitPointerEventScope {
-                            val activePointers = mutableMapOf<PointerId, Offset>()
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                for (change in event.changes) {
-                                    change.consume()
-                                    if (change.pressed) {
-                                        activePointers[change.id] = change.position
-                                    } else {
-                                        activePointers.remove(change.id)
-                                    }
-                                }
-                                var newMask = 0
-                                for (pos in activePointers.values) {
-                                    for ((bit, rect) in buttonBounds) {
-                                        // Hit-box circular con margen cómodo para pulsar 2 botones a la vez
-                                        val center = rect.center
-                                        val hitR = (rect.width.coerceAtLeast(rect.height) * 0.62f)
-                                        if (hypot(pos.x - center.x, pos.y - center.y) <= hitR) {
-                                            newMask = newMask or bit
-                                        }
-                                    }
-                                }
-                                onMaskChanged(newMask)
+        modifier =
+            modifier
+                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                .then(
+                    if (editMode) {
+                        Modifier.pointerInput(offsetX, offsetY) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                onDrag(dragAmount.x, dragAmount.y)
                             }
                         }
-                    }
-                }
-            )
+                    } else {
+                        Modifier.pointerInput(scale) {
+                            awaitPointerEventScope {
+                                val activePointers = mutableMapOf<PointerId, Offset>()
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    for (change in event.changes) {
+                                        change.consume()
+                                        if (change.pressed) {
+                                            activePointers[change.id] = change.position
+                                        } else {
+                                            activePointers.remove(change.id)
+                                        }
+                                    }
+                                    var newMask = 0
+                                    for (pos in activePointers.values) {
+                                        for ((bit, rect) in buttonBounds) {
+                                            // Hit-box circular con margen cómodo para pulsar 2 botones a la vez
+                                            val center = rect.center
+                                            val hitR = (rect.width.coerceAtLeast(rect.height) * 0.62f)
+                                            if (hypot(pos.x - center.x, pos.y - center.y) <= hitR) {
+                                                newMask = newMask or bit
+                                            }
+                                        }
+                                    }
+                                    onMaskChanged(newMask)
+                                }
+                            }
+                        }
+                    },
+                ),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy((10f * scale).dp),
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = Alignment.End,
         ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy((12f * scale).dp),
-                modifier = Modifier.onGloballyPositioned { coords ->
-                    rowBounds[0] = coords.boundsInParent()
-                }
+                modifier =
+                    Modifier.onGloballyPositioned { coords ->
+                        rowBounds[0] = coords.boundsInParent()
+                    },
             ) {
                 val rOffset = rowBounds[0]?.topLeft ?: Offset.Zero
                 ArcadeCircleVisual(
@@ -242,7 +249,7 @@ private fun ArcadeButtonCluster(
                     accent = SilverGray,
                     pressed = (activeMask and RetroJoypad.Y) != 0,
                     editMode = editMode,
-                    onPositioned = { rect -> buttonBounds[RetroJoypad.Y] = rect.translate(rOffset) }
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.Y] = rect.translate(rOffset) },
                 )
                 ArcadeCircleVisual(
                     label = "X",
@@ -250,7 +257,7 @@ private fun ArcadeButtonCluster(
                     accent = SilverGray,
                     pressed = (activeMask and RetroJoypad.X) != 0,
                     editMode = editMode,
-                    onPositioned = { rect -> buttonBounds[RetroJoypad.X] = rect.translate(rOffset) }
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.X] = rect.translate(rOffset) },
                 )
                 ArcadeCircleVisual(
                     label = "L",
@@ -258,14 +265,15 @@ private fun ArcadeButtonCluster(
                     accent = MutedGray,
                     pressed = (activeMask and RetroJoypad.L) != 0,
                     editMode = editMode,
-                    onPositioned = { rect -> buttonBounds[RetroJoypad.L] = rect.translate(rOffset) }
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.L] = rect.translate(rOffset) },
                 )
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy((12f * scale).dp),
-                modifier = Modifier.onGloballyPositioned { coords ->
-                    rowBounds[1] = coords.boundsInParent()
-                }
+                modifier =
+                    Modifier.onGloballyPositioned { coords ->
+                        rowBounds[1] = coords.boundsInParent()
+                    },
             ) {
                 val rOffset = rowBounds[1]?.topLeft ?: Offset.Zero
                 ArcadeCircleVisual(
@@ -274,7 +282,7 @@ private fun ArcadeButtonCluster(
                     accent = PureWhite,
                     pressed = (activeMask and RetroJoypad.B) != 0,
                     editMode = editMode,
-                    onPositioned = { rect -> buttonBounds[RetroJoypad.B] = rect.translate(rOffset) }
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.B] = rect.translate(rOffset) },
                 )
                 ArcadeCircleVisual(
                     label = "A",
@@ -282,7 +290,7 @@ private fun ArcadeButtonCluster(
                     accent = PureWhite,
                     pressed = (activeMask and RetroJoypad.A) != 0,
                     editMode = editMode,
-                    onPositioned = { rect -> buttonBounds[RetroJoypad.A] = rect.translate(rOffset) }
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.A] = rect.translate(rOffset) },
                 )
                 ArcadeCircleVisual(
                     label = "R",
@@ -290,7 +298,7 @@ private fun ArcadeButtonCluster(
                     accent = MutedGray,
                     pressed = (activeMask and RetroJoypad.R) != 0,
                     editMode = editMode,
-                    onPositioned = { rect -> buttonBounds[RetroJoypad.R] = rect.translate(rOffset) }
+                    onPositioned = { rect -> buttonBounds[RetroJoypad.R] = rect.translate(rOffset) },
                 )
             }
         }
@@ -304,28 +312,28 @@ private fun ArcadeCircleVisual(
     accent: Color,
     pressed: Boolean,
     editMode: Boolean,
-    onPositioned: (Rect) -> Unit
+    onPositioned: (Rect) -> Unit,
 ) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(size)
-            .onGloballyPositioned { coords -> onPositioned(coords.boundsInParent()) }
-            .background(
-                color = if (pressed) accent else CarbonSurface.copy(alpha = 0.82f),
-                shape = CircleShape
-            )
-            .border(
-                width = 1.5.dp,
-                color = if (editMode) PureWhite else accent,
-                shape = CircleShape
-            )
+        modifier =
+            Modifier
+                .size(size)
+                .onGloballyPositioned { coords -> onPositioned(coords.boundsInParent()) }
+                .background(
+                    color = if (pressed) accent else CarbonSurface.copy(alpha = 0.82f),
+                    shape = CircleShape,
+                ).border(
+                    width = 1.5.dp,
+                    color = if (editMode) PureWhite else accent,
+                    shape = CircleShape,
+                ),
     ) {
         Text(
             text = label,
             color = if (pressed) PureBlack else PureWhite,
             fontWeight = FontWeight.ExtraBold,
-            fontSize = 15.sp
+            fontSize = 15.sp,
         )
     }
 }
@@ -335,56 +343,58 @@ private fun ArcadeEightWayDpad(
     sizeDp: Dp,
     activeMask: Int,
     editMode: Boolean,
-    onDpadChanged: (Int) -> Unit
+    onDpadChanged: (Int) -> Unit,
 ) {
     val density = LocalDensity.current
     val radiusPx = with(density) { (sizeDp / 2).toPx() }
     var knobOffset by remember { mutableStateOf(Offset.Zero) }
 
     Box(
-        modifier = Modifier
-            .size(sizeDp)
-            .then(
-                if (!editMode) {
-                    Modifier.pointerInput(radiusPx) {
-                        awaitPointerEventScope {
-                            var activePointer: PointerId? = null
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val center = Offset(size.width / 2f, size.height / 2f)
+        modifier =
+            Modifier
+                .size(sizeDp)
+                .then(
+                    if (!editMode) {
+                        Modifier.pointerInput(radiusPx) {
+                            awaitPointerEventScope {
+                                var activePointer: PointerId? = null
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val center = Offset(size.width / 2f, size.height / 2f)
 
-                                val tracked = activePointer?.let { pid ->
-                                    event.changes.firstOrNull { it.id == pid }
-                                }
-                                if (tracked == null) {
-                                    val pressed = event.changes.firstOrNull { it.pressed }
-                                    if (pressed != null) {
-                                        activePointer = pressed.id
-                                        pressed.consume()
-                                        val delta = pressed.position - center
+                                    val tracked =
+                                        activePointer?.let { pid ->
+                                            event.changes.firstOrNull { it.id == pid }
+                                        }
+                                    if (tracked == null) {
+                                        val pressed = event.changes.firstOrNull { it.pressed }
+                                        if (pressed != null) {
+                                            activePointer = pressed.id
+                                            pressed.consume()
+                                            val delta = pressed.position - center
+                                            val (mask, clamped) = computeEightWay(delta, radiusPx)
+                                            knobOffset = clamped
+                                            onDpadChanged(mask)
+                                        }
+                                    } else if (!tracked.pressed) {
+                                        tracked.consume()
+                                        activePointer = null
+                                        knobOffset = Offset.Zero
+                                        onDpadChanged(0)
+                                    } else {
+                                        tracked.consume()
+                                        val delta = tracked.position - center
                                         val (mask, clamped) = computeEightWay(delta, radiusPx)
                                         knobOffset = clamped
                                         onDpadChanged(mask)
                                     }
-                                } else if (!tracked.pressed) {
-                                    tracked.consume()
-                                    activePointer = null
-                                    knobOffset = Offset.Zero
-                                    onDpadChanged(0)
-                                } else {
-                                    tracked.consume()
-                                    val delta = tracked.position - center
-                                    val (mask, clamped) = computeEightWay(delta, radiusPx)
-                                    knobOffset = clamped
-                                    onDpadChanged(mask)
                                 }
                             }
                         }
-                    }
-                } else {
-                    Modifier
-                }
-            )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val c = Offset(size.width / 2f, size.height / 2f)
@@ -392,32 +402,36 @@ private fun ArcadeEightWayDpad(
             drawCircle(
                 color = CarbonSurface.copy(alpha = 0.78f),
                 radius = outerR,
-                center = c
+                center = c,
             )
             drawCircle(
                 color = if (editMode) PureWhite else SteelBorder,
                 radius = outerR,
                 center = c,
-                style = Stroke(width = 3f)
+                style = Stroke(width = 3f),
             )
             val stickColor = if (activeMask != 0) PureWhite else SilverGray.copy(alpha = 0.75f)
             drawCircle(
                 color = stickColor,
                 radius = outerR * 0.34f,
-                center = c + knobOffset
+                center = c + knobOffset,
             )
         }
     }
 }
 
-private fun computeEightWay(delta: Offset, maxRadius: Float): Pair<Int, Offset> {
+private fun computeEightWay(
+    delta: Offset,
+    maxRadius: Float,
+): Pair<Int, Offset> {
     val dist = hypot(delta.x, delta.y)
     val deadzone = maxRadius * 0.18f
-    val clamped = if (dist > maxRadius * 0.6f && dist > 0f) {
-        delta * ((maxRadius * 0.6f) / dist)
-    } else {
-        delta
-    }
+    val clamped =
+        if (dist > maxRadius * 0.6f && dist > 0f) {
+            delta * ((maxRadius * 0.6f) / dist)
+        } else {
+            delta
+        }
     if (dist < deadzone) {
         return 0 to clamped
     }
@@ -435,44 +449,44 @@ private fun ArcadePillButton(
     label: String,
     accent: Color,
     editMode: Boolean,
-    onPressChanged: (Boolean) -> Unit
+    onPressChanged: (Boolean) -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
 
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .background(
-                color = if (pressed) accent else ObsidianBlack.copy(alpha = 0.82f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .border(1.5.dp, accent, RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp, vertical = 7.dp)
-            .then(
-                if (!editMode) {
-                    Modifier.pointerInput(label) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val anyDown = event.changes.any { it.pressed }
-                                event.changes.forEach { it.consume() }
-                                if (pressed != anyDown) {
-                                    pressed = anyDown
-                                    onPressChanged(anyDown)
+        modifier =
+            Modifier
+                .background(
+                    color = if (pressed) accent else ObsidianBlack.copy(alpha = 0.82f),
+                    shape = RoundedCornerShape(16.dp),
+                ).border(1.5.dp, accent, RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 7.dp)
+                .then(
+                    if (!editMode) {
+                        Modifier.pointerInput(label) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val anyDown = event.changes.any { it.pressed }
+                                    event.changes.forEach { it.consume() }
+                                    if (pressed != anyDown) {
+                                        pressed = anyDown
+                                        onPressChanged(anyDown)
+                                    }
                                 }
                             }
                         }
-                    }
-                } else {
-                    Modifier
-                }
-            )
+                    } else {
+                        Modifier
+                    },
+                ),
     ) {
         Text(
             text = label,
             color = if (pressed) PureBlack else PureWhite,
             fontWeight = FontWeight.Bold,
-            fontSize = 11.sp
+            fontSize = 11.sp,
         )
     }
 }

@@ -33,6 +33,8 @@ class IpfsRomManager(context: Context) {
         }
         return File(dir, clean)
     }
+
+    private val gateways = listOf(
         "https://gateway.pinata.cloud/ipfs/",
         "https://ipfs.io/ipfs/",
         "https://dweb.link/ipfs/"

@@ -23,11 +23,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -75,7 +75,7 @@ fun GameLeaderboardSheet(
     replayLaunchState: dog.bald.arcade.ui.screens.ReplayLaunchState? = null,
     onWatchReplay: (LeaderboardEntryDto) -> Unit = {},
     onOpenUserProfile: (String) -> Unit = {},
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var refreshKey by remember(game.id) { mutableIntStateOf(0) }
@@ -102,7 +102,7 @@ fun GameLeaderboardSheet(
                 val myDeferred = async { runCatching { repo.fetchMyGameRank(game.id) }.getOrNull() }
                 GameLeaderboardData(
                     entries = topDeferred.await(),
-                    myEntry = myDeferred.await()
+                    myEntry = myDeferred.await(),
                 )
             }
         }.onSuccess {
@@ -119,28 +119,29 @@ fun GameLeaderboardSheet(
         sheetState = sheetState,
         containerColor = ObsidianBlack,
         contentColor = PureWhite,
-        shape = RectangleShape
+        shape = RectangleShape,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 20.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 20.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Icon(
                         imageVector = Icons.Default.EmojiEvents,
                         contentDescription = null,
                         tint = PureWhite,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
@@ -149,14 +150,14 @@ fun GameLeaderboardSheet(
                             fontFamily = JetBrainsMonoFamily,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = SilverGray
+                            color = SilverGray,
                         )
                         Text(
                             text = game.title,
                             style = MaterialTheme.typography.titleMedium,
                             color = PureWhite,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -164,7 +165,7 @@ fun GameLeaderboardSheet(
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Actualizar ranking",
-                        tint = SilverGray
+                        tint = SilverGray,
                     )
                 }
             }
@@ -177,17 +178,18 @@ fun GameLeaderboardSheet(
                 !hasLeaderboard -> {
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                            .background(CarbonSurface)
-                            .border(1.dp, CharcoalBorder, RectangleShape)
-                            .padding(16.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .background(CarbonSurface)
+                                .border(1.dp, CharcoalBorder, RectangleShape)
+                                .padding(16.dp),
                     ) {
                         Text(
                             text = "Modo Libre: el ranking 1-Crédito y replays para este título estarán disponibles próximamente.\nTu tiempo jugado e historial de partidas sí se registran.",
                             color = SilverGray,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
                         )
                     }
                 }
@@ -195,9 +197,10 @@ fun GameLeaderboardSheet(
                 loading -> {
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(220.dp),
                     ) {
                         CircularProgressIndicator(color = PureWhite, strokeWidth = 2.dp)
                     }
@@ -207,19 +210,21 @@ fun GameLeaderboardSheet(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
                     ) {
                         Text(text = errorMsg ?: "", color = SilverGray, fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = { refreshKey++ },
                             shape = RectangleShape,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = PureWhite,
-                                contentColor = PureBlack
-                            )
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    containerColor = PureWhite,
+                                    contentColor = PureBlack,
+                                ),
                         ) {
                             Text("REINTENTAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
@@ -229,17 +234,18 @@ fun GameLeaderboardSheet(
                 data.entries.isEmpty() -> {
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                            .background(CarbonSurface)
-                            .border(1.dp, CharcoalBorder, RectangleShape)
-                            .padding(16.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(180.dp)
+                                .background(CarbonSurface)
+                                .border(1.dp, CharcoalBorder, RectangleShape)
+                                .padding(16.dp),
                     ) {
                         Text(
                             text = "Aún no hay récords registrados.\n¡Sé el primero en marcar historia!",
                             color = SilverGray,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
                         )
                     }
                 }
@@ -247,9 +253,10 @@ fun GameLeaderboardSheet(
                 else -> {
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 360.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 360.dp),
                     ) {
                         items(data.entries, key = { it.userId }) { entry ->
                             val itemLaunchState = replayLaunchState?.takeIf { it.replayPath == entry.replayPath }
@@ -258,15 +265,18 @@ fun GameLeaderboardSheet(
                                 isMe = entry.userId == currentUid,
                                 formattedScore = numberFmt.format(entry.score),
                                 onClick = { onOpenUserProfile(entry.userId) },
-                                onWatchReplay = if (!entry.replayPath.isNullOrBlank()) {
-                                    {
-                                        if (replayLaunchState == null) {
-                                            onWatchReplay(entry)
+                                onWatchReplay =
+                                    if (!entry.replayPath.isNullOrBlank()) {
+                                        {
+                                            if (replayLaunchState == null) {
+                                                onWatchReplay(entry)
+                                            }
                                         }
-                                    }
-                                } else null,
+                                    } else {
+                                        null
+                                    },
                                 replayLoading = itemLaunchState != null,
-                                launchState = itemLaunchState
+                                launchState = itemLaunchState,
                             )
                         }
                     }
@@ -285,20 +295,20 @@ fun GameLeaderboardSheet(
                         fontFamily = JetBrainsMonoFamily,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = SilverGray
+                        color = SilverGray,
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     LeaderboardRow(
                         entry = myEntry,
                         isMe = true,
                         formattedScore = numberFmt.format(myEntry.score),
-                        onClick = { onOpenUserProfile(myEntry.userId) }
+                        onClick = { onOpenUserProfile(myEntry.userId) },
                     )
                 } else {
                     Text(
                         text = "Todavía no tienes puntaje en este juego. Juega en modo Solo (1 crédito) para entrar al ranking.",
                         color = MutedGray,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -314,140 +324,148 @@ private fun LeaderboardRow(
     onClick: () -> Unit = {},
     onWatchReplay: (() -> Unit)? = null,
     replayLoading: Boolean = false,
-    launchState: dog.bald.arcade.ui.screens.ReplayLaunchState? = null
+    launchState: dog.bald.arcade.ui.screens.ReplayLaunchState? = null,
 ) {
     val bgColor = if (isMe) GraphiteSurface else CarbonSurface
     val borderColor = if (isMe || entry.rank <= 3L) SteelBorder else CharcoalBorder
-    val rankColor = when (entry.rank) {
-        1L -> Color(0xFFFFD54F)
-        2L -> Color(0xFFE0E0E0)
-        3L -> Color(0xFFFFAB91)
-        else -> SilverGray
-    }
+    val rankColor =
+        when (entry.rank) {
+            1L -> Color(0xFFFFD54F)
+            2L -> Color(0xFFE0E0E0)
+            3L -> Color(0xFFFFAB91)
+            else -> SilverGray
+        }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bgColor)
-            .border(1.dp, borderColor, RectangleShape)
-            .clickable(onClick = onClick)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(bgColor)
+                .border(1.dp, borderColor, RectangleShape)
+                .clickable(onClick = onClick),
     ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = "#${entry.rank}",
-            fontFamily = JetBrainsMonoFamily,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = rankColor,
-            modifier = Modifier.width(38.dp)
-        )
-        DiceBearPixelArtAvatar(
-            seed = entry.username,
-            modifier = Modifier
-                .size(26.dp)
-                .border(1.dp, CharcoalBorder, RectangleShape)
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = entry.username,
-                    color = PureWhite,
-                    fontSize = 13.sp,
-                    fontWeight = if (isMe) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (isMe) {
-                    Spacer(modifier = Modifier.width(6.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+        ) {
+            Text(
+                text = "#${entry.rank}",
+                fontFamily = JetBrainsMonoFamily,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = rankColor,
+                modifier = Modifier.width(38.dp),
+            )
+            DiceBearPixelArtAvatar(
+                seed = entry.username,
+                modifier =
+                    Modifier
+                        .size(26.dp)
+                        .border(1.dp, CharcoalBorder, RectangleShape),
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "TÚ",
+                        text = entry.username,
+                        color = PureWhite,
+                        fontSize = 13.sp,
+                        fontWeight = if (isMe) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isMe) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "TÚ",
+                            fontFamily = JetBrainsMonoFamily,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PureBlack,
+                            modifier =
+                                Modifier
+                                    .background(PureWhite)
+                                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                        )
+                    }
+                    when (entry.verificationStatus) {
+                        "verified" -> {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "✓ VERIF.",
+                                fontFamily = JetBrainsMonoFamily,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF81C784),
+                                modifier =
+                                    Modifier
+                                        .border(1.dp, Color(0xFF388E3C), RectangleShape)
+                                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                            )
+                        }
+                        "pending", "verifying" -> {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "AUDITORÍA",
+                                fontFamily = JetBrainsMonoFamily,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SilverGray,
+                                modifier =
+                                    Modifier
+                                        .border(1.dp, CharcoalBorder, RectangleShape)
+                                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = formattedScore,
+                fontFamily = JetBrainsMonoFamily,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = PureWhite,
+            )
+            if (onWatchReplay != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier =
+                        Modifier
+                            .background(PureWhite)
+                            .clickable(enabled = !replayLoading, onClick = onWatchReplay)
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                ) {
+                    if (replayLoading) {
+                        CircularProgressIndicator(
+                            color = PureBlack,
+                            strokeWidth = 1.5.dp,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Ver Replay",
+                            tint = PureBlack,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = if (replayLoading) "..." else "REPLAY",
                         fontFamily = JetBrainsMonoFamily,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureBlack,
-                        modifier = Modifier
-                            .background(PureWhite)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
                     )
-                }
-                when (entry.verificationStatus) {
-                    "verified" -> {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "✓ VERIF.",
-                            fontFamily = JetBrainsMonoFamily,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF81C784),
-                            modifier = Modifier
-                                .border(1.dp, Color(0xFF388E3C), RectangleShape)
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
-                    }
-                    "pending", "verifying" -> {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "AUDITORÍA",
-                            fontFamily = JetBrainsMonoFamily,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = SilverGray,
-                            modifier = Modifier
-                                .border(1.dp, CharcoalBorder, RectangleShape)
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
-                    }
                 }
             }
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = formattedScore,
-            fontFamily = JetBrainsMonoFamily,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = PureWhite
-        )
-        if (onWatchReplay != null) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .background(PureWhite)
-                    .clickable(enabled = !replayLoading, onClick = onWatchReplay)
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
-            ) {
-                if (replayLoading) {
-                    CircularProgressIndicator(
-                        color = PureBlack,
-                        strokeWidth = 1.5.dp,
-                        modifier = Modifier.size(12.dp)
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Ver Replay",
-                        tint = PureBlack,
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(3.dp))
-                Text(
-                    text = if (replayLoading) "..." else "REPLAY",
-                    fontFamily = JetBrainsMonoFamily,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = PureBlack
-                )
-            }
-        }
-    }
         if (launchState != null) {
             val pctText = if (launchState.progress >= 0f) " ${(launchState.progress * 100).toInt()}%" else ""
             Text(
@@ -457,24 +475,26 @@ private fun LeaderboardRow(
                 fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 6.dp)
+                modifier = Modifier.padding(start = 10.dp, end = 10.dp, bottom = 6.dp),
             )
             if (launchState.progress >= 0f) {
                 LinearProgressIndicator(
                     progress = { launchState.progress.coerceIn(0f, 1f) },
                     color = PureWhite,
                     trackColor = GraphiteSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
                 )
             } else {
                 LinearProgressIndicator(
                     color = PureWhite,
                     trackColor = GraphiteSurface,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(3.dp),
                 )
             }
         }

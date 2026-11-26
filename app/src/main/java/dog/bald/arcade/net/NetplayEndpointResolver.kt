@@ -8,12 +8,15 @@ package dog.bald.arcade.net
  *   soporte de NAT Hairpinning (NAT Loopback) en routers hogareños.
  */
 object NetplayEndpointResolver {
-
     /**
      * Da formato a un endpoint de slot combinando el endpoint público STUN y el candidato LAN:
      * Ej: "186.156.23.107:7059|192.168.0.3:7059"
      */
-    fun formatCandidateEndpoint(publicEp: String, localIp: String?, port: Int): String {
+    fun formatCandidateEndpoint(
+        publicEp: String,
+        localIp: String?,
+        port: Int,
+    ): String {
         val cleanPub = publicEp.substringBefore('|').trim()
         val lanCandidate = if (!localIp.isNullOrBlank()) "$localIp:$port" else null
         return if (lanCandidate != null && cleanPub.isNotBlank() && cleanPub != lanCandidate) {
@@ -30,7 +33,10 @@ object NetplayEndpointResolver {
      * - En caso contrario (pares remotos en redes distintas o formato clásico sin candidato LAN),
      *   se retorna el endpoint público.
      */
-    fun resolveEffectiveEndpoint(peerEndpoint: String, myPublicIp: String?): String {
+    fun resolveEffectiveEndpoint(
+        peerEndpoint: String,
+        myPublicIp: String?,
+    ): String {
         val trimmed = peerEndpoint.trim()
         if (!trimmed.contains('|')) {
             return trimmed
@@ -40,7 +46,12 @@ object NetplayEndpointResolver {
         val lanEp = parts.getOrNull(1)?.trim()
 
         val peerHost = publicEp.substringBefore(':').trim().removeSurrounding("[", "]")
-        val myHost = myPublicIp?.substringBefore('|')?.substringBefore(':')?.trim()?.removeSurrounding("[", "]")
+        val myHost =
+            myPublicIp
+                ?.substringBefore('|')
+                ?.substringBefore(':')
+                ?.trim()
+                ?.removeSurrounding("[", "]")
 
         if (!myHost.isNullOrBlank() && peerHost == myHost && !lanEp.isNullOrBlank()) {
             return lanEp

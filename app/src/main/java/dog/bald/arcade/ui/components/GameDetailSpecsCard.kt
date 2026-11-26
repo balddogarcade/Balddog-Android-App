@@ -19,17 +19,18 @@ import dog.bald.arcade.data.GameDto
 @Composable
 fun GameDetailSpecsCard(
     game: GameDto,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val rows = listOfNotNull(
-        game.genre?.takeIf { it.isNotBlank() }?.let { "Género" to it },
-        game.nplayers?.takeIf { it.isNotBlank() }?.let { "Jugadores" to it }
-            ?: game.players?.let { "Jugadores" to "$it" },
-        game.inputControls?.takeIf { it.isNotBlank() }?.let { "Controles" to it },
-        game.inputButtons?.let { "Botones" to "$it" },
-        game.emulatorName?.takeIf { it.isNotBlank() }?.let { "Referencia MAME" to it },
-        game.gameName?.takeIf { it.isNotBlank() }?.let { "ROM" to it }
-    )
+    val rows =
+        listOfNotNull(
+            game.genre?.takeIf { it.isNotBlank() }?.let { "Género" to it },
+            game.nplayers?.takeIf { it.isNotBlank() }?.let { "Jugadores" to it }
+                ?: game.players?.let { "Jugadores" to "$it" },
+            game.inputControls?.takeIf { it.isNotBlank() }?.let { "Controles" to it },
+            game.inputButtons?.let { "Botones" to "$it" },
+            game.emulatorName?.takeIf { it.isNotBlank() }?.let { "Referencia MAME" to it },
+            game.gameName?.takeIf { it.isNotBlank() }?.let { "ROM" to it },
+        )
 
     if (rows.isEmpty()) return
 
@@ -38,25 +39,26 @@ fun GameDetailSpecsCard(
             Text(
                 text = "Ficha técnica",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
             )
             Spacer(modifier = Modifier.height(10.dp))
             rows.forEach { (label, value) ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
                         text = label,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         text = value,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             }

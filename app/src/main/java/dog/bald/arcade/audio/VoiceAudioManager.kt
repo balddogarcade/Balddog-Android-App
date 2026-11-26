@@ -18,12 +18,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 class VoiceAudioManager internal constructor(
     private val onCapturePcm: (ShortArray) -> Unit,
     private val onPullPlaybackPcm: (Int) -> ShortArray,
-    private val backend: AudioBackend
+    private val backend: AudioBackend,
 ) {
     constructor(
         context: Context,
         onCapturePcm: (ShortArray) -> Unit,
-        onPullPlaybackPcm: (Int) -> ShortArray
+        onPullPlaybackPcm: (Int) -> ShortArray,
     ) : this(onCapturePcm, onPullPlaybackPcm, AndroidAudioBackend(context))
 
     companion object {
@@ -34,77 +34,105 @@ class VoiceAudioManager internal constructor(
 
     internal interface CaptureDevice {
         fun startRecording()
-        fun readBlocking(buffer: ShortArray, offset: Int, count: Int): Int
+
+        fun readBlocking(
+            buffer: ShortArray,
+            offset: Int,
+            count: Int,
+        ): Int
+
         fun stop()
+
         fun release()
     }
 
     internal interface PlaybackDevice {
         fun play()
-        fun writeBlocking(buffer: ShortArray, offset: Int, count: Int): Int
+
+        fun writeBlocking(
+            buffer: ShortArray,
+            offset: Int,
+            count: Int,
+        ): Int
+
         fun stop()
+
         fun release()
     }
 
     internal interface AudioBackend {
         fun hasRecordPermission(): Boolean
+
         fun openCapture(): CaptureDevice?
+
         fun openPlayback(): PlaybackDevice?
     }
 
-    private class AndroidAudioBackend(private val context: Context) : AudioBackend {
-        override fun hasRecordPermission(): Boolean {
-            return ContextCompat.checkSelfPermission(
+    private class AndroidAudioBackend(
+        private val context: Context,
+    ) : AudioBackend {
+        override fun hasRecordPermission(): Boolean =
+            ContextCompat.checkSelfPermission(
                 context,
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission.RECORD_AUDIO,
             ) == PackageManager.PERMISSION_GRANTED
-        }
 
         @SuppressLint("MissingPermission")
         override fun openCapture(): CaptureDevice? {
-            val minBufBytes = AudioRecord.getMinBufferSize(
-                SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            ).coerceAtLeast(FRAME_SAMPLES * 2 * 4)
+            val minBufBytes =
+                AudioRecord
+                    .getMinBufferSize(
+                        SAMPLE_RATE,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                    ).coerceAtLeast(FRAME_SAMPLES * 2 * 4)
 
-            val record = try {
-                AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    SAMPLE_RATE,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    minBufBytes
-                )
-            } catch (_: Throwable) {
-                return null
-            }
+            val record =
+                try {
+                    AudioRecord(
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                        SAMPLE_RATE,
+                        AudioFormat.CHANNEL_IN_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        minBufBytes,
+                    )
+                } catch (_: Throwable) {
+                    return null
+                }
 
             if (record.state != AudioRecord.STATE_INITIALIZED) {
                 runCatching { record.release() }
                 return null
             }
 
-            val aec = if (AcousticEchoCanceler.isAvailable()) {
-                runCatching {
-                    AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
-                }.getOrNull()
-            } else null
+            val aec =
+                if (AcousticEchoCanceler.isAvailable()) {
+                    runCatching {
+                        AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true }
+                    }.getOrNull()
+                } else {
+                    null
+                }
 
-            val ns = if (NoiseSuppressor.isAvailable()) {
-                runCatching {
-                    NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true }
-                }.getOrNull()
-            } else null
+            val ns =
+                if (NoiseSuppressor.isAvailable()) {
+                    runCatching {
+                        NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true }
+                    }.getOrNull()
+                } else {
+                    null
+                }
 
             return object : CaptureDevice {
                 override fun startRecording() {
                     record.startRecording()
                 }
 
-                override fun readBlocking(buffer: ShortArray, offset: Int, count: Int): Int {
-                    return record.read(buffer, offset, count, AudioRecord.READ_BLOCKING)
-                }
+                override fun readBlocking(
+                    buffer: ShortArray,
+                    offset: Int,
+                    count: Int,
+                ): Int = record.read(buffer, offset, count, AudioRecord.READ_BLOCKING)
 
                 override fun stop() {
                     runCatching { record.stop() }
@@ -120,34 +148,42 @@ class VoiceAudioManager internal constructor(
         }
 
         override fun openPlayback(): PlaybackDevice? {
-            val minBufBytes = AudioTrack.getMinBufferSize(
-                SAMPLE_RATE,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            ).coerceAtLeast(FRAME_SAMPLES * 2 * 4)
+            val minBufBytes =
+                AudioTrack
+                    .getMinBufferSize(
+                        SAMPLE_RATE,
+                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                    ).coerceAtLeast(FRAME_SAMPLES * 2 * 4)
 
             // USAGE_MEDIA + CONTENT_TYPE_SPEECH mantiene A2DP estéreo en Bluetooth sin forzar HFP mono
-            val attrs = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
-            val format = AudioFormat.Builder()
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                .build()
-
-            val track = try {
-                AudioTrack.Builder()
-                    .setAudioAttributes(attrs)
-                    .setAudioFormat(format)
-                    .setBufferSizeInBytes(minBufBytes)
-                    .setTransferMode(AudioTrack.MODE_STREAM)
-                    .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+            val attrs =
+                AudioAttributes
+                    .Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
-            } catch (_: Throwable) {
-                return null
-            }
+            val format =
+                AudioFormat
+                    .Builder()
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .build()
+
+            val track =
+                try {
+                    AudioTrack
+                        .Builder()
+                        .setAudioAttributes(attrs)
+                        .setAudioFormat(format)
+                        .setBufferSizeInBytes(minBufBytes)
+                        .setTransferMode(AudioTrack.MODE_STREAM)
+                        .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+                        .build()
+                } catch (_: Throwable) {
+                    return null
+                }
 
             if (track.state != AudioTrack.STATE_INITIALIZED) {
                 runCatching { track.release() }
@@ -159,9 +195,11 @@ class VoiceAudioManager internal constructor(
                     track.play()
                 }
 
-                override fun writeBlocking(buffer: ShortArray, offset: Int, count: Int): Int {
-                    return track.write(buffer, offset, count, AudioTrack.WRITE_BLOCKING)
-                }
+                override fun writeBlocking(
+                    buffer: ShortArray,
+                    offset: Int,
+                    count: Int,
+                ): Int = track.write(buffer, offset, count, AudioTrack.WRITE_BLOCKING)
 
                 override fun stop() {
                     runCatching { track.pause() }
@@ -239,16 +277,18 @@ class VoiceAudioManager internal constructor(
     private fun ensureCaptureRunningLocked() {
         if (!running.get() || !captureWanted.get() || paused.get() || captureThread?.isAlive == true) return
         if (!hasRecordPermission()) return
-        captureThread = Thread({ runCaptureLoop() }, "balddog-voice-cap").apply {
-            start()
-        }
+        captureThread =
+            Thread({ runCaptureLoop() }, "balddog-voice-cap").apply {
+                start()
+            }
     }
 
     private fun ensurePlaybackRunningLocked() {
         if (!running.get() || !playbackWanted.get() || paused.get() || playbackThread?.isAlive == true) return
-        playbackThread = Thread({ runPlaybackLoop() }, "balddog-voice-play").apply {
-            start()
-        }
+        playbackThread =
+            Thread({ runPlaybackLoop() }, "balddog-voice-play").apply {
+                start()
+            }
     }
 
     private fun wakeCaptureLocked() {
@@ -271,17 +311,18 @@ class VoiceAudioManager internal constructor(
         try {
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             val opened = backend.openCapture() ?: return
-            val shouldRun = synchronized(captureLock) {
-                if (!running.get() || !captureWanted.get() || paused.get() || captureThread !== Thread.currentThread()) {
-                    canRestart = true
-                    false
-                } else {
-                    Thread.interrupted()
-                    device = opened
-                    activeCapture = opened
-                    true
+            val shouldRun =
+                synchronized(captureLock) {
+                    if (!running.get() || !captureWanted.get() || paused.get() || captureThread !== Thread.currentThread()) {
+                        canRestart = true
+                        false
+                    } else {
+                        Thread.interrupted()
+                        device = opened
+                        activeCapture = opened
+                        true
+                    }
                 }
-            }
             if (!shouldRun) {
                 runCatching { opened.release() }
                 return
@@ -334,17 +375,18 @@ class VoiceAudioManager internal constructor(
         try {
             runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
             val opened = backend.openPlayback() ?: return
-            val shouldRun = synchronized(playbackLock) {
-                if (!running.get() || !playbackWanted.get() || paused.get() || playbackThread !== Thread.currentThread()) {
-                    canRestart = true
-                    false
-                } else {
-                    Thread.interrupted()
-                    device = opened
-                    activePlayback = opened
-                    true
+            val shouldRun =
+                synchronized(playbackLock) {
+                    if (!running.get() || !playbackWanted.get() || paused.get() || playbackThread !== Thread.currentThread()) {
+                        canRestart = true
+                        false
+                    } else {
+                        Thread.interrupted()
+                        device = opened
+                        activePlayback = opened
+                        true
+                    }
                 }
-            }
             if (!shouldRun) {
                 runCatching { opened.release() }
                 return

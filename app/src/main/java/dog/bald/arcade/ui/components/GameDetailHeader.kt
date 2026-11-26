@@ -1,6 +1,9 @@
 package dog.bald.arcade.ui.components
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,19 +23,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import dog.bald.arcade.data.GameDto
 
 @Composable
@@ -40,12 +40,12 @@ internal fun RemoteImage(
     url: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
 ) {
     val context = LocalContext.current
     val bitmap by produceState<ImageBitmap?>(
         initialValue = url?.takeIf { it.isNotBlank() }?.let { RemoteImageCache.getFromMemory(it) },
-        url
+        url,
     ) {
         if (url.isNullOrBlank()) {
             value = null
@@ -59,7 +59,7 @@ internal fun RemoteImage(
             bitmap = img,
             contentDescription = contentDescription,
             contentScale = contentScale,
-            modifier = modifier
+            modifier = modifier,
         )
     } else {
         Box(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant))
@@ -71,7 +71,7 @@ fun GameDetailHeader(
     game: GameDto,
     onPlayClick: () -> Unit,
     onRankingClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (!game.urlImageMarquee.isNullOrBlank()) {
@@ -79,56 +79,59 @@ fun GameDetailHeader(
                 url = game.urlImageMarquee,
                 contentDescription = "${game.title} marquee",
                 contentScale = ContentScale.FillWidth,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(84.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(84.dp)
+                        .clip(RoundedCornerShape(12.dp)),
             )
             Spacer(modifier = Modifier.height(12.dp))
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             RemoteImage(
                 url = game.coverUrl ?: game.urlImageTitle ?: game.urlIcon,
                 contentDescription = game.title,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(width = 104.dp, height = 136.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                modifier =
+                    Modifier
+                        .size(width = 104.dp, height = 136.dp)
+                        .clip(RoundedCornerShape(12.dp)),
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = game.title,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
-                val subtitle = listOfNotNull(
-                    game.manufacturer?.takeIf { it.isNotBlank() },
-                    game.year?.takeIf { it.isNotBlank() }
-                ).joinToString(" • ")
+                val subtitle =
+                    listOfNotNull(
+                        game.manufacturer?.takeIf { it.isNotBlank() },
+                        game.year?.takeIf { it.isNotBlank() },
+                    ).joinToString(" • ")
                 if (subtitle.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (!game.serie.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
+                        color = MaterialTheme.colorScheme.secondaryContainer,
                     ) {
                         Text(
                             text = game.serie,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                     }
                 }
@@ -139,11 +142,11 @@ fun GameDetailHeader(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Button(
                 onClick = onPlayClick,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
@@ -151,7 +154,7 @@ fun GameDetailHeader(
             }
             OutlinedButton(
                 onClick = onRankingClick,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Default.EmojiEvents, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))

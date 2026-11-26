@@ -1,7 +1,5 @@
 package dog.bald.arcade.ui.screens
 
-import dog.bald.arcade.data.toUserMessage
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -20,13 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -38,19 +34,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dog.bald.arcade.R
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.toUserMessage
 import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.MutedGray
@@ -59,14 +57,13 @@ import dog.bald.arcade.ui.theme.PureBlack
 import dog.bald.arcade.ui.theme.PureWhite
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
-import dog.bald.arcade.ui.theme.SteelBorder
 import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
     repo: ArcadeRepository,
     onAuthenticated: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     var isRegister by remember { mutableStateOf(false) }
@@ -82,41 +79,44 @@ fun AuthScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && awaitingGoogleOAuth) {
-                awaitingGoogleOAuth = false
-                loading = false
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME && awaitingGoogleOAuth) {
+                    awaitingGoogleOAuth = false
+                    loading = false
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ObsidianBlack)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
-            .padding(24.dp),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(ObsidianBlack)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(24.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Image(
             painter = painterResource(id = R.drawable.logo_text),
             contentDescription = "Bald Dog",
             contentScale = ContentScale.Fit,
-            modifier = Modifier
-                .fillMaxWidth(0.75f)
-                .widthIn(max = 280.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth(0.75f)
+                    .widthIn(max = 280.dp),
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "El patio de recreo de los perros calvos.",
             color = MutedGray,
             fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -125,32 +125,34 @@ fun AuthScreen(
             colors = CardDefaults.cardColors(containerColor = CarbonSurface),
             border = BorderStroke(1.dp, CharcoalBorder),
             shape = RectangleShape,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = when {
-                        isRecovery -> "RECUPERAR CONTRASEÑA"
-                        isRegister -> "CREAR CUENTA"
-                        else -> "INICIAR SESIÓN"
-                    },
+                    text =
+                        when {
+                            isRecovery -> "RECUPERAR CONTRASEÑA"
+                            isRegister -> "CREAR CUENTA"
+                            else -> "INICIAR SESIÓN"
+                        },
                     color = PureWhite,
                     fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
                 )
 
-                val fieldColors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PureWhite,
-                    unfocusedBorderColor = CharcoalBorder,
-                    focusedTextColor = PureWhite,
-                    unfocusedTextColor = PureWhite,
-                    focusedLabelColor = PureWhite,
-                    unfocusedLabelColor = MutedGray
-                )
+                val fieldColors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PureWhite,
+                        unfocusedBorderColor = CharcoalBorder,
+                        focusedTextColor = PureWhite,
+                        unfocusedTextColor = PureWhite,
+                        focusedLabelColor = PureWhite,
+                        unfocusedLabelColor = MutedGray,
+                    )
 
                 if (isRegister) {
                     OutlinedTextField(
@@ -159,7 +161,7 @@ fun AuthScreen(
                         label = { Text("Jugador (Username)") },
                         singleLine = true,
                         colors = fieldColors,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 
@@ -169,7 +171,7 @@ fun AuthScreen(
                     label = { Text("Email") },
                     singleLine = true,
                     colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 if (!isRecovery) {
@@ -180,7 +182,7 @@ fun AuthScreen(
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         colors = fieldColors,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
 
@@ -188,7 +190,7 @@ fun AuthScreen(
                     Text(
                         text = infoMsg ?: "",
                         color = PureWhite,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
 
@@ -196,7 +198,7 @@ fun AuthScreen(
                     Text(
                         text = errorMsg ?: "",
                         color = SilverGray,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
 
@@ -207,7 +209,7 @@ fun AuthScreen(
                     Text(
                         text = "Username: 3 a 20 caracteres (letras, números y _)",
                         color = SilverGray,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
 
@@ -243,11 +245,12 @@ fun AuthScreen(
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PureWhite,
-                        contentColor = PureBlack
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = PureWhite,
+                            contentColor = PureBlack,
+                        ),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (loading) {
                         CircularProgressIndicator(color = PureBlack, strokeWidth = 2.dp)
@@ -259,7 +262,7 @@ fun AuthScreen(
                                 else -> "ENTRAR"
                             },
                             fontFamily = SpaceGroteskFamily,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
                         )
                     }
                 }
@@ -280,7 +283,7 @@ fun AuthScreen(
                                 }
                             }
                         },
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) {
                         Text("Reenviar correo de verificación", color = PureWhite, fontSize = 12.sp)
                     }
@@ -290,10 +293,11 @@ fun AuthScreen(
                     Button(
                         enabled = !loading,
                         shape = RectangleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PureWhite,
-                            contentColor = androidx.compose.ui.graphics.Color.Black
-                        ),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = PureWhite,
+                                contentColor = androidx.compose.ui.graphics.Color.Black,
+                            ),
                         onClick = {
                             scope.launch {
                                 loading = true
@@ -310,19 +314,19 @@ fun AuthScreen(
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
                         Image(
                             painter = painterResource(R.drawable.ic_google),
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
                             text = "CONTINUAR CON GOOGLE",
                             color = androidx.compose.ui.graphics.Color.Black,
                             fontFamily = SpaceGroteskFamily,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
                         )
                     }
                 }
@@ -330,7 +334,7 @@ fun AuthScreen(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (!isRegister && !isRecovery) {
                         TextButton(
@@ -340,7 +344,7 @@ fun AuthScreen(
                                 infoMsg = null
                             },
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.heightIn(min = 32.dp)
+                            modifier = Modifier.heightIn(min = 32.dp),
                         ) {
                             Text("¿Olvidaste tu contraseña?", color = MutedGray, fontSize = 12.sp)
                         }
@@ -357,16 +361,17 @@ fun AuthScreen(
                             infoMsg = null
                         },
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.heightIn(min = 32.dp)
+                        modifier = Modifier.heightIn(min = 32.dp),
                     ) {
                         Text(
-                            text = when {
-                                isRecovery -> "Volver al login"
-                                isRegister -> "¿Ya tienes cuenta? Inicia sesión"
-                                else -> "¿Nuevo aquí? Crea una cuenta"
-                            },
+                            text =
+                                when {
+                                    isRecovery -> "Volver al login"
+                                    isRegister -> "¿Ya tienes cuenta? Inicia sesión"
+                                    else -> "¿Nuevo aquí? Crea una cuenta"
+                                },
                             color = MutedGray,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
                         )
                     }
                 }

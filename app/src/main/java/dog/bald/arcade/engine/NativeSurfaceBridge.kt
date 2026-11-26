@@ -7,7 +7,16 @@ object NativeSurfaceBridge {
         System.loadLibrary("balddog_android")
     }
 
-    external fun attachSurface(surface: Surface, width: Int, height: Int)
-    external fun resizeSurface(width: Int, height: Int)
+    external fun attachSurface(
+        surface: Surface,
+        width: Int,
+        height: Int,
+    )
+
+    external fun resizeSurface(
+        width: Int,
+        height: Int,
+    )
+
     external fun detachSurface()
 }

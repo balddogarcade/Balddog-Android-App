@@ -6,7 +6,7 @@ package dog.bald.arcade.input
 object RetroJoypad {
     const val B = 1 shl 0
     const val Y = 1 shl 1
-    const val COIN = 1 shl 2    // RETRO_DEVICE_ID_JOYPAD_SELECT
+    const val COIN = 1 shl 2 // RETRO_DEVICE_ID_JOYPAD_SELECT
     const val START = 1 shl 3
     const val UP = 1 shl 4
     const val DOWN = 1 shl 5

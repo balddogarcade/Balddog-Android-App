@@ -26,22 +26,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dog.bald.arcade.data.GameDto
 
-data class GalleryImageItem(val type: String, val label: String, val url: String)
+data class GalleryImageItem(
+    val type: String,
+    val label: String,
+    val url: String,
+)
 
 @Composable
 fun GameDetailGallery(
     game: GameDto,
     onImageOpened: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val images = remember(game) {
-        listOfNotNull(
-            game.urlImageIngame?.let { GalleryImageItem("ingame", "In-Game", it) },
-            game.urlImageTitle?.let { GalleryImageItem("title", "Título", it) },
-            game.urlImageCabinet?.let { GalleryImageItem("cabinet", "Gabinete", it) },
-            game.urlImageFlyer?.let { GalleryImageItem("flyer", "Flyer", it) }
-        )
-    }
+    val images =
+        remember(game) {
+            listOfNotNull(
+                game.urlImageIngame?.let { GalleryImageItem("ingame", "In-Game", it) },
+                game.urlImageTitle?.let { GalleryImageItem("title", "Título", it) },
+                game.urlImageCabinet?.let { GalleryImageItem("cabinet", "Gabinete", it) },
+                game.urlImageFlyer?.let { GalleryImageItem("flyer", "Flyer", it) },
+            )
+        }
 
     if (images.isEmpty()) return
 
@@ -51,7 +56,7 @@ fun GameDetailGallery(
         Text(
             text = "Galería",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
         )
         Spacer(modifier = Modifier.height(8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -60,13 +65,14 @@ fun GameDetailGallery(
                     url = item.url,
                     contentDescription = "${game.title} ${item.label}",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(width = 160.dp, height = 112.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            selectedImage = item
-                            onImageOpened(item.type)
-                        }
+                    modifier =
+                        Modifier
+                            .size(width = 160.dp, height = 112.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                selectedImage = item
+                                onImageOpened(item.type)
+                            },
                 )
             }
         }
@@ -86,12 +92,13 @@ fun GameDetailGallery(
                     url = item.url,
                     contentDescription = item.label,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(320.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(320.dp)
+                            .clip(RoundedCornerShape(8.dp)),
                 )
-            }
+            },
         )
     }
 }

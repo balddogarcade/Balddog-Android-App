@@ -1,7 +1,5 @@
 package dog.bald.arcade.ui.screens
 
-import dog.bald.arcade.data.toUserMessage
-
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -92,6 +90,7 @@ import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.RoomMessageDto
 import dog.bald.arcade.data.RoomSlotInfo
+import dog.bald.arcade.data.toUserMessage
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.net.LobbyLatencyMonitor
 import dog.bald.arcade.net.LobbyPeerTarget
@@ -103,13 +102,13 @@ import dog.bald.arcade.ui.theme.CarbonSurface
 import dog.bald.arcade.ui.theme.CharcoalBorder
 import dog.bald.arcade.ui.theme.DangerRed
 import dog.bald.arcade.ui.theme.DangerRedBorder
-import dog.bald.arcade.ui.theme.ReadyGreenAccent
 import dog.bald.arcade.ui.theme.GraphiteSurface
 import dog.bald.arcade.ui.theme.JetBrainsMonoFamily
 import dog.bald.arcade.ui.theme.MutedGray
 import dog.bald.arcade.ui.theme.ObsidianBlack
 import dog.bald.arcade.ui.theme.PureBlack
 import dog.bald.arcade.ui.theme.PureWhite
+import dog.bald.arcade.ui.theme.ReadyGreenAccent
 import dog.bald.arcade.ui.theme.SilverGray
 import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
@@ -137,7 +136,7 @@ fun RoomLobbyScreen(
     hasActiveOverlay: Boolean = false,
     onOpenUserProfile: (String) -> Unit = {},
     onLeave: (String?) -> Unit,
-    onStartMatch: suspend (room: RoomDto, mySlot: Int) -> Result<Unit>
+    onStartMatch: suspend (room: RoomDto, mySlot: Int) -> Result<Unit>,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -156,48 +155,60 @@ fun RoomLobbyScreen(
     var leftRoom by remember { mutableStateOf(false) }
     var initialJoinDone by remember(initialRoom.id) {
         mutableStateOf(
-            myUid.isBlank() || initialRoom.slotsJson.values.any { it.userId == myUid }
+            myUid.isBlank() || initialRoom.slotsJson.values.any { it.userId == myUid },
         )
     }
     var showHostExitConfirm by remember { mutableStateOf(false) }
     var copiedRoomCode by remember { mutableStateOf(false) }
 
     val isOnlineRoom = room.mode != "lan"
-    val latencyMonitor = remember(room.id, myUdpPort, myUid, isOnlineRoom) {
-        LobbyLatencyMonitor(
-            localPort = myUdpPort,
-            myUserId = myUid,
-            measureInternetPing = isOnlineRoom
-        )
-    }
+    val latencyMonitor =
+        remember(room.id, myUdpPort, myUid, isOnlineRoom) {
+            LobbyLatencyMonitor(
+                localPort = myUdpPort,
+                myUserId = myUid,
+                measureInternetPing = isOnlineRoom,
+            )
+        }
     val latenciesMs by latencyMonitor.latenciesMs.collectAsState()
 
     val isHost = room.hostId == myUid
-    val mySlot = room.slotsJson.entries.firstOrNull { it.value.userId == myUid }?.key?.toIntOrNull()
+    val mySlot =
+        room.slotsJson.entries
+            .firstOrNull { it.value.userId == myUid }
+            ?.key
+            ?.toIntOrNull()
 
     val discoveredEndpoint by latencyMonitor.publicEndpoint.collectAsState()
     LaunchedEffect(discoveredEndpoint, mySlot) {
         val rawEp = discoveredEndpoint ?: return@LaunchedEffect
         val slot = mySlot ?: return@LaunchedEffect
         val localIp = lanNsd.getLocalIpv4Address()
-        val ep = dog.bald.arcade.net.NetplayEndpointResolver.formatCandidateEndpoint(rawEp, localIp, myUdpPort)
+        val ep =
+            dog.bald.arcade.net.NetplayEndpointResolver
+                .formatCandidateEndpoint(rawEp, localIp, myUdpPort)
         val voicePort = myVoiceEndpoint.substringBefore('|').substringAfterLast(':').toIntOrNull() ?: (myUdpPort + 1000)
-        val voiceEp = if (myVoiceEndpoint.isNotBlank()) {
-            val rawVoice = myVoiceEndpoint.substringBefore('|').trim()
-            dog.bald.arcade.net.NetplayEndpointResolver.formatCandidateEndpoint(rawVoice, localIp, voicePort)
-        } else null
+        val voiceEp =
+            if (myVoiceEndpoint.isNotBlank()) {
+                val rawVoice = myVoiceEndpoint.substringBefore('|').trim()
+                dog.bald.arcade.net.NetplayEndpointResolver
+                    .formatCandidateEndpoint(rawVoice, localIp, voicePort)
+            } else {
+                null
+            }
         val currentSlotEp = room.slotsJson[slot.toString()]?.endpoint
         if (room.mode != "lan" && ep.isNotBlank() && currentSlotEp != ep) {
             val isCurrentPrivate = currentSlotEp == null || isPrivateIp(currentSlotEp)
             if (isCurrentPrivate || currentSlotEp != ep) {
                 runCatching {
-                    val updated = repo.updateRoomSlot(
-                        roomId = room.id,
-                        action = "claim",
-                        slotIndex = slot,
-                        endpoint = ep,
-                        voiceEndpoint = voiceEp
-                    )
+                    val updated =
+                        repo.updateRoomSlot(
+                            roomId = room.id,
+                            action = "claim",
+                            slotIndex = slot,
+                            endpoint = ep,
+                            voiceEndpoint = voiceEp,
+                        )
                     room = updated
                 }
             }
@@ -213,7 +224,7 @@ fun RoomLobbyScreen(
 
     LaunchedEffect(room.slotsJson) {
         latencyMonitor.updatePeers(
-            room.slotsJson.values.map { LobbyPeerTarget(userId = it.userId, endpoint = it.endpoint) }
+            room.slotsJson.values.map { LobbyPeerTarget(userId = it.userId, endpoint = it.endpoint) },
         )
     }
 
@@ -237,7 +248,7 @@ fun RoomLobbyScreen(
                     roomId = room.id,
                     action = "join",
                     endpoint = myEndpoint,
-                    voiceEndpoint = myVoiceEndpoint.ifBlank { null }
+                    voiceEndpoint = myVoiceEndpoint.ifBlank { null },
                 )
             }.onSuccess { joined ->
                 room = joined
@@ -253,7 +264,10 @@ fun RoomLobbyScreen(
         }
     }
 
-    fun triggerMatchLaunch(targetRoom: RoomDto, slot: Int) {
+    fun triggerMatchLaunch(
+        targetRoom: RoomDto,
+        slot: Int,
+    ) {
         if (leftRoom || matchLaunched || preparingMatch) return
         if (targetRoom.mode != "lan") {
             val hasPrivateEp = targetRoom.slotsJson.values.any { isPrivateIp(it.endpoint) }
@@ -267,25 +281,26 @@ fun RoomLobbyScreen(
         errorMsg = null
         failedPlayingLaunch = false
         latencyMonitor.close()
-        launchJob = scope.launch {
-            val result = onStartMatch(targetRoom, slot)
-            if (result.isSuccess) {
-                preparingMatch = false
-            } else {
-                val err = result.exceptionOrNull()
-                if (err !is CancellationException) {
-                    matchLaunched = false
+        launchJob =
+            scope.launch {
+                val result = onStartMatch(targetRoom, slot)
+                if (result.isSuccess) {
                     preparingMatch = false
-                    startingMatch = false
-                    if (targetRoom.status == "playing") {
-                        failedPlayingLaunch = true
+                } else {
+                    val err = result.exceptionOrNull()
+                    if (err !is CancellationException) {
+                        matchLaunched = false
+                        preparingMatch = false
+                        startingMatch = false
+                        if (targetRoom.status == "playing") {
+                            failedPlayingLaunch = true
+                        }
+                        errorMsg = err?.toUserMessage("Error preparando partida")
+                            ?: "Error preparando partida"
+                        latencyMonitor.start(scope)
                     }
-                    errorMsg = err?.toUserMessage("Error preparando partida")
-                        ?: "Error preparando partida"
-                    latencyMonitor.start(scope)
                 }
             }
-        }
     }
 
     fun leaveCleanly(reason: String? = null) {
@@ -394,10 +409,11 @@ fun RoomLobbyScreen(
                     failedPlayingLaunch = false
                 }
                 room = updated
-                val updatedSlot = updated.slotsJson.entries
-                    .firstOrNull { it.value.userId == myUid }
-                    ?.key
-                    ?.toIntOrNull()
+                val updatedSlot =
+                    updated.slotsJson.entries
+                        .firstOrNull { it.value.userId == myUid }
+                        ?.key
+                        ?.toIntOrNull()
                 if (updated.status == "playing" && updatedSlot != null && !matchLaunched && !preparingMatch && !failedPlayingLaunch) {
                     triggerMatchLaunch(updated, updatedSlot)
                 }
@@ -412,13 +428,14 @@ fun RoomLobbyScreen(
         scope.launch {
             try {
                 errorMsg = null
-                room = repo.updateRoomSlot(
-                    roomId = room.id,
-                    action = "claim",
-                    slotIndex = slotIdx,
-                    endpoint = myEndpoint,
-                    voiceEndpoint = myVoiceEndpoint.ifBlank { null }
-                )
+                room =
+                    repo.updateRoomSlot(
+                        roomId = room.id,
+                        action = "claim",
+                        slotIndex = slotIdx,
+                        endpoint = myEndpoint,
+                        voiceEndpoint = myVoiceEndpoint.ifBlank { null },
+                    )
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 errorMsg = t.toUserMessage("Error actualizando sala")
@@ -433,11 +450,12 @@ fun RoomLobbyScreen(
         scope.launch {
             try {
                 errorMsg = null
-                room = repo.updateRoomSlot(
-                    roomId = room.id,
-                    action = "ready",
-                    ready = !myCurrentReady
-                )
+                room =
+                    repo.updateRoomSlot(
+                        roomId = room.id,
+                        action = "ready",
+                        ready = !myCurrentReady,
+                    )
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 errorMsg = t.toUserMessage("Error cambiando estado")
@@ -463,14 +481,14 @@ fun RoomLobbyScreen(
                     color = PureWhite,
                     fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
                 )
             },
             text = {
                 Text(
                     text = "Eres el anfitrión. Si sales ahora, la sala se cerrará y los demás jugadores serán desconectados.",
                     color = SilverGray,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
                 )
             },
             confirmButton = {
@@ -480,10 +498,11 @@ fun RoomLobbyScreen(
                         leaveCleanly()
                     },
                     shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DangerRed,
-                        contentColor = PureWhite
-                    )
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = DangerRed,
+                            contentColor = PureWhite,
+                        ),
                 ) {
                     Text("CERRAR SALA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
@@ -491,21 +510,22 @@ fun RoomLobbyScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showHostExitConfirm = false },
-                    shape = RectangleShape
+                    shape = RectangleShape,
                 ) {
                     Text("CANCELAR", color = SilverGray, fontSize = 12.sp)
                 }
-            }
+            },
         )
     }
 
-    val quickActions = remember {
-        listOf(
-            "¡Listo!" to Icons.Default.Check,
-            "¡GG!" to Icons.Default.EmojiEvents,
-            "¡Espera!" to Icons.Default.HourglassEmpty
-        )
-    }
+    val quickActions =
+        remember {
+            listOf(
+                "¡Listo!" to Icons.Default.Check,
+                "¡GG!" to Icons.Default.EmojiEvents,
+                "¡Espera!" to Icons.Default.HourglassEmpty,
+            )
+        }
     val chatListState = rememberLazyListState()
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -523,8 +543,7 @@ fun RoomLobbyScreen(
                     if (messages.none { it.id == sent.id }) {
                         messages = messages + sent
                     }
-                }
-                .onFailure { err ->
+                }.onFailure { err ->
                     if (err is CancellationException) throw err
                     errorMsg = err.toUserMessage("No se pudo enviar el mensaje")
                 }
@@ -532,24 +551,26 @@ fun RoomLobbyScreen(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(ObsidianBlack)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(ObsidianBlack)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Header Card: Poster 3:4 grande + Metadatos de Sala + Compartir ID + Botón Salir Rojo
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CarbonSurface)
-                .border(1.dp, CharcoalBorder)
-                .padding(10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(CarbonSurface)
+                    .border(1.dp, CharcoalBorder)
+                    .padding(10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.Top,
         ) {
             GameCoverImage(
                 slug = game?.slug,
@@ -557,65 +578,68 @@ fun RoomLobbyScreen(
                 contentScale = ContentScale.Fit,
                 shape = RectangleShape,
                 backgroundColor = ObsidianBlack,
-                modifier = Modifier
-                    .width(72.dp)
-                    .height(96.dp)
+                modifier =
+                    Modifier
+                        .width(72.dp)
+                        .height(96.dp),
             )
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier
-                                .background(GraphiteSurface)
-                                .border(1.dp, SteelBorder)
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                            modifier =
+                                Modifier
+                                    .background(GraphiteSurface)
+                                    .border(1.dp, SteelBorder)
+                                    .padding(horizontal = 6.dp, vertical = 3.dp),
                         ) {
                             Icon(
                                 imageVector = if (isOnlineRoom) Icons.Default.Public else Icons.Default.Wifi,
                                 contentDescription = null,
                                 tint = PureWhite,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(12.dp),
                             )
                             Text(
                                 text = room.mode.uppercase(),
                                 color = PureWhite,
                                 fontFamily = JetBrainsMonoFamily,
                                 fontWeight = FontWeight.Medium,
-                                fontSize = 10.sp
+                                fontSize = 10.sp,
                             )
                         }
                         if (room.isPrivate) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(3.dp),
-                                modifier = Modifier
-                                    .background(GraphiteSurface)
-                                    .border(1.dp, CharcoalBorder)
-                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                                modifier =
+                                    Modifier
+                                        .background(GraphiteSurface)
+                                        .border(1.dp, CharcoalBorder)
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = "Sala privada",
                                     tint = SilverGray,
-                                    modifier = Modifier.size(11.dp)
+                                    modifier = Modifier.size(11.dp),
                                 )
                                 Text(
                                     text = "PRIVADA",
                                     color = SilverGray,
                                     fontFamily = JetBrainsMonoFamily,
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
                                 )
                             }
                         }
@@ -625,24 +649,25 @@ fun RoomLobbyScreen(
                         onClick = requestExit,
                         shape = RectangleShape,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = DangerRed,
-                            contentColor = PureWhite
-                        ),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = DangerRed,
+                                contentColor = PureWhite,
+                            ),
                         border = BorderStroke(1.dp, DangerRedBorder),
-                        modifier = Modifier.height(30.dp)
+                        modifier = Modifier.height(30.dp),
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                             contentDescription = "Salir de la sala",
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "SALIR",
                             fontFamily = SpaceGroteskFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
                         )
                     }
                 }
@@ -654,17 +679,17 @@ fun RoomLobbyScreen(
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     ArcadeBadge(
                         text = "#${room.code}",
-                        style = ArcadeBadgeStyle.Solid
+                        style = ArcadeBadgeStyle.Solid,
                     )
                     OutlinedButton(
                         onClick = {
@@ -675,50 +700,51 @@ fun RoomLobbyScreen(
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, if (copiedRoomCode) PureWhite else CharcoalBorder),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.height(28.dp),
                     ) {
                         Icon(
                             imageVector = if (copiedRoomCode) Icons.Default.Check else Icons.Default.ContentCopy,
                             contentDescription = "Copiar ID de sala",
                             tint = if (copiedRoomCode) PureWhite else SilverGray,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(13.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (copiedRoomCode) "COPIADO" else "COPIAR",
                             color = if (copiedRoomCode) PureWhite else SilverGray,
                             fontFamily = JetBrainsMonoFamily,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
                         )
                     }
                     OutlinedButton(
                         onClick = {
                             val gameTitle = game?.title ?: "Arcade Match"
                             val shareBody = "¡Únete a mi sala en bald.dog ARCADE!\nJuego: $gameTitle\nCódigo de sala: #${room.code} (${room.mode.uppercase()})"
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "Sala #${room.code} · $gameTitle")
-                                putExtra(Intent.EXTRA_TEXT, shareBody)
-                            }
+                            val sendIntent =
+                                Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Sala #${room.code} · $gameTitle")
+                                    putExtra(Intent.EXTRA_TEXT, shareBody)
+                                }
                             context.startActivity(Intent.createChooser(sendIntent, "Compartir ID de sala"))
                         },
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.height(28.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = "Compartir ID de sala",
                             tint = PureWhite,
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(13.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "COMPARTIR",
                             color = PureWhite,
                             fontFamily = JetBrainsMonoFamily,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
                         )
                     }
                 }
@@ -727,44 +753,46 @@ fun RoomLobbyScreen(
 
         if (preparingMatch) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(GraphiteSurface)
-                    .border(1.dp, SteelBorder)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(GraphiteSurface)
+                        .border(1.dp, SteelBorder)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
                     imageVector = Icons.Default.HourglassTop,
                     contentDescription = null,
                     tint = PureWhite,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(16.dp),
                 )
                 Text(
                     text = "Preparando ROM y archivos de la partida...",
                     color = PureWhite,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
 
         if (errorMsg != null) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(CarbonSurface)
-                    .border(1.dp, DangerRedBorder)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(CarbonSurface)
+                        .border(1.dp, DangerRedBorder)
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
                     text = errorMsg ?: "",
                     color = PureWhite,
                     fontSize = 12.sp,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 if (room.status == "playing" && mySlot != null && !preparingMatch && !leftRoom) {
                     OutlinedButton(
@@ -775,14 +803,14 @@ fun RoomLobbyScreen(
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, PureWhite),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                        modifier = Modifier.height(30.dp)
+                        modifier = Modifier.height(30.dp),
                     ) {
                         Text(
                             text = "REINTENTAR",
                             color = PureWhite,
                             fontFamily = JetBrainsMonoFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
                         )
                     }
                 }
@@ -793,24 +821,24 @@ fun RoomLobbyScreen(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Icon(
                 imageVector = Icons.Default.Groups,
                 contentDescription = null,
                 tint = SilverGray,
-                modifier = Modifier.size(15.dp)
+                modifier = Modifier.size(15.dp),
             )
             Text(
                 text = "JUGADORES (${room.slotsJson.size}/${room.maxPlayers}) · TOCA UN SLOT LIBRE",
                 color = MutedGray,
                 fontFamily = JetBrainsMonoFamily,
-                fontSize = 11.sp
+                fontSize = 11.sp,
             )
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             for (slot in 0 until room.maxPlayers) {
                 val occupant = room.slotsJson[slot.toString()]
@@ -827,7 +855,7 @@ fun RoomLobbyScreen(
                     myAvatarSeed = myAvatarSeed,
                     onClaim = { claimSlot(slot) },
                     onInspectOccupant = occupant?.let { occ -> { onOpenUserProfile(occ.userId) } },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -843,8 +871,7 @@ fun RoomLobbyScreen(
                                     if (messages.none { it.id == sent.id }) {
                                         messages = messages + sent
                                     }
-                                }
-                                .onFailure { err ->
+                                }.onFailure { err ->
                                     if (err is CancellationException) throw err
                                     errorMsg = err.toUserMessage("No se pudo enviar el mensaje")
                                 }
@@ -854,13 +881,13 @@ fun RoomLobbyScreen(
                     colors = ButtonDefaults.outlinedButtonColors(containerColor = GraphiteSurface),
                     border = BorderStroke(1.dp, CharcoalBorder),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    modifier = Modifier.height(34.dp)
+                    modifier = Modifier.height(34.dp),
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = SilverGray,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(14.dp),
                     )
                     Spacer(modifier = Modifier.width(5.dp))
                     Text(label, color = PureWhite, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -869,48 +896,50 @@ fun RoomLobbyScreen(
         }
 
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(CarbonSurface, RectangleShape)
-                .border(1.dp, CharcoalBorder)
-                .padding(10.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(CarbonSurface, RectangleShape)
+                    .border(1.dp, CharcoalBorder)
+                    .padding(10.dp),
         ) {
             if (messages.isEmpty()) {
                 Column(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Forum,
                         contentDescription = null,
                         tint = MutedGray,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(22.dp),
                     )
                     Text(
                         text = "Sin mensajes aún. Saluda o usa un mensaje rápido.",
                         color = MutedGray,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
             } else {
                 LazyColumn(
                     state = chatListState,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(messages, key = { it.id }) { msg ->
                         Text(
-                            text = buildAnnotatedString {
-                                withStyle(SpanStyle(color = PureWhite, fontWeight = FontWeight.SemiBold)) {
-                                    append("${msg.username}: ")
-                                }
-                                withStyle(SpanStyle(color = SilverGray)) {
-                                    append(msg.message)
-                                }
-                            },
+                            text =
+                                buildAnnotatedString {
+                                    withStyle(SpanStyle(color = PureWhite, fontWeight = FontWeight.SemiBold)) {
+                                        append("${msg.username}: ")
+                                    }
+                                    withStyle(SpanStyle(color = SilverGray)) {
+                                        append(msg.message)
+                                    }
+                                },
                             fontSize = 12.sp,
-                            modifier = Modifier.clickable { onOpenUserProfile(msg.userId) }
+                            modifier = Modifier.clickable { onOpenUserProfile(msg.userId) },
                         )
                     }
                 }
@@ -920,7 +949,7 @@ fun RoomLobbyScreen(
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(
                 value = chatInput,
@@ -930,34 +959,36 @@ fun RoomLobbyScreen(
                 shape = RectangleShape,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { sendChatMessage() }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = CarbonSurface,
-                    unfocusedContainerColor = CarbonSurface,
-                    focusedBorderColor = PureWhite,
-                    unfocusedBorderColor = CharcoalBorder,
-                    focusedTextColor = PureWhite,
-                    unfocusedTextColor = PureWhite,
-                    cursorColor = PureWhite
-                ),
-                modifier = Modifier.weight(1f)
+                colors =
+                    OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CarbonSurface,
+                        unfocusedContainerColor = CarbonSurface,
+                        focusedBorderColor = PureWhite,
+                        unfocusedBorderColor = CharcoalBorder,
+                        focusedTextColor = PureWhite,
+                        unfocusedTextColor = PureWhite,
+                        cursorColor = PureWhite,
+                    ),
+                modifier = Modifier.weight(1f),
             )
             Button(
                 enabled = chatInput.isNotBlank(),
                 onClick = { sendChatMessage() },
                 shape = RectangleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = PureWhite,
-                    contentColor = PureBlack,
-                    disabledContainerColor = GraphiteSurface,
-                    disabledContentColor = MutedGray
-                ),
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = PureWhite,
+                        contentColor = PureBlack,
+                        disabledContainerColor = GraphiteSurface,
+                        disabledContentColor = MutedGray,
+                    ),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                modifier = Modifier.height(50.dp)
+                modifier = Modifier.height(50.dp),
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Enviar mensaje",
-                    modifier = Modifier.size(15.dp)
+                    modifier = Modifier.size(15.dp),
                 )
                 Spacer(modifier = Modifier.width(5.dp))
                 Text("ENVIAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -974,27 +1005,29 @@ fun RoomLobbyScreen(
                             triggerMatchLaunch(room, mySlot)
                         },
                         shape = RectangleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PureWhite,
-                            contentColor = PureBlack,
-                            disabledContainerColor = GraphiteSurface,
-                            disabledContentColor = MutedGray
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = PureWhite,
+                                contentColor = PureBlack,
+                                disabledContainerColor = GraphiteSurface,
+                                disabledContentColor = MutedGray,
+                            ),
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(48.dp),
                     ) {
                         Icon(
                             imageVector = if (preparingMatch) Icons.Default.HourglassTop else Icons.Default.PlayArrow,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (preparingMatch) "PREPARANDO ROM..." else "REINTENTAR PARTIDA",
                             fontFamily = SpaceGroteskFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
                         )
                     }
                 } else {
@@ -1003,27 +1036,29 @@ fun RoomLobbyScreen(
                         enabled = !preparingMatch && !matchLaunched && !leftRoom,
                         onClick = { toggleReady() },
                         shape = RectangleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (amReady) GraphiteSurface else PureWhite,
-                            contentColor = if (amReady) PureWhite else PureBlack
-                        ),
+                        colors =
+                            ButtonDefaults.buttonColors(
+                                containerColor = if (amReady) GraphiteSurface else PureWhite,
+                                contentColor = if (amReady) PureWhite else PureBlack,
+                            ),
                         border = BorderStroke(1.dp, if (amReady) ReadyGreenAccent else PureWhite),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .height(48.dp),
                     ) {
                         Icon(
                             imageVector = if (amReady) Icons.Default.CheckCircle else Icons.Default.Check,
                             contentDescription = null,
                             tint = if (amReady) ReadyGreenAccent else PureBlack,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = if (amReady) "LISTO · TOCA PARA ESPERAR" else "MARCAR LISTO",
                             fontFamily = SpaceGroteskFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
                         )
                     }
                 }
@@ -1031,20 +1066,25 @@ fun RoomLobbyScreen(
             if (isHost && mySlot != null) {
                 val seated = room.slotsJson.values
                 val canStart = seated.size >= 2 && seated.all { it.ready }
-                val waitingLabel = if (seated.size < 2) {
-                    "ESPERANDO JUGADORES (${seated.size}/2+)"
-                } else {
-                    "ESPERANDO QUE TODOS ESTÉN LISTOS"
-                }
-                val buttonLabel = when {
-                    preparingMatch -> "PREPARANDO ROM..."
-                    startingMatch -> "INICIANDO..."
-                    room.status == "playing" && failedPlayingLaunch -> "REINTENTAR PARTIDA"
-                    canStart -> "INICIAR PARTIDA"
-                    else -> waitingLabel
-                }
-                val buttonEnabled = (canStart || (room.status == "playing" && failedPlayingLaunch)) &&
-                    !startingMatch && !preparingMatch && !matchLaunched
+                val waitingLabel =
+                    if (seated.size < 2) {
+                        "ESPERANDO JUGADORES (${seated.size}/2+)"
+                    } else {
+                        "ESPERANDO QUE TODOS ESTÉN LISTOS"
+                    }
+                val buttonLabel =
+                    when {
+                        preparingMatch -> "PREPARANDO ROM..."
+                        startingMatch -> "INICIANDO..."
+                        room.status == "playing" && failedPlayingLaunch -> "REINTENTAR PARTIDA"
+                        canStart -> "INICIAR PARTIDA"
+                        else -> waitingLabel
+                    }
+                val buttonEnabled =
+                    (canStart || (room.status == "playing" && failedPlayingLaunch)) &&
+                        !startingMatch &&
+                        !preparingMatch &&
+                        !matchLaunched
                 Button(
                     enabled = buttonEnabled,
                     onClick = {
@@ -1062,11 +1102,12 @@ fun RoomLobbyScreen(
                             }.onSuccess { startedRoom ->
                                 room = startedRoom
                                 startingMatch = false
-                                val resolvedSlot = startedRoom.slotsJson.entries
-                                    .firstOrNull { it.value.userId == myUid }
-                                    ?.key
-                                    ?.toIntOrNull()
-                                    ?: mySlot
+                                val resolvedSlot =
+                                    startedRoom.slotsJson.entries
+                                        .firstOrNull { it.value.userId == myUid }
+                                        ?.key
+                                        ?.toIntOrNull()
+                                        ?: mySlot
                                 triggerMatchLaunch(startedRoom, resolvedSlot)
                             }.onFailure { err ->
                                 if (err is CancellationException) throw err
@@ -1076,32 +1117,35 @@ fun RoomLobbyScreen(
                         }
                     },
                     shape = RectangleShape,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PureWhite,
-                        contentColor = PureBlack,
-                        disabledContainerColor = GraphiteSurface,
-                        disabledContentColor = MutedGray
-                    ),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = PureWhite,
+                            contentColor = PureBlack,
+                            disabledContainerColor = GraphiteSurface,
+                            disabledContentColor = MutedGray,
+                        ),
                     border = if (buttonEnabled) null else BorderStroke(1.dp, CharcoalBorder),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(48.dp),
                 ) {
                     Icon(
-                        imageVector = if (buttonEnabled && !preparingMatch && !startingMatch) {
-                            Icons.Default.PlayArrow
-                        } else {
-                            Icons.Default.HourglassTop
-                        },
+                        imageVector =
+                            if (buttonEnabled && !preparingMatch && !startingMatch) {
+                                Icons.Default.PlayArrow
+                            } else {
+                                Icons.Default.HourglassTop
+                            },
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = buttonLabel,
                         fontFamily = SpaceGroteskFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -1120,34 +1164,38 @@ private fun PlayerSlotCard(
     myAvatarSeed: String? = null,
     onClaim: () -> Unit,
     onInspectOccupant: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    val borderColor = when {
-        occupant == null -> CharcoalBorder
-        occupant.ready -> PureWhite
-        else -> SteelBorder
-    }
+    val borderColor =
+        when {
+            occupant == null -> CharcoalBorder
+            occupant.ready -> PureWhite
+            else -> SteelBorder
+        }
     Card(
         shape = RectangleShape,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isMine) GraphiteSurface else CarbonSurface
-        ),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = if (isMine) GraphiteSurface else CarbonSurface,
+            ),
         border = BorderStroke(1.dp, borderColor),
-        modifier = modifier
-            .height(132.dp)
-            .clickable {
-                if (occupant == null) onClaim() else onInspectOccupant?.invoke()
-            }
+        modifier =
+            modifier
+                .height(132.dp)
+                .clickable {
+                    if (occupant == null) onClaim() else onInspectOccupant?.invoke()
+                },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Box(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     text = "${slotIndex + 1}P",
@@ -1155,20 +1203,22 @@ private fun PlayerSlotCard(
                     fontFamily = SpaceGroteskFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
-                    modifier = Modifier.align(Alignment.CenterStart)
+                    modifier = Modifier.align(Alignment.CenterStart),
                 )
                 if (occupant != null) {
-                    val pingText = when {
-                        isMine && !isOnlineRoom -> "LOCAL"
-                        pingMs != null -> "$pingMs ms"
-                        else -> "-- ms"
-                    }
-                    val pingColor = when {
-                        pingMs == null -> MutedGray
-                        pingMs <= 80 -> PureWhite
-                        pingMs <= 150 -> SilverGray
-                        else -> MutedGray
-                    }
+                    val pingText =
+                        when {
+                            isMine && !isOnlineRoom -> "LOCAL"
+                            pingMs != null -> "$pingMs ms"
+                            else -> "-- ms"
+                        }
+                    val pingColor =
+                        when {
+                            pingMs == null -> MutedGray
+                            pingMs <= 80 -> PureWhite
+                            pingMs <= 150 -> SilverGray
+                            else -> MutedGray
+                        }
                     Text(
                         text = pingText,
                         color = pingColor,
@@ -1176,7 +1226,7 @@ private fun PlayerSlotCard(
                         fontSize = 9.sp,
                         maxLines = 1,
                         softWrap = false,
-                        modifier = Modifier.align(Alignment.Center)
+                        modifier = Modifier.align(Alignment.Center),
                     )
                 }
                 if (isSlotHost) {
@@ -1184,9 +1234,10 @@ private fun PlayerSlotCard(
                         imageVector = Icons.Default.Star,
                         contentDescription = "Anfitrión",
                         tint = PureWhite,
-                        modifier = Modifier
-                            .size(12.dp)
-                            .align(Alignment.CenterEnd)
+                        modifier =
+                            Modifier
+                                .size(12.dp)
+                                .align(Alignment.CenterEnd),
                     )
                 } else if (isMine) {
                     Text(
@@ -1195,34 +1246,36 @@ private fun PlayerSlotCard(
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Medium,
                         fontSize = 9.sp,
-                        modifier = Modifier.align(Alignment.CenterEnd)
+                        modifier = Modifier.align(Alignment.CenterEnd),
                     )
                 }
             }
 
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(ObsidianBlack)
-                    .border(1.dp, if (occupant != null) SteelBorder else CharcoalBorder)
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .background(ObsidianBlack)
+                        .border(1.dp, if (occupant != null) SteelBorder else CharcoalBorder),
             ) {
                 if (occupant != null) {
-                    val effectiveAvatarSeed = when {
-                        isMine && !myAvatarSeed.isNullOrBlank() -> myAvatarSeed
-                        !occupant.avatarSeed.isNullOrBlank() -> occupant.avatarSeed
-                        else -> occupant.username.ifBlank { occupant.userId }
-                    }
+                    val effectiveAvatarSeed =
+                        when {
+                            isMine && !myAvatarSeed.isNullOrBlank() -> myAvatarSeed
+                            !occupant.avatarSeed.isNullOrBlank() -> occupant.avatarSeed
+                            else -> occupant.username.ifBlank { occupant.userId }
+                        }
                     DiceBearPixelArtAvatar(
                         seed = effectiveAvatarSeed,
-                        modifier = Modifier.size(38.dp)
+                        modifier = Modifier.size(38.dp),
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.PersonAdd,
                         contentDescription = "Slot libre",
                         tint = MutedGray,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -1233,26 +1286,26 @@ private fun PlayerSlotCard(
                 fontSize = 11.sp,
                 fontWeight = if (occupant != null) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
 
             if (occupant != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     Icon(
                         imageVector = if (occupant.ready) Icons.Default.CheckCircle else Icons.Default.Schedule,
                         contentDescription = null,
                         tint = if (occupant.ready) ReadyGreenAccent else MutedGray,
-                        modifier = Modifier.size(10.dp)
+                        modifier = Modifier.size(10.dp),
                     )
                     Text(
                         text = if (occupant.ready) "LISTO" else "ESPERA",
                         color = if (occupant.ready) PureWhite else MutedGray,
                         fontFamily = JetBrainsMonoFamily,
                         fontSize = 9.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                 }
             } else {
@@ -1260,19 +1313,20 @@ private fun PlayerSlotCard(
                     text = "TOCAR",
                     color = MutedGray,
                     fontFamily = JetBrainsMonoFamily,
-                    fontSize = 9.sp
+                    fontSize = 9.sp,
                 )
             }
         }
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
-private fun isPrivateIp(endpoint: String): Boolean {
-    return dog.bald.arcade.net.NetplayEndpointResolver.isPrivateEndpoint(endpoint)
-}
+private fun isPrivateIp(endpoint: String): Boolean =
+    dog.bald.arcade.net.NetplayEndpointResolver
+        .isPrivateEndpoint(endpoint)

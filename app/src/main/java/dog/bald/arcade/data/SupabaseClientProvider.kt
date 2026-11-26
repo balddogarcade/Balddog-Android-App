@@ -12,11 +12,12 @@ import io.github.jan.supabase.auth.user.UserSession
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
-import java.io.File
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-private class EncryptedSessionManager(context: Context) : SessionManager {
+private class EncryptedSessionManager(
+    context: Context,
+) : SessionManager {
     private val json = Json { ignoreUnknownKeys = true }
     private val prefs: SharedPreferences by lazy {
         try {
@@ -28,15 +29,17 @@ private class EncryptedSessionManager(context: Context) : SessionManager {
     }
 
     private fun createPrefs(context: Context): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        val masterKey =
+            MasterKey
+                .Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
         return EncryptedSharedPreferences.create(
             context,
             "balddog_secure_session",
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }
 
@@ -44,9 +47,7 @@ private class EncryptedSessionManager(context: Context) : SessionManager {
         prefs.edit().putString("session_json", json.encodeToString(session)).apply()
     }
 
-    override suspend fun loadSession(): UserSession {
-        return loadSessionOrNull() ?: throw NoSuchElementException("No saved session")
-    }
+    override suspend fun loadSession(): UserSession = loadSessionOrNull() ?: throw NoSuchElementException("No saved session")
 
     override suspend fun loadSessionOrNull(): UserSession? {
         val raw = prefs.getString("session_json", null) ?: return null
@@ -62,11 +63,11 @@ object SupabaseClientProvider {
     @Volatile
     private var instance: SupabaseClient? = null
 
-    fun get(context: Context): SupabaseClient {
-        return instance ?: synchronized(this) {
+    fun get(context: Context): SupabaseClient =
+        instance ?: synchronized(this) {
             instance ?: createSupabaseClient(
                 supabaseUrl = BuildConfig.SUPABASE_URL,
-                supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+                supabaseKey = BuildConfig.SUPABASE_ANON_KEY,
             ) {
                 install(Auth) {
                     scheme = "dog.bald.arcade"
@@ -77,5 +78,4 @@ object SupabaseClientProvider {
                 install(Realtime)
             }.also { instance = it }
         }
-    }
 }

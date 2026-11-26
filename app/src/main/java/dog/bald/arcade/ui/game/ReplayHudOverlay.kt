@@ -69,7 +69,7 @@ fun ReplayHudOverlay(
     onCaptureScreenshot: () -> Unit,
     onExportVideoClip: () -> Unit,
     onExit: () -> Unit,
-    onOpenMenu: (() -> Unit)? = null
+    onOpenMenu: (() -> Unit)? = null,
 ) {
     val numFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
     val totalFrames = replayHud.totalFrames.toLong().coerceAtLeast(1L)
@@ -77,29 +77,31 @@ fun ReplayHudOverlay(
     val progress = (currentFrame.toFloat() / totalFrames.toFloat()).coerceIn(0f, 1f)
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         // =========================================================================
         // PILAR IZQUIERDO: Info de partida, marcador, tiempo, seekbar y velocidades
         // Anclado exclusivamente al lateral para no tapar el centro de juego (4:3)
         // =========================================================================
         Column(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .width(148.dp)
-                .wrapContentHeight()
-                .background(ObsidianBlack.copy(alpha = 0.88f))
-                .border(1.dp, SteelBorder, RectangleShape)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier =
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .width(148.dp)
+                    .wrapContentHeight()
+                    .background(ObsidianBlack.copy(alpha = 0.88f))
+                    .border(1.dp, SteelBorder, RectangleShape)
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // Badge de estado REPLAY / REPLAY FIN
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     text = if (replayHud.finished) "REPLAY FIN" else "REPLAY ${replayHud.speed}x",
@@ -107,9 +109,10 @@ fun ReplayHudOverlay(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold,
                     color = PureBlack,
-                    modifier = Modifier
-                        .background(if (replayHud.finished) Color(0xFFFFD54F) else Color(0xFF4ADE80))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                    modifier =
+                        Modifier
+                            .background(if (replayHud.finished) Color(0xFFFFD54F) else Color(0xFF4ADE80))
+                            .padding(horizontal = 5.dp, vertical = 2.dp),
                 )
                 if (replayHud.paused) {
                     Text(
@@ -118,9 +121,10 @@ fun ReplayHudOverlay(
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         color = PureWhite,
-                        modifier = Modifier
-                            .background(CharcoalBorder)
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                        modifier =
+                            Modifier
+                                .background(CharcoalBorder)
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
                     )
                 }
             }
@@ -132,7 +136,7 @@ fun ReplayHudOverlay(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
 
             // Marcadores actual y objetivo
@@ -142,13 +146,13 @@ fun ReplayHudOverlay(
                     fontFamily = JetBrainsMonoFamily,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PureWhite
+                    color = PureWhite,
                 )
                 Text(
                     text = "OBJ ${numFmt.format(targetScore)}",
                     fontFamily = JetBrainsMonoFamily,
                     fontSize = 9.sp,
-                    color = SilverGray
+                    color = SilverGray,
                 )
             }
 
@@ -157,7 +161,7 @@ fun ReplayHudOverlay(
                 text = "${formatFramesTime(currentFrame)} / ${formatFramesTime(totalFrames)}",
                 fontFamily = JetBrainsMonoFamily,
                 fontSize = 10.sp,
-                color = SilverGray
+                color = SilverGray,
             )
 
             // Barra de progreso interactiva (Seekbar táctil con adelantado manual)
@@ -166,13 +170,13 @@ fun ReplayHudOverlay(
                 onSeek = { p ->
                     val frame = (p * totalFrames).toLong().coerceIn(0L, totalFrames)
                     onSeekToFrame(frame)
-                }
+                },
             )
 
             // Botones de adelantado rápido (+10s, +30s)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 QuickSkipButton(
                     label = "+10s",
@@ -180,7 +184,7 @@ fun ReplayHudOverlay(
                         val target = (currentFrame + 600L).coerceIn(0L, totalFrames)
                         onSeekToFrame(target)
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 QuickSkipButton(
                     label = "+30s",
@@ -188,32 +192,33 @@ fun ReplayHudOverlay(
                         val target = (currentFrame + 1800L).coerceIn(0L, totalFrames)
                         onSeekToFrame(target)
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
 
             // Selector de velocidades 1x / 2x / 4x
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 listOf(1, 2, 4).forEach { spd ->
                     val selected = replayHud.speed.toInt() == spd
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(if (selected) PureWhite else CarbonSurface)
-                            .border(1.dp, if (selected) PureWhite else CharcoalBorder, RectangleShape)
-                            .clickable { onSelectSpeed(spd) }
-                            .padding(vertical = 4.dp)
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .background(if (selected) PureWhite else CarbonSurface)
+                                .border(1.dp, if (selected) PureWhite else CharcoalBorder, RectangleShape)
+                                .clickable { onSelectSpeed(spd) }
+                                .padding(vertical = 4.dp),
                     ) {
                         Text(
                             text = "${spd}x",
                             fontFamily = JetBrainsMonoFamily,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (selected) PureBlack else PureWhite
+                            color = if (selected) PureBlack else PureWhite,
                         )
                     }
                 }
@@ -225,21 +230,22 @@ fun ReplayHudOverlay(
         // Anclado al lateral derecho para no obstaculizar el espacio del juego (4:3)
         // =========================================================================
         Column(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(62.dp)
-                .wrapContentHeight()
-                .background(ObsidianBlack.copy(alpha = 0.88f))
-                .border(1.dp, SteelBorder, RectangleShape)
-                .padding(horizontal = 6.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(62.dp)
+                    .wrapContentHeight()
+                    .background(ObsidianBlack.copy(alpha = 0.88f))
+                    .border(1.dp, SteelBorder, RectangleShape)
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // Salir del replay
             ReplaySideButton(
                 icon = Icons.Default.Close,
                 label = "SALIR",
-                onClick = onExit
+                onClick = onExit,
             )
 
             // Menú
@@ -247,7 +253,7 @@ fun ReplayHudOverlay(
                 ReplaySideButton(
                     icon = Icons.Default.Menu,
                     label = "MENÚ",
-                    onClick = onOpenMenu
+                    onClick = onOpenMenu,
                 )
             }
 
@@ -256,30 +262,30 @@ fun ReplayHudOverlay(
                 icon = if (replayHud.paused) Icons.Default.PlayArrow else Icons.Default.Pause,
                 label = if (replayHud.paused) "PLAY" else "PAUSA",
                 onClick = onTogglePause,
-                highlight = replayHud.paused
+                highlight = replayHud.paused,
             )
 
             // Reiniciar replay (desde frame 0)
             ReplaySideButton(
                 icon = Icons.Default.Replay,
                 label = "INICIO",
-                onClick = onRestart
+                onClick = onRestart,
             )
 
             // Captura de pantalla PNG
             ReplaySideButton(
                 icon = Icons.Default.CameraAlt,
                 label = "PNG",
-                onClick = onCaptureScreenshot
+                onClick = onCaptureScreenshot,
             )
 
             // Exportar clip MP4
             ReplaySideButton(
                 icon = Icons.Default.Videocam,
-                label = if (exportProgressPct != null) "${exportProgressPct}%" else "MP4",
+                label = if (exportProgressPct != null) "$exportProgressPct%" else "MP4",
                 onClick = onExportVideoClip,
                 enabled = exportProgressPct == null,
-                iconTint = if (exportProgressPct != null) Color(0xFFFFD54F) else PureWhite
+                iconTint = if (exportProgressPct != null) Color(0xFFFFD54F) else PureWhite,
             )
         }
     }
@@ -293,68 +299,72 @@ fun ReplayHudOverlay(
 private fun ReplaySeekBar(
     progress: Float,
     onSeek: (Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var draggingProgress by remember { mutableStateOf<Float?>(null) }
     val displayProgress = (draggingProgress ?: progress).coerceIn(0f, 1f)
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(26.dp)
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    val fraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
-                    onSeek(fraction)
-                }
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { offset ->
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .height(26.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
                         val fraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
-                        draggingProgress = fraction
-                    },
-                    onDragEnd = {
-                        draggingProgress?.let { onSeek(it) }
-                        draggingProgress = null
-                    },
-                    onDragCancel = {
-                        draggingProgress = null
-                    },
-                    onHorizontalDrag = { change, _ ->
-                        change.consume()
-                        val fraction = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
-                        draggingProgress = fraction
+                        onSeek(fraction)
                     }
-                )
-            },
-        contentAlignment = Alignment.CenterStart
+                }.pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            val fraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            draggingProgress = fraction
+                        },
+                        onDragEnd = {
+                            draggingProgress?.let { onSeek(it) }
+                            draggingProgress = null
+                        },
+                        onDragCancel = {
+                            draggingProgress = null
+                        },
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            val fraction = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                            draggingProgress = fraction
+                        },
+                    )
+                },
+        contentAlignment = Alignment.CenterStart,
     ) {
         // Pista de fondo
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp)
-                .background(CharcoalBorder, RectangleShape)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .background(CharcoalBorder, RectangleShape),
         )
         // Progreso relleno
         Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction = displayProgress.coerceAtLeast(0.01f))
-                .height(6.dp)
-                .background(if (draggingProgress != null) Color(0xFF4ADE80) else PureWhite, RectangleShape)
+            modifier =
+                Modifier
+                    .fillMaxWidth(fraction = displayProgress.coerceAtLeast(0.01f))
+                    .height(6.dp)
+                    .background(if (draggingProgress != null) Color(0xFF4ADE80) else PureWhite, RectangleShape),
         )
         // Scrubber / Cabezal indicador táctil
         Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction = displayProgress.coerceAtLeast(0.01f)),
-            contentAlignment = Alignment.CenterEnd
+            modifier =
+                Modifier
+                    .fillMaxWidth(fraction = displayProgress.coerceAtLeast(0.01f)),
+            contentAlignment = Alignment.CenterEnd,
         ) {
             Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .background(PureWhite, RectangleShape)
-                    .border(1.dp, PureBlack, RectangleShape)
+                modifier =
+                    Modifier
+                        .size(10.dp)
+                        .background(PureWhite, RectangleShape)
+                        .border(1.dp, PureBlack, RectangleShape),
             )
         }
     }
@@ -364,25 +374,26 @@ private fun ReplaySeekBar(
 private fun QuickSkipButton(
     label: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier
-            .background(CarbonSurface)
-            .border(1.dp, CharcoalBorder, RectangleShape)
-            .clickable(onClick = onClick)
-            .padding(vertical = 3.dp)
+        modifier =
+            modifier
+                .background(CarbonSurface)
+                .border(1.dp, CharcoalBorder, RectangleShape)
+                .clickable(onClick = onClick)
+                .padding(vertical = 3.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             Icon(
                 imageVector = Icons.Default.FastForward,
                 contentDescription = null,
                 tint = SilverGray,
-                modifier = Modifier.size(11.dp)
+                modifier = Modifier.size(11.dp),
             )
             Spacer(modifier = Modifier.width(2.dp))
             Text(
@@ -390,7 +401,7 @@ private fun QuickSkipButton(
                 fontFamily = JetBrainsMonoFamily,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = PureWhite
+                color = PureWhite,
             )
         }
     }
@@ -404,23 +415,24 @@ private fun ReplaySideButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     highlight: Boolean = false,
-    iconTint: Color = PureWhite
+    iconTint: Color = PureWhite,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(if (highlight) PureWhite else CarbonSurface)
-            .border(1.dp, if (highlight) PureWhite else CharcoalBorder, RectangleShape)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(vertical = 5.dp)
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(if (highlight) PureWhite else CarbonSurface)
+                .border(1.dp, if (highlight) PureWhite else CharcoalBorder, RectangleShape)
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(vertical = 5.dp),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = if (highlight) PureBlack else iconTint,
-            modifier = Modifier.size(15.dp)
+            modifier = Modifier.size(15.dp),
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
@@ -428,7 +440,7 @@ private fun ReplaySideButton(
             fontFamily = JetBrainsMonoFamily,
             fontSize = 8.sp,
             fontWeight = FontWeight.Bold,
-            color = if (highlight) PureBlack else PureWhite
+            color = if (highlight) PureBlack else PureWhite,
         )
     }
 }

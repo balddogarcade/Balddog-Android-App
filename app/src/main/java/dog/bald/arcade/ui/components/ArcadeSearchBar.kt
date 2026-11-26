@@ -2,7 +2,6 @@ package dog.bald.arcade.ui.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -16,6 +15,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -30,7 +30,7 @@ fun ArcadeSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -41,7 +41,7 @@ fun ArcadeSearchBar(
             Text(
                 text = placeholder,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MutedGray
+                color = MutedGray,
             )
         },
         leadingIcon = {
@@ -49,7 +49,7 @@ fun ArcadeSearchBar(
                 imageVector = Icons.Default.Search,
                 contentDescription = null,
                 tint = MutedGray,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(18.dp),
             )
         },
         trailingIcon = {
@@ -59,7 +59,7 @@ fun ArcadeSearchBar(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Limpiar búsqueda",
                         tint = SilverGray,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -69,15 +69,16 @@ fun ArcadeSearchBar(
         shape = RectangleShape,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = CarbonSurface,
-            unfocusedContainerColor = CarbonSurface,
-            focusedBorderColor = PureWhite,
-            unfocusedBorderColor = CharcoalBorder,
-            cursorColor = PureWhite,
-            focusedTextColor = PureWhite,
-            unfocusedTextColor = PureWhite
-        ),
-        modifier = modifier.fillMaxWidth()
+        colors =
+            OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = CarbonSurface,
+                unfocusedContainerColor = CarbonSurface,
+                focusedBorderColor = PureWhite,
+                unfocusedBorderColor = CharcoalBorder,
+                cursorColor = PureWhite,
+                focusedTextColor = PureWhite,
+                unfocusedTextColor = PureWhite,
+            ),
+        modifier = modifier.fillMaxWidth(),
     )
 }

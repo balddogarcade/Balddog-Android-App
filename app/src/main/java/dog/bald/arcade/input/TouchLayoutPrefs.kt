@@ -11,7 +11,7 @@ data class TouchLayoutConfig(
     val dpadOffsetY: Float = 0f,
     val buttonsOffsetX: Float = 0f,
     val buttonsOffsetY: Float = 0f,
-    val forceShowTouch: Boolean = true
+    val forceShowTouch: Boolean = true,
 )
 
 object TouchLayoutPrefs {
@@ -33,12 +33,16 @@ object TouchLayoutPrefs {
             dpadOffsetY = p.getFloat(KEY_DPAD_Y, 0f),
             buttonsOffsetX = p.getFloat(KEY_BTN_X, 0f),
             buttonsOffsetY = p.getFloat(KEY_BTN_Y, 0f),
-            forceShowTouch = p.getBoolean(KEY_FORCE_SHOW, true)
+            forceShowTouch = p.getBoolean(KEY_FORCE_SHOW, true),
         )
     }
 
-    fun save(context: Context, config: TouchLayoutConfig) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    fun save(
+        context: Context,
+        config: TouchLayoutConfig,
+    ) {
+        context
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putFloat(KEY_OPACITY, config.opacity)
             .putFloat(KEY_SCALE, config.scale)

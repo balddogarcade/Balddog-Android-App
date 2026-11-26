@@ -13,25 +13,29 @@ import kotlin.math.abs
 class ControllerManager internal constructor(
     private val onControllerPresenceChanged: (Boolean) -> Unit,
     private val onPortMaskChanged: (port: Int, mask: Int) -> Unit,
-    private val backend: DeviceBackend
+    private val backend: DeviceBackend,
 ) {
     constructor(
         context: Context,
         onControllerPresenceChanged: (Boolean) -> Unit,
-        onPortMaskChanged: (port: Int, mask: Int) -> Unit
+        onPortMaskChanged: (port: Int, mask: Int) -> Unit,
     ) : this(
         onControllerPresenceChanged = onControllerPresenceChanged,
         onPortMaskChanged = onPortMaskChanged,
-        backend = AndroidDeviceBackend(context)
+        backend = AndroidDeviceBackend(context),
     )
 
     internal interface DeviceBackend {
         fun registerListener(listener: InputManager.InputDeviceListener)
+
         fun unregisterListener(listener: InputManager.InputDeviceListener)
+
         fun getActiveGamepadDeviceIds(): List<Int>
     }
 
-    private class AndroidDeviceBackend(context: Context) : DeviceBackend {
+    private class AndroidDeviceBackend(
+        context: Context,
+    ) : DeviceBackend {
         private val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
 
         override fun registerListener(listener: InputManager.InputDeviceListener) {
@@ -49,9 +53,10 @@ class ControllerManager internal constructor(
                 if (!dev.isEnabled || dev.isVirtual) continue
                 val sources = dev.sources
                 val hasGamepad = (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
-                val hasJoystick = (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK &&
-                    dev.getMotionRange(MotionEvent.AXIS_X) != null &&
-                    dev.getMotionRange(MotionEvent.AXIS_Y) != null
+                val hasJoystick =
+                    (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK &&
+                        dev.getMotionRange(MotionEvent.AXIS_X) != null &&
+                        dev.getMotionRange(MotionEvent.AXIS_Y) != null
                 if (hasGamepad || hasJoystick) {
                     result.add(id)
                 }
@@ -65,11 +70,14 @@ class ControllerManager internal constructor(
     private val portKeyMasks = IntArray(4)
     private val portAxisMasks = IntArray(4)
 
-    private val deviceListener = object : InputManager.InputDeviceListener {
-        override fun onInputDeviceAdded(deviceId: Int) = refreshDevices()
-        override fun onInputDeviceRemoved(deviceId: Int) = refreshDevices()
-        override fun onInputDeviceChanged(deviceId: Int) = refreshDevices()
-    }
+    private val deviceListener =
+        object : InputManager.InputDeviceListener {
+            override fun onInputDeviceAdded(deviceId: Int) = refreshDevices()
+
+            override fun onInputDeviceRemoved(deviceId: Int) = refreshDevices()
+
+            override fun onInputDeviceChanged(deviceId: Int) = refreshDevices()
+        }
 
     fun start() {
         backend.registerListener(deviceListener)
@@ -123,11 +131,13 @@ class ControllerManager internal constructor(
 
     fun hasPhysicalController(): Boolean = deviceToPort.isNotEmpty()
 
-    fun handleKeyEvent(event: KeyEvent): Boolean {
-        return applyKeyState(event.deviceId, event.keyCode, event.action)
-    }
+    fun handleKeyEvent(event: KeyEvent): Boolean = applyKeyState(event.deviceId, event.keyCode, event.action)
 
-    internal fun applyKeyState(deviceId: Int, keyCode: Int, action: Int): Boolean {
+    internal fun applyKeyState(
+        deviceId: Int,
+        keyCode: Int,
+        action: Int,
+    ): Boolean {
         val port = deviceToPort[deviceId] ?: return false
         val bit = mapKeyCodeToBit(keyCode)
         if (bit == 0) return false
@@ -141,16 +151,15 @@ class ControllerManager internal constructor(
         return true
     }
 
-    fun handleMotionEvent(event: MotionEvent): Boolean {
-        return applyAxisState(
+    fun handleMotionEvent(event: MotionEvent): Boolean =
+        applyAxisState(
             deviceId = event.deviceId,
             source = event.source,
             hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X),
             hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y),
             stickX = event.getAxisValue(MotionEvent.AXIS_X),
-            stickY = event.getAxisValue(MotionEvent.AXIS_Y)
+            stickY = event.getAxisValue(MotionEvent.AXIS_Y),
         )
-    }
 
     internal fun applyAxisState(
         deviceId: Int,
@@ -158,7 +167,7 @@ class ControllerManager internal constructor(
         hatX: Float,
         hatY: Float,
         stickX: Float,
-        stickY: Float
+        stickY: Float,
     ): Boolean {
         if ((source and InputDevice.SOURCE_JOYSTICK) != InputDevice.SOURCE_JOYSTICK &&
             (source and InputDevice.SOURCE_GAMEPAD) != InputDevice.SOURCE_GAMEPAD
@@ -187,20 +196,22 @@ class ControllerManager internal constructor(
         onPortMaskChanged(port, portKeyMasks[port] or portAxisMasks[port])
     }
 
-    private fun mapKeyCodeToBit(keyCode: Int): Int = when (keyCode) {
-        KeyEvent.KEYCODE_BUTTON_A -> RetroJoypad.B
-        KeyEvent.KEYCODE_BUTTON_B -> RetroJoypad.A
-        KeyEvent.KEYCODE_BUTTON_X -> RetroJoypad.Y
-        KeyEvent.KEYCODE_BUTTON_Y -> RetroJoypad.X
-        KeyEvent.KEYCODE_BUTTON_L1 -> RetroJoypad.L
-        KeyEvent.KEYCODE_BUTTON_R1 -> RetroJoypad.R
-        KeyEvent.KEYCODE_BUTTON_START -> RetroJoypad.START
-        KeyEvent.KEYCODE_BUTTON_SELECT,
-        KeyEvent.KEYCODE_BUTTON_MODE -> RetroJoypad.COIN
-        KeyEvent.KEYCODE_DPAD_UP -> RetroJoypad.UP
-        KeyEvent.KEYCODE_DPAD_DOWN -> RetroJoypad.DOWN
-        KeyEvent.KEYCODE_DPAD_LEFT -> RetroJoypad.LEFT
-        KeyEvent.KEYCODE_DPAD_RIGHT -> RetroJoypad.RIGHT
-        else -> 0
-    }
+    private fun mapKeyCodeToBit(keyCode: Int): Int =
+        when (keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A -> RetroJoypad.B
+            KeyEvent.KEYCODE_BUTTON_B -> RetroJoypad.A
+            KeyEvent.KEYCODE_BUTTON_X -> RetroJoypad.Y
+            KeyEvent.KEYCODE_BUTTON_Y -> RetroJoypad.X
+            KeyEvent.KEYCODE_BUTTON_L1 -> RetroJoypad.L
+            KeyEvent.KEYCODE_BUTTON_R1 -> RetroJoypad.R
+            KeyEvent.KEYCODE_BUTTON_START -> RetroJoypad.START
+            KeyEvent.KEYCODE_BUTTON_SELECT,
+            KeyEvent.KEYCODE_BUTTON_MODE,
+            -> RetroJoypad.COIN
+            KeyEvent.KEYCODE_DPAD_UP -> RetroJoypad.UP
+            KeyEvent.KEYCODE_DPAD_DOWN -> RetroJoypad.DOWN
+            KeyEvent.KEYCODE_DPAD_LEFT -> RetroJoypad.LEFT
+            KeyEvent.KEYCODE_DPAD_RIGHT -> RetroJoypad.RIGHT
+            else -> 0
+        }
 }

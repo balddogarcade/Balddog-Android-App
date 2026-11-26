@@ -69,7 +69,7 @@ fun DiagnosticsSheet(
     engineStatus: EngineStatus?,
     logs: List<String>,
     onRefreshLogs: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val clipboard = LocalClipboardManager.current
@@ -87,42 +87,43 @@ fun DiagnosticsSheet(
         sheetState = sheetState,
         containerColor = CarbonSurface,
         contentColor = PureWhite,
-        shape = RectangleShape
+        shape = RectangleShape,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Cabecera
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Terminal,
                         contentDescription = null,
                         tint = PureWhite,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                     Column {
                         Text(
                             text = "DIAGNÓSTICO DEL MOTOR",
                             style = MaterialTheme.typography.titleMedium,
-                            color = PureWhite
+                            color = PureWhite,
                         )
                         Text(
                             text = "${logs.size} eventos en búfer",
                             color = MutedGray,
                             fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                 }
@@ -131,31 +132,32 @@ fun DiagnosticsSheet(
                     OutlinedButton(
                         onClick = {
                             val header = "Rust v${engineStatus?.engineVersion ?: "?"} | ${engineStatus?.targetArch ?: "?"} | FBNeo=${engineStatus?.fbneoReady == true}"
-                            val payload = buildString {
-                                appendLine(header)
-                                appendLine("---")
-                                logs.forEach { appendLine(it) }
-                            }
+                            val payload =
+                                buildString {
+                                    appendLine(header)
+                                    appendLine("---")
+                                    logs.forEach { appendLine(it) }
+                                }
                             clipboard.setText(AnnotatedString(payload))
                             copied = true
                         },
                         enabled = logs.isNotEmpty(),
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, CharcoalBorder),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
                             contentDescription = "Copiar logs",
                             tint = if (copied) ReadyGreenAccent else SilverGray,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (copied) "COPIADO" else "COPIAR",
                             color = if (copied) ReadyGreenAccent else SilverGray,
                             fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
 
@@ -163,20 +165,20 @@ fun DiagnosticsSheet(
                         onClick = onRefreshLogs,
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Ping al motor",
                             tint = PureWhite,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(14.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "PING",
                             color = PureWhite,
                             fontSize = 11.sp,
-                            fontFamily = JetBrainsMonoFamily
+                            fontFamily = JetBrainsMonoFamily,
                         )
                     }
                 }
@@ -185,13 +187,14 @@ fun DiagnosticsSheet(
             // Resumen técnico del motor
             val fbneoReady = engineStatus?.fbneoReady == true
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(GraphiteSurface, RectangleShape)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .background(GraphiteSurface, RectangleShape)
+                        .border(1.dp, CharcoalBorder, RectangleShape)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -199,31 +202,32 @@ fun DiagnosticsSheet(
                         color = PureWhite,
                         fontSize = 12.sp,
                         fontFamily = JetBrainsMonoFamily,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
                     )
                     Text(
                         text = if (fbneoReady) "Core FBNeo verificado y listo" else "Core FBNeo no detectado",
                         color = MutedGray,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (fbneoReady) ReadyGreenAccent else DangerRed)
+                        modifier =
+                            Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (fbneoReady) ReadyGreenAccent else DangerRed),
                     )
                     Text(
                         text = if (fbneoReady) "LISTO" else "ERROR",
                         color = if (fbneoReady) ReadyGreenAccent else DangerRed,
                         fontSize = 11.sp,
                         fontFamily = JetBrainsMonoFamily,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -232,19 +236,20 @@ fun DiagnosticsSheet(
 
             // Consola de logs
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 180.dp, max = 360.dp)
-                    .background(ObsidianBlack, RectangleShape)
-                    .border(1.dp, CharcoalBorder, RectangleShape)
-                    .padding(12.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 180.dp, max = 360.dp)
+                        .background(ObsidianBlack, RectangleShape)
+                        .border(1.dp, CharcoalBorder, RectangleShape)
+                        .padding(12.dp),
             ) {
                 if (logs.isEmpty()) {
                     Text(
                         text = "Sin eventos registrados aún. Pulsa PING para verificar el motor.",
                         color = MutedGray,
                         fontSize = 11.sp,
-                        fontFamily = JetBrainsMonoFamily
+                        fontFamily = JetBrainsMonoFamily,
                     )
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -253,7 +258,7 @@ fun DiagnosticsSheet(
                                 text = line,
                                 color = SilverGray,
                                 fontSize = 11.sp,
-                                fontFamily = JetBrainsMonoFamily
+                                fontFamily = JetBrainsMonoFamily,
                             )
                         }
                     }

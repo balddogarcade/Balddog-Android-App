@@ -18,32 +18,43 @@ data class PendingScoreSubmission(
     val creditsUsed: Int = 1,
     val isHardcore: Boolean = true,
     val replayLocalPath: String? = null,
-    val queuedAtMs: Long = System.currentTimeMillis()
+    val queuedAtMs: Long = System.currentTimeMillis(),
 )
 
 internal interface ScoreQueueStore {
     fun read(): List<PendingScoreSubmission>
+
     fun write(entries: List<PendingScoreSubmission>)
+
     fun clear()
 }
 
 internal interface ReplayFileHandler {
     fun existsAndNonEmpty(path: String?): Boolean
+
     fun sha256Hex(path: String): String?
+
     fun deleteFile(path: String?)
+
     fun clearAllReplayFiles()
 }
 
 internal data class UploadedReplay(
     val path: String,
     val sizeBytes: Int,
-    val sha256: String
+    val sha256: String,
 )
 
 internal interface ScoreSyncClient {
     fun currentUserId(): String?
+
     suspend fun fetchMyGameRankScore(gameId: String): Long?
-    suspend fun uploadReplay(gameId: String, localPath: String): UploadedReplay?
+
+    suspend fun uploadReplay(
+        gameId: String,
+        localPath: String,
+    ): UploadedReplay?
+
     suspend fun submitHighScore(
         gameId: String,
         score: Long,
@@ -52,41 +63,38 @@ internal interface ScoreSyncClient {
         isHardcore: Boolean,
         replayPath: String,
         replaySizeBytes: Int?,
-        replaySha256: String
+        replaySha256: String,
     ): SubmitScoreResultDto?
 }
 
 internal class PendingScoreQueueEngine(
     private val store: ScoreQueueStore,
-    private val replayFiles: ReplayFileHandler
+    private val replayFiles: ReplayFileHandler,
 ) {
     private val lock = Any()
     private val flushMutex = Mutex()
 
-    fun isPermanentRejection(reason: String?): Boolean {
-        return reason != null && reason in permanentRejectionReasons
-    }
+    fun isPermanentRejection(reason: String?): Boolean = reason != null && reason in permanentRejectionReasons
 
     fun read(currentUserId: String?): List<PendingScoreSubmission> {
         if (currentUserId.isNullOrBlank()) return emptyList()
         val filesToDelete = mutableListOf<String?>()
-        val own = synchronized(lock) {
-            val all = store.read()
-            val foreign = all.filter { it.userId.isNullOrBlank() || it.userId != currentUserId }
-            val matching = all.filter { it.userId == currentUserId }
-            if (foreign.isNotEmpty() && !flushMutex.isLocked) {
-                foreign.forEach { filesToDelete += it.replayLocalPath }
-                store.write(matching)
+        val own =
+            synchronized(lock) {
+                val all = store.read()
+                val foreign = all.filter { it.userId.isNullOrBlank() || it.userId != currentUserId }
+                val matching = all.filter { it.userId == currentUserId }
+                if (foreign.isNotEmpty() && !flushMutex.isLocked) {
+                    foreign.forEach { filesToDelete += it.replayLocalPath }
+                    store.write(matching)
+                }
+                matching
             }
-            matching
-        }
         filesToDelete.forEach { replayFiles.deleteFile(it) }
         return own
     }
 
-    fun pendingCount(currentUserId: String?): Int {
-        return read(currentUserId).size
-    }
+    fun pendingCount(currentUserId: String?): Int = read(currentUserId).size
 
     fun enqueue(entry: PendingScoreSubmission) {
         val uid = entry.userId?.takeIf { it.isNotBlank() } ?: return
@@ -131,16 +139,17 @@ internal class PendingScoreQueueEngine(
 
         return flushMutex.withLock {
             val foreignPaths = mutableListOf<String?>()
-            val snapshot = synchronized(lock) {
-                val all = store.read()
-                val foreign = all.filter { it.userId.isNullOrBlank() || it.userId != uid }
-                val own = all.filter { it.userId == uid }
-                foreign.forEach { foreignPaths += it.replayLocalPath }
-                if (foreign.isNotEmpty() && own.isEmpty()) {
-                    store.write(emptyList())
+            val snapshot =
+                synchronized(lock) {
+                    val all = store.read()
+                    val foreign = all.filter { it.userId.isNullOrBlank() || it.userId != uid }
+                    val own = all.filter { it.userId == uid }
+                    foreign.forEach { foreignPaths += it.replayLocalPath }
+                    if (foreign.isNotEmpty() && own.isEmpty()) {
+                        store.write(emptyList())
+                    }
+                    own
                 }
-                own
-            }
             foreignPaths.forEach { replayFiles.deleteFile(it) }
             if (snapshot.isEmpty()) return@withLock 0
 
@@ -164,9 +173,11 @@ internal class PendingScoreQueueEngine(
                     continue
                 }
 
-                val replaySha256 = replayFiles.sha256Hex(localPath)
-                    ?.lowercase()
-                    ?.takeIf { SHA256_HEX_REGEX.matches(it) }
+                val replaySha256 =
+                    replayFiles
+                        .sha256Hex(localPath)
+                        ?.lowercase()
+                        ?.takeIf { SHA256_HEX_REGEX.matches(it) }
                 if (replaySha256 == null) {
                     filesToDelete += localPath
                     continue
@@ -180,18 +191,19 @@ internal class PendingScoreQueueEngine(
                 }
 
                 val effectiveSha256 = replaySha256
-                val result = runCatching {
-                    client.submitHighScore(
-                        gameId = item.gameId,
-                        score = item.score,
-                        romSha256 = item.romSha256,
-                        creditsUsed = item.creditsUsed,
-                        isHardcore = item.isHardcore,
-                        replayPath = uploaded.path,
-                        replaySizeBytes = uploaded.sizeBytes,
-                        replaySha256 = effectiveSha256
-                    )
-                }
+                val result =
+                    runCatching {
+                        client.submitHighScore(
+                            gameId = item.gameId,
+                            score = item.score,
+                            romSha256 = item.romSha256,
+                            creditsUsed = item.creditsUsed,
+                            isHardcore = item.isHardcore,
+                            replayPath = uploaded.path,
+                            replaySizeBytes = uploaded.sizeBytes,
+                            replaySha256 = effectiveSha256,
+                        )
+                    }
                 val dto = result.getOrNull()
                 if (result.isSuccess && dto != null) {
                     if (dto.accepted) {
@@ -221,9 +233,10 @@ internal class PendingScoreQueueEngine(
 
                 for (latestItem in latestOwn) {
                     val snapItem = snapshotByGameId[latestItem.gameId]
-                    val isNewOrSuperseded = snapItem == null ||
-                        latestItem.score > snapItem.score ||
-                        (latestItem.score == snapItem.score && latestItem.queuedAtMs > snapItem.queuedAtMs)
+                    val isNewOrSuperseded =
+                        snapItem == null ||
+                            latestItem.score > snapItem.score ||
+                            (latestItem.score == snapItem.score && latestItem.queuedAtMs > snapItem.queuedAtMs)
                     if (isNewOrSuperseded) {
                         val existing = mergedByGameId[latestItem.gameId]
                         if (existing == null ||
@@ -252,33 +265,38 @@ internal class PendingScoreQueueEngine(
     companion object {
         private val SHA256_HEX_REGEX = Regex("^[0-9a-f]{64}$")
 
-        val permanentRejectionReasons = setOf(
-            "anonymous_not_allowed",
-            "invalid_score",
-            "hardcore_required",
-            "single_credit_only",
-            "game_not_found",
-            "leaderboard_not_configured",
-            "rom_mismatch",
-            "score_exceeds_max",
-            "replay_required",
-            "invalid_replay_path",
-            "invalid_replay_metadata",
-            "invalid_replay_sha256",
-            "replay_already_used"
-        )
+        val permanentRejectionReasons =
+            setOf(
+                "anonymous_not_allowed",
+                "invalid_score",
+                "hardcore_required",
+                "single_credit_only",
+                "game_not_found",
+                "leaderboard_not_configured",
+                "rom_mismatch",
+                "score_exceeds_max",
+                "replay_required",
+                "invalid_replay_path",
+                "invalid_replay_metadata",
+                "invalid_replay_sha256",
+                "replay_already_used",
+            )
     }
 }
 
-private class SharedPreferencesScoreQueueStore(context: Context) : ScoreQueueStore {
+private class SharedPreferencesScoreQueueStore(
+    context: Context,
+) : ScoreQueueStore {
     private val appCtx = context.applicationContext
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun read(): List<PendingScoreSubmission> {
-        val raw = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_QUEUE, null)
-            ?.takeIf { it.isNotBlank() }
-            ?: return emptyList()
+        val raw =
+            appCtx
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_QUEUE, null)
+                ?.takeIf { it.isNotBlank() }
+                ?: return emptyList()
         return runCatching { json.decodeFromString<List<PendingScoreSubmission>>(raw) }
             .getOrDefault(emptyList())
     }
@@ -293,7 +311,8 @@ private class SharedPreferencesScoreQueueStore(context: Context) : ScoreQueueSto
     }
 
     override fun clear() {
-        appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        appCtx
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .apply()
@@ -305,7 +324,9 @@ private class SharedPreferencesScoreQueueStore(context: Context) : ScoreQueueSto
     }
 }
 
-internal class AndroidReplayFileHandler(context: Context) : ReplayFileHandler {
+internal class AndroidReplayFileHandler(
+    context: Context,
+) : ReplayFileHandler {
     private val pendingDir = File(context.applicationContext.filesDir, "pending_replays")
 
     override fun existsAndNonEmpty(path: String?): Boolean {
@@ -320,7 +341,8 @@ internal class AndroidReplayFileHandler(context: Context) : ReplayFileHandler {
         return runCatching {
             val bytes = f.readBytes()
             if (bytes.isEmpty()) return null
-            MessageDigest.getInstance("SHA-256")
+            MessageDigest
+                .getInstance("SHA-256")
                 .digest(bytes)
                 .joinToString("") { "%02x".format(it) }
         }.getOrNull()
@@ -340,19 +362,22 @@ internal class AndroidReplayFileHandler(context: Context) : ReplayFileHandler {
     }
 }
 
-private class ArcadeScoreSyncClient(private val repo: ArcadeRepository) : ScoreSyncClient {
+private class ArcadeScoreSyncClient(
+    private val repo: ArcadeRepository,
+) : ScoreSyncClient {
     override fun currentUserId(): String? = repo.currentUserId()
 
-    override suspend fun fetchMyGameRankScore(gameId: String): Long? {
-        return repo.fetchMyGameRank(gameId)?.score
-    }
+    override suspend fun fetchMyGameRankScore(gameId: String): Long? = repo.fetchMyGameRank(gameId)?.score
 
-    override suspend fun uploadReplay(gameId: String, localPath: String): UploadedReplay? {
+    override suspend fun uploadReplay(
+        gameId: String,
+        localPath: String,
+    ): UploadedReplay? {
         val uploaded = repo.uploadReplay(gameId, File(localPath)) ?: return null
         return UploadedReplay(
             path = uploaded.first,
             sizeBytes = uploaded.second,
-            sha256 = uploaded.third
+            sha256 = uploaded.third,
         )
     }
 
@@ -364,9 +389,9 @@ private class ArcadeScoreSyncClient(private val repo: ArcadeRepository) : ScoreS
         isHardcore: Boolean,
         replayPath: String,
         replaySizeBytes: Int?,
-        replaySha256: String
-    ): SubmitScoreResultDto? {
-        return repo.submitHighScore(
+        replaySha256: String,
+    ): SubmitScoreResultDto? =
+        repo.submitHighScore(
             gameId = gameId,
             score = score,
             romSha256 = romSha256,
@@ -374,9 +399,8 @@ private class ArcadeScoreSyncClient(private val repo: ArcadeRepository) : ScoreS
             isHardcore = isHardcore,
             replayPath = replayPath,
             replaySizeBytes = replaySizeBytes,
-            replaySha256 = replaySha256
+            replaySha256 = replaySha256,
         )
-    }
 }
 
 /**
@@ -388,24 +412,25 @@ object PendingScoreQueue {
     private var engineInstance: PendingScoreQueueEngine? = null
     private val initLock = Any()
 
-    private fun engine(context: Context): PendingScoreQueueEngine {
-        return engineInstance ?: synchronized(initLock) {
+    private fun engine(context: Context): PendingScoreQueueEngine =
+        engineInstance ?: synchronized(initLock) {
             engineInstance ?: PendingScoreQueueEngine(
                 store = SharedPreferencesScoreQueueStore(context),
-                replayFiles = AndroidReplayFileHandler(context)
+                replayFiles = AndroidReplayFileHandler(context),
             ).also { engineInstance = it }
         }
-    }
 
-    fun isPermanentRejection(reason: String?): Boolean {
-        return reason != null && reason in PendingScoreQueueEngine.permanentRejectionReasons
-    }
+    fun isPermanentRejection(reason: String?): Boolean = reason != null && reason in PendingScoreQueueEngine.permanentRejectionReasons
 
-    fun pendingCount(context: Context, currentUserId: String? = null): Int {
-        return engine(context).pendingCount(currentUserId)
-    }
+    fun pendingCount(
+        context: Context,
+        currentUserId: String? = null,
+    ): Int = engine(context).pendingCount(currentUserId)
 
-    fun enqueue(context: Context, entry: PendingScoreSubmission) {
+    fun enqueue(
+        context: Context,
+        entry: PendingScoreSubmission,
+    ) {
         engine(context).enqueue(entry)
     }
 
@@ -417,7 +442,8 @@ object PendingScoreQueue {
         clear(context)
     }
 
-    suspend fun flushAll(context: Context, repo: ArcadeRepository): Int {
-        return engine(context).flushAll(ArcadeScoreSyncClient(repo))
-    }
+    suspend fun flushAll(
+        context: Context,
+        repo: ArcadeRepository,
+    ): Int = engine(context).flushAll(ArcadeScoreSyncClient(repo))
 }

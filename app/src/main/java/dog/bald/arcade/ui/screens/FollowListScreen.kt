@@ -67,7 +67,7 @@ fun FollowListScreen(
     onBack: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
     onFollowChanged: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
 
@@ -87,44 +87,47 @@ fun FollowListScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ObsidianBlack)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(ObsidianBlack)
+                .statusBarsPadding()
+                .navigationBarsPadding(),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(PureBlack)
-                .border(1.dp, CharcoalBorder, RectangleShape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(PureBlack)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .background(CarbonSurface, RectangleShape)
-                    .border(1.dp, SteelBorder, RectangleShape)
-                    .clickable(onClick = onBack)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                modifier =
+                    Modifier
+                        .background(CarbonSurface, RectangleShape)
+                        .border(1.dp, SteelBorder, RectangleShape)
+                        .clickable(onClick = onBack)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Volver",
                         tint = PureWhite,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                     Text(
                         text = "VOLVER",
                         color = PureWhite,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
             }
@@ -135,7 +138,7 @@ fun FollowListScreen(
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
         }
 
@@ -156,7 +159,7 @@ fun FollowListScreen(
                         text = if (direction == "following") "Aún no sigue a ningún jugador." else "Aún no tiene seguidores.",
                         color = MutedGray,
                         fontFamily = JetBrainsMonoFamily,
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
                     )
                 }
             }
@@ -164,39 +167,41 @@ fun FollowListScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(users, key = { it.userId }) { user ->
                         val flag = CountryCatalog.flagEmoji(user.countryCode)
                         val rank = ArcadeRank.fromPoints(user.globalPoints)
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(CarbonSurface, RectangleShape)
-                                .border(1.dp, CharcoalBorder, RectangleShape)
-                                .clickable { onOpenUserProfile(user.userId) }
-                                .padding(10.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(CarbonSurface, RectangleShape)
+                                    .border(1.dp, CharcoalBorder, RectangleShape)
+                                    .clickable { onOpenUserProfile(user.userId) }
+                                    .padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(ObsidianBlack, RectangleShape)
-                                    .border(1.dp, SteelBorder, RectangleShape)
-                                    .padding(3.dp),
-                                contentAlignment = Alignment.Center
+                                modifier =
+                                    Modifier
+                                        .size(40.dp)
+                                        .background(ObsidianBlack, RectangleShape)
+                                        .border(1.dp, SteelBorder, RectangleShape)
+                                        .padding(3.dp),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 DiceBearPixelArtAvatar(
                                     seed = user.avatarSeed?.takeIf { it.isNotBlank() } ?: user.username,
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(34.dp),
                                 )
                             }
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
                                     if (flag.isNotEmpty()) {
                                         Text(text = flag, fontSize = 13.sp)
@@ -207,14 +212,14 @@ fun FollowListScreen(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                                 Text(
                                     text = "${rank.title} · ${user.globalPoints} PTS",
                                     color = MutedGray,
                                     fontFamily = JetBrainsMonoFamily,
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
                                 )
                             }
 
@@ -222,13 +227,15 @@ fun FollowListScreen(
                                 val following = user.isFollowingByMe
                                 val toggleFollow: () -> Unit = {
                                     val prev = users
-                                    users = users.map {
-                                        if (it.userId == user.userId) it.copy(isFollowingByMe = !following) else it
-                                    }
-                                    scope.launch {
-                                        val res = runCatching {
-                                            if (following) repo.unfollowUser(user.userId) else repo.followUser(user.userId)
+                                    users =
+                                        users.map {
+                                            if (it.userId == user.userId) it.copy(isFollowingByMe = !following) else it
                                         }
+                                    scope.launch {
+                                        val res =
+                                            runCatching {
+                                                if (following) repo.unfollowUser(user.userId) else repo.followUser(user.userId)
+                                            }
                                         if (res.isSuccess) {
                                             onFollowChanged()
                                         } else {
@@ -241,31 +248,32 @@ fun FollowListScreen(
                                         onClick = toggleFollow,
                                         shape = RectangleShape,
                                         border = BorderStroke(1.dp, SteelBorder),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                     ) {
                                         Text(
                                             text = "SIGUIENDO",
                                             color = PureWhite,
                                             fontFamily = JetBrainsMonoFamily,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp
+                                            fontSize = 10.sp,
                                         )
                                     }
                                 } else {
                                     Button(
                                         onClick = toggleFollow,
                                         shape = RectangleShape,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = PureWhite,
-                                            contentColor = PureBlack
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                        colors =
+                                            ButtonDefaults.buttonColors(
+                                                containerColor = PureWhite,
+                                                contentColor = PureBlack,
+                                            ),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                     ) {
                                         Text(
                                             text = "SEGUIR",
                                             fontFamily = JetBrainsMonoFamily,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp
+                                            fontSize = 10.sp,
                                         )
                                     }
                                 }

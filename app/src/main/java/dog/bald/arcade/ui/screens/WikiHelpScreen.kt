@@ -53,7 +53,7 @@ import dog.bald.arcade.ui.theme.SteelBorder
 
 private data class WikiLink(
     val label: String,
-    val url: String
+    val url: String,
 )
 
 private data class WikiSection(
@@ -61,81 +61,89 @@ private data class WikiSection(
     val title: String,
     val summary: String,
     val bullets: List<String>,
-    val links: List<WikiLink> = emptyList()
+    val links: List<WikiLink> = emptyList(),
 )
 
-private val wikiSections = listOf(
-    WikiSection(
-        id = "catalog",
-        title = "1. CATÁLOGO, ROMs IPFS Y PRIMEROS PASOS",
-        summary = "Cómo descargar juegos, BIOS y empezar a jugar en segundos.",
-        bullets = listOf(
-            "En la pestaña Catálogo verás todos los juegos curados con soporte de sistema (CPS-1, CPS-2, Neo Geo, Konami, etc.).",
-            "Toca DESCARGAR (o JUGAR directo desde Rankings) para bajar la ROM y su BIOS requerida desde IPFS con verificación SHA-256.",
-            "Puedes liberar espacio en cualquier momento tocando el ícono de papelera en la tarjeta del juego o desde Perfil → Limpiar Caché."
-        )
-    ),
-    WikiSection(
-        id = "rankings",
-        title = "2. RANKINGS, REGLAS 1CC Y REPLAYS VERIFICADOS",
-        summary = "Cómo entrar al leaderboard oficial con partidas de 1 crédito.",
-        bullets = listOf(
-            "Solo las partidas en solitario con 1 crédito (1CC) y modo Hardcore (sin Save States ni trucos) envían puntaje al ranking oficial.",
-            "Al finalizar tu partida se guarda automáticamente un replay determinista que puede ser auditado y reproducido por otros jugadores.",
-            "En la vista individual de cada juego puedes alternar entre Top 1CC y Tiempo Jugado, y filtrar por TODOS o SIGUIENDO."
-        )
-    ),
-    WikiSection(
-        id = "gamification",
-        title = "3. PUNTOS GLOBALES, RANGOS Y MEDALLAS",
-        summary = "Fórmula del Ranking Global, desempates y progresión.",
-        bullets = listOf(
-            "Puntos Globales por cada juego con ranking activo: #1 = 100 pts, #2 = 75 pts, #3 = 50 pts, #4–#10 = 25 pts, 1CC (#11+) = 10 pts.",
-            "Desempate Global: a igualdad de puntos gana quien tenga menor tiempo total acumulado. En un juego: menor tiempo en ese juego, luego fecha más antigua.",
-            "Rangos Arcade: Novato (0+) → Retador (150+) → Luchador (450+) → Maestro (900+) → Gran Maestro (1,500+) → Leyenda (2,000+).",
-            "Medallas: Rey del Arcade (#1), Podio (Top 3), 1CC Master, Replay Verificado, Veterano (25h/100h/250h) y Anfitrión Netplay (25/100/250 salas)."
-        )
-    ),
-    WikiSection(
-        id = "netplay",
-        title = "4. SALAS NETPLAY (ONLINE / LAN) Y VOZ",
-        summary = "Juega cooperativo o arcade en línea y red local.",
-        bullets = listOf(
-            "En la pestaña Salas puedes crear una sala Online o LAN, o unirte a una existente con su código.",
-            "Las salas creadas por jugadores que sigues muestran la etiqueta [SIGUIENDO] y puedes filtrarlas arriba.",
-            "Dentro del lobby puedes tocar cualquier jugador ocupado o mensaje del chat para ver su Perfil Público y seguirlo sin salir de la sala."
-        )
-    ),
-    WikiSection(
-        id = "profile",
-        title = "5. CONTROLES, PERFIL PÚBLICO Y PRIVACIDAD",
-        summary = "Personalización, redes sociales, seguidores y gamepad.",
-        bullets = listOf(
-            "Usa botones táctiles configurables en pantalla o conecta cualquier Gamepad Bluetooth/USB (se detecta automáticamente).",
-            "En Perfil → EDITAR PERFIL puedes cambiar tu username, bio, país, generar un avatar pixel-art aleatorio y agregar tus redes sociales (URLs https:// o tag de Discord).",
-            "El toggle 'Perfil privado' oculta tus redes, tiempo total e historial reciente en tu perfil público, manteniendo visibles tus récords 1CC y medallas."
-        )
-    ),
-    WikiSection(
-        id = "community",
-        title = "6. COMUNIDAD Y REDES OFICIALES",
-        summary = "Canales oficiales de bald.dog ARCADE para soporte, código y novedades.",
-        bullets = listOf(
-            "Únete al Discord oficial para coordinar partidas Netplay, reportar bugs o proponer nuevos juegos.",
-            "Sigue el desarrollo en GitHub y entérate de actualizaciones y torneos en X (Twitter)."
+private val wikiSections =
+    listOf(
+        WikiSection(
+            id = "catalog",
+            title = "1. CATÁLOGO, ROMs IPFS Y PRIMEROS PASOS",
+            summary = "Cómo descargar juegos, BIOS y empezar a jugar en segundos.",
+            bullets =
+                listOf(
+                    "En la pestaña Catálogo verás todos los juegos curados con soporte de sistema (CPS-1, CPS-2, Neo Geo, Konami, etc.).",
+                    "Toca DESCARGAR (o JUGAR directo desde Rankings) para bajar la ROM y su BIOS requerida desde IPFS con verificación SHA-256.",
+                    "Puedes liberar espacio en cualquier momento tocando el ícono de papelera en la tarjeta del juego o desde Perfil → Limpiar Caché.",
+                ),
         ),
-        links = listOf(
-            WikiLink(label = "DISCORD", url = "https://discord.gg/wrN9KRvubj"),
-            WikiLink(label = "GITHUB", url = "https://github.com/balddogarcade/"),
-            WikiLink(label = "X / TWITTER", url = "https://x.com/BaldDogArcade")
-        )
+        WikiSection(
+            id = "rankings",
+            title = "2. RANKINGS, REGLAS 1CC Y REPLAYS VERIFICADOS",
+            summary = "Cómo entrar al leaderboard oficial con partidas de 1 crédito.",
+            bullets =
+                listOf(
+                    "Solo las partidas en solitario con 1 crédito (1CC) y modo Hardcore (sin Save States ni trucos) envían puntaje al ranking oficial.",
+                    "Al finalizar tu partida se guarda automáticamente un replay determinista que puede ser auditado y reproducido por otros jugadores.",
+                    "En la vista individual de cada juego puedes alternar entre Top 1CC y Tiempo Jugado, y filtrar por TODOS o SIGUIENDO.",
+                ),
+        ),
+        WikiSection(
+            id = "gamification",
+            title = "3. PUNTOS GLOBALES, RANGOS Y MEDALLAS",
+            summary = "Fórmula del Ranking Global, desempates y progresión.",
+            bullets =
+                listOf(
+                    "Puntos Globales por cada juego con ranking activo: #1 = 100 pts, #2 = 75 pts, #3 = 50 pts, #4–#10 = 25 pts, 1CC (#11+) = 10 pts.",
+                    "Desempate Global: a igualdad de puntos gana quien tenga menor tiempo total acumulado. En un juego: menor tiempo en ese juego, luego fecha más antigua.",
+                    "Rangos Arcade: Novato (0+) → Retador (150+) → Luchador (450+) → Maestro (900+) → Gran Maestro (1,500+) → Leyenda (2,000+).",
+                    "Medallas: Rey del Arcade (#1), Podio (Top 3), 1CC Master, Replay Verificado, Veterano (25h/100h/250h) y Anfitrión Netplay (25/100/250 salas).",
+                ),
+        ),
+        WikiSection(
+            id = "netplay",
+            title = "4. SALAS NETPLAY (ONLINE / LAN) Y VOZ",
+            summary = "Juega cooperativo o arcade en línea y red local.",
+            bullets =
+                listOf(
+                    "En la pestaña Salas puedes crear una sala Online o LAN, o unirte a una existente con su código.",
+                    "Las salas creadas por jugadores que sigues muestran la etiqueta [SIGUIENDO] y puedes filtrarlas arriba.",
+                    "Dentro del lobby puedes tocar cualquier jugador ocupado o mensaje del chat para ver su Perfil Público y seguirlo sin salir de la sala.",
+                ),
+        ),
+        WikiSection(
+            id = "profile",
+            title = "5. CONTROLES, PERFIL PÚBLICO Y PRIVACIDAD",
+            summary = "Personalización, redes sociales, seguidores y gamepad.",
+            bullets =
+                listOf(
+                    "Usa botones táctiles configurables en pantalla o conecta cualquier Gamepad Bluetooth/USB (se detecta automáticamente).",
+                    "En Perfil → EDITAR PERFIL puedes cambiar tu username, bio, país, generar un avatar pixel-art aleatorio y agregar tus redes sociales (URLs https:// o tag de Discord).",
+                    "El toggle 'Perfil privado' oculta tus redes, tiempo total e historial reciente en tu perfil público, manteniendo visibles tus récords 1CC y medallas.",
+                ),
+        ),
+        WikiSection(
+            id = "community",
+            title = "6. COMUNIDAD Y REDES OFICIALES",
+            summary = "Canales oficiales de bald.dog ARCADE para soporte, código y novedades.",
+            bullets =
+                listOf(
+                    "Únete al Discord oficial para coordinar partidas Netplay, reportar bugs o proponer nuevos juegos.",
+                    "Sigue el desarrollo en GitHub y entérate de actualizaciones y torneos en X (Twitter).",
+                ),
+            links =
+                listOf(
+                    WikiLink(label = "DISCORD", url = "https://discord.gg/wrN9KRvubj"),
+                    WikiLink(label = "GITHUB", url = "https://github.com/balddogarcade/"),
+                    WikiLink(label = "X / TWITTER", url = "https://x.com/BaldDogArcade"),
+                ),
+        ),
     )
-)
 
 @Composable
 fun WikiHelpScreen(
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
 
@@ -143,56 +151,63 @@ fun WikiHelpScreen(
     var expandedId by remember { mutableStateOf<String?>(wikiSections.first().id) }
     val uriHandler = LocalUriHandler.current
 
-    val filtered = remember(searchQuery) {
-        val q = searchQuery.trim()
-        if (q.isEmpty()) wikiSections
-        else wikiSections.filter { sec ->
-            sec.title.contains(q, ignoreCase = true) ||
-                sec.summary.contains(q, ignoreCase = true) ||
-                sec.bullets.any { it.contains(q, ignoreCase = true) } ||
-                sec.links.any { it.label.contains(q, ignoreCase = true) || it.url.contains(q, ignoreCase = true) }
+    val filtered =
+        remember(searchQuery) {
+            val q = searchQuery.trim()
+            if (q.isEmpty()) {
+                wikiSections
+            } else {
+                wikiSections.filter { sec ->
+                    sec.title.contains(q, ignoreCase = true) ||
+                        sec.summary.contains(q, ignoreCase = true) ||
+                        sec.bullets.any { it.contains(q, ignoreCase = true) } ||
+                        sec.links.any { it.label.contains(q, ignoreCase = true) || it.url.contains(q, ignoreCase = true) }
+                }
+            }
         }
-    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(ObsidianBlack)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(ObsidianBlack)
+                .statusBarsPadding()
+                .navigationBarsPadding(),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(PureBlack)
-                .border(1.dp, CharcoalBorder, RectangleShape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(PureBlack)
+                    .border(1.dp, CharcoalBorder, RectangleShape)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
-                modifier = Modifier
-                    .background(CarbonSurface, RectangleShape)
-                    .border(1.dp, SteelBorder, RectangleShape)
-                    .clickable(onClick = onBack)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                modifier =
+                    Modifier
+                        .background(CarbonSurface, RectangleShape)
+                        .border(1.dp, SteelBorder, RectangleShape)
+                        .clickable(onClick = onBack)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Volver",
                         tint = PureWhite,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(16.dp),
                     )
                     Text(
                         text = "VOLVER",
                         color = PureWhite,
                         fontFamily = JetBrainsMonoFamily,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
                     )
                 }
             }
@@ -201,7 +216,7 @@ fun WikiHelpScreen(
                 color = PureWhite,
                 fontFamily = SpaceGroteskFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 15.sp
+                fontSize = 15.sp,
             )
         }
 
@@ -215,43 +230,46 @@ fun WikiHelpScreen(
                     imageVector = Icons.Default.Search,
                     contentDescription = null,
                     tint = MutedGray,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(16.dp),
                 )
             },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = PureWhite,
-                unfocusedTextColor = PureWhite,
-                focusedBorderColor = PureWhite,
-                unfocusedBorderColor = CharcoalBorder,
-                cursorColor = PureWhite
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
+            colors =
+                OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = PureWhite,
+                    unfocusedTextColor = PureWhite,
+                    focusedBorderColor = PureWhite,
+                    unfocusedBorderColor = CharcoalBorder,
+                    cursorColor = PureWhite,
+                ),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
         )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(filtered, key = { it.id }) { section ->
                 val isExpanded = expandedId == section.id
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(CarbonSurface, RectangleShape)
-                        .border(1.dp, if (isExpanded) SteelBorder else CharcoalBorder, RectangleShape)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .background(CarbonSurface, RectangleShape)
+                            .border(1.dp, if (isExpanded) SteelBorder else CharcoalBorder, RectangleShape),
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                expandedId = if (isExpanded) null else section.id
-                            }
-                            .padding(12.dp),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    expandedId = if (isExpanded) null else section.id
+                                }.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
@@ -259,49 +277,51 @@ fun WikiHelpScreen(
                                 color = PureWhite,
                                 fontFamily = JetBrainsMonoFamily,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 12.sp,
                             )
                             Text(
                                 text = section.summary,
                                 color = MutedGray,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
                             )
                         }
                         Icon(
                             imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = null,
                             tint = PureWhite,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                     }
 
                     if (isExpanded) {
                         HorizontalDivider(color = CharcoalBorder)
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(ObsidianBlack)
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(ObsidianBlack)
+                                    .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             section.bullets.forEach { bullet ->
                                 Text(
                                     text = "• $bullet",
                                     color = SilverGray,
                                     fontSize = 12.sp,
-                                    lineHeight = 17.sp
+                                    lineHeight = 17.sp,
                                 )
                             }
                             section.links.forEach { link ->
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(CarbonSurface, RectangleShape)
-                                        .border(1.dp, SteelBorder, RectangleShape)
-                                        .clickable { uriHandler.openUri(link.url) }
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .background(CarbonSurface, RectangleShape)
+                                            .border(1.dp, SteelBorder, RectangleShape)
+                                            .clickable { uriHandler.openUri(link.url) }
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -309,20 +329,20 @@ fun WikiHelpScreen(
                                             color = PureWhite,
                                             fontFamily = JetBrainsMonoFamily,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
+                                            fontSize = 11.sp,
                                         )
                                         Text(
                                             text = link.url,
                                             color = MutedGray,
                                             fontFamily = JetBrainsMonoFamily,
-                                            fontSize = 10.sp
+                                            fontSize = 10.sp,
                                         )
                                     }
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                                         contentDescription = link.label,
                                         tint = PureWhite,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(16.dp),
                                     )
                                 }
                             }

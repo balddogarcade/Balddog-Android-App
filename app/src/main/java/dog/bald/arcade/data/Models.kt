@@ -11,7 +11,7 @@ data class GameBiosDto(
     @SerialName("ipfs_cid") val ipfsCid: String,
     val sha256: String,
     val crc32: String,
-    @SerialName("size_bytes") val sizeBytes: Long = 0L
+    @SerialName("size_bytes") val sizeBytes: Long = 0L,
 )
 
 @Serializable
@@ -56,13 +56,13 @@ data class GameDto(
     @SerialName("url_image_marquee") val urlImageMarquee: String? = null,
     @SerialName("url_image_cabinet") val urlImageCabinet: String? = null,
     @SerialName("url_image_flyer") val urlImageFlyer: String? = null,
-    @SerialName("url_icon") val urlIcon: String? = null
+    @SerialName("url_icon") val urlIcon: String? = null,
 )
 
 @Serializable
 data class ScoreConfigDto(
     val lboard: String = "",
-    val format: String = "rcheevos"
+    val format: String = "rcheevos",
 )
 
 @Serializable
@@ -73,7 +73,7 @@ data class SocialLinksDto(
     val twitch: String? = null,
     val discord: String? = null,
     val github: String? = null,
-    val website: String? = null
+    val website: String? = null,
 )
 
 @Serializable
@@ -89,7 +89,7 @@ data class ProfileDto(
     @SerialName("total_plays") val totalPlays: Int = 0,
     @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
     @SerialName("is_anonymous") val isAnonymous: Boolean = false,
-    @SerialName("welcome_email_sent") val welcomeEmailSent: Boolean = false
+    @SerialName("welcome_email_sent") val welcomeEmailSent: Boolean = false,
 )
 
 @Serializable
@@ -98,7 +98,7 @@ data class UserGameStatDto(
     @SerialName("game_id") val gameId: String,
     @SerialName("play_seconds") val playSeconds: Long = 0L,
     @SerialName("play_count") val playCount: Int = 0,
-    @SerialName("last_played_at") val lastPlayedAt: String = ""
+    @SerialName("last_played_at") val lastPlayedAt: String = "",
 )
 
 @Serializable
@@ -108,7 +108,7 @@ data class RoomSlotInfo(
     val endpoint: String,
     @SerialName("voice_endpoint") val voiceEndpoint: String? = null,
     val ready: Boolean = false,
-    @SerialName("avatar_seed") val avatarSeed: String? = null
+    @SerialName("avatar_seed") val avatarSeed: String? = null,
 )
 
 @Serializable
@@ -125,7 +125,7 @@ data class RoomDto(
     @SerialName("local_ip") val localIp: String? = null,
     @SerialName("local_port") val localPort: Int? = null,
     @SerialName("is_private") val isPrivate: Boolean = false,
-    @SerialName("updated_at") val updatedAt: String = ""
+    @SerialName("updated_at") val updatedAt: String = "",
 )
 
 @Serializable
@@ -135,7 +135,7 @@ data class RoomMessageDto(
     @SerialName("user_id") val userId: String,
     val username: String,
     val message: String,
-    @SerialName("created_at") val createdAt: String = ""
+    @SerialName("created_at") val createdAt: String = "",
 )
 
 @Serializable
@@ -144,7 +144,7 @@ data class HighScoreDto(
     @SerialName("game_id") val gameId: String,
     @SerialName("user_id") val userId: String,
     val score: Long,
-    @SerialName("achieved_at") val achievedAt: String = ""
+    @SerialName("achieved_at") val achievedAt: String = "",
 )
 
 @Serializable
@@ -157,7 +157,7 @@ data class LeaderboardEntryDto(
     val score: Long,
     @SerialName("achieved_at") val achievedAt: String = "",
     @SerialName("replay_path") val replayPath: String? = null,
-    @SerialName("verification_status") val verificationStatus: String = "unverified"
+    @SerialName("verification_status") val verificationStatus: String = "unverified",
 )
 
 @Serializable
@@ -166,12 +166,12 @@ data class SubmitScoreResultDto(
     @SerialName("is_new_record") val isNewRecord: Boolean = false,
     @SerialName("best_score") val bestScore: Long = 0L,
     val rank: Long? = null,
-    val reason: String? = null
+    val reason: String? = null,
 )
 
 data class GameLeaderboardData(
     val entries: List<LeaderboardEntryDto> = emptyList(),
-    val myEntry: LeaderboardEntryDto? = null
+    val myEntry: LeaderboardEntryDto? = null,
 )
 
 @Serializable
@@ -184,14 +184,14 @@ data class MyHighScoreDto(
     @SerialName("total_players") val totalPlayers: Long = 0L,
     @SerialName("replay_path") val replayPath: String? = null,
     @SerialName("replay_size_bytes") val replaySizeBytes: Int? = null,
-    @SerialName("verification_status") val verificationStatus: String = "unverified"
+    @SerialName("verification_status") val verificationStatus: String = "unverified",
 )
 
 @Serializable
 data class MatchHistoryPlayerDto(
     @SerialName("user_id") val userId: String,
     val username: String,
-    val slot: Int = 0
+    val slot: Int = 0,
 )
 
 @Serializable
@@ -204,7 +204,7 @@ data class MatchHistoryDto(
     @SerialName("started_at") val startedAt: String = "",
     @SerialName("ended_at") val endedAt: String? = null,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
-    val score: Long? = null
+    val score: Long? = null,
 )
 
 @Serializable
@@ -219,7 +219,7 @@ data class GlobalLeaderboardEntryDto(
     val podiums: Long = 0L,
     @SerialName("total_1cc") val total1cc: Long = 0L,
     @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,
-    @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false
+    @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false,
 )
 
 @Serializable
@@ -234,7 +234,7 @@ data class GameLeaderboardV2EntryDto(
     @SerialName("achieved_at") val achievedAt: String = "",
     @SerialName("replay_path") val replayPath: String? = null,
     @SerialName("verification_status") val verificationStatus: String = "unverified",
-    @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false
+    @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false,
 )
 
 @Serializable
@@ -243,7 +243,7 @@ data class GameTopPlayerDto(
     @SerialName("user_id") val userId: String,
     val username: String,
     @SerialName("country_code") val countryCode: String? = null,
-    val score: Long = 0L
+    val score: Long = 0L,
 )
 
 @Serializable
@@ -252,7 +252,7 @@ data class GameRankingSummaryDto(
     @SerialName("total_players") val totalPlayers: Long = 0L,
     @SerialName("my_rank") val myRank: Long? = null,
     @SerialName("my_score") val myScore: Long? = null,
-    @SerialName("top3_json") val top3: List<GameTopPlayerDto> = emptyList()
+    @SerialName("top3_json") val top3: List<GameTopPlayerDto> = emptyList(),
 )
 
 @Serializable
@@ -263,7 +263,7 @@ data class PublicProfileHighScoreDto(
     val rank: Long = 0L,
     @SerialName("total_players") val totalPlayers: Long = 0L,
     @SerialName("replay_path") val replayPath: String? = null,
-    @SerialName("verification_status") val verificationStatus: String = "unverified"
+    @SerialName("verification_status") val verificationStatus: String = "unverified",
 )
 
 @Serializable
@@ -273,7 +273,7 @@ data class PublicProfileMatchDto(
     val mode: String,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
     val score: Long? = null,
-    @SerialName("ended_at") val endedAt: String? = null
+    @SerialName("ended_at") val endedAt: String? = null,
 )
 
 @Serializable
@@ -298,7 +298,7 @@ data class PublicProfileDto(
     @SerialName("following_count") val followingCount: Long = 0L,
     @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false,
     @SerialName("high_scores") val highScores: List<PublicProfileHighScoreDto> = emptyList(),
-    @SerialName("recent_matches") val recentMatches: List<PublicProfileMatchDto> = emptyList()
+    @SerialName("recent_matches") val recentMatches: List<PublicProfileMatchDto> = emptyList(),
 )
 
 @Serializable
@@ -308,21 +308,23 @@ data class FollowUserDto(
     @SerialName("avatar_seed") val avatarSeed: String? = null,
     @SerialName("country_code") val countryCode: String? = null,
     @SerialName("global_points") val globalPoints: Long = 0L,
-    @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false
+    @SerialName("is_following_by_me") val isFollowingByMe: Boolean = false,
 )
 
-enum class ArcadeRank(val title: String, val minPoints: Long) {
+enum class ArcadeRank(
+    val title: String,
+    val minPoints: Long,
+) {
     NOVATO("NOVATO", 0L),
     RETADOR("RETADOR", 150L),
     LUCHADOR("LUCHADOR", 450L),
     MAESTRO("MAESTRO", 900L),
     GRAN_MAESTRO("GRAN MAESTRO", 1500L),
-    LEYENDA("LEYENDA", 2000L);
+    LEYENDA("LEYENDA", 2000L),
+    ;
 
     companion object {
-        fun fromPoints(points: Long): ArcadeRank {
-            return entries.lastOrNull { points >= it.minPoints } ?: NOVATO
-        }
+        fun fromPoints(points: Long): ArcadeRank = entries.lastOrNull { points >= it.minPoints } ?: NOVATO
     }
 }
 
@@ -330,7 +332,7 @@ data class ArcadeBadge(
     val id: String,
     val title: String,
     val subtitle: String,
-    val tier: String? = null
+    val tier: String? = null,
 )
 
 fun computeArcadeBadges(
@@ -339,36 +341,40 @@ fun computeArcadeBadges(
     total1cc: Long,
     verifiedReplays: Long,
     totalPlaySeconds: Long?,
-    netplayMatches: Long
+    netplayMatches: Long,
 ): List<ArcadeBadge> {
     val badges = mutableListOf<ArcadeBadge>()
     if (firstPlaces > 0) {
-        badges += ArcadeBadge(
-            id = "king",
-            title = "REY DEL ARCADE",
-            subtitle = "$firstPlaces × #1"
-        )
+        badges +=
+            ArcadeBadge(
+                id = "king",
+                title = "REY DEL ARCADE",
+                subtitle = "$firstPlaces × #1",
+            )
     }
     if (podiums > 0) {
-        badges += ArcadeBadge(
-            id = "podium",
-            title = "PODIO",
-            subtitle = "$podiums × Top 3"
-        )
+        badges +=
+            ArcadeBadge(
+                id = "podium",
+                title = "PODIO",
+                subtitle = "$podiums × Top 3",
+            )
     }
     if (total1cc > 0) {
-        badges += ArcadeBadge(
-            id = "1cc_master",
-            title = "1CC MASTER",
-            subtitle = "$total1cc juegos"
-        )
+        badges +=
+            ArcadeBadge(
+                id = "1cc_master",
+                title = "1CC MASTER",
+                subtitle = "$total1cc juegos",
+            )
     }
     if (verifiedReplays > 0) {
-        badges += ArcadeBadge(
-            id = "verified_replay",
-            title = "REPLAY VERIFICADO",
-            subtitle = "$verifiedReplays auditados"
-        )
+        badges +=
+            ArcadeBadge(
+                id = "verified_replay",
+                title = "REPLAY VERIFICADO",
+                subtitle = "$verifiedReplays auditados",
+            )
     }
     val hours = (totalPlaySeconds ?: 0L) / 3600L
     when {

@@ -20,18 +20,22 @@ data class PendingMatchHistoryEntry(
     val endedAtIso: String,
     val durationSeconds: Int,
     val score: Long? = null,
-    val queuedAtMs: Long = System.currentTimeMillis()
+    val queuedAtMs: Long = System.currentTimeMillis(),
 )
 
 internal interface MatchHistoryQueueStore {
     fun read(): List<PendingMatchHistoryEntry>
+
     fun write(entries: List<PendingMatchHistoryEntry>)
+
     fun clear()
 }
 
 internal interface MatchHistorySyncClient {
     fun currentUserId(): String?
+
     suspend fun fetchMyUsername(): String?
+
     suspend fun recordMatchHistory(
         clientSessionId: String,
         gameId: String,
@@ -42,12 +46,12 @@ internal interface MatchHistorySyncClient {
         startedAtIso: String,
         endedAtIso: String,
         durationSeconds: Int,
-        score: Long?
+        score: Long?,
     )
 }
 
 internal class PendingMatchHistoryQueueEngine(
-    private val store: MatchHistoryQueueStore
+    private val store: MatchHistoryQueueStore,
 ) {
     private val lock = Any()
     private val flushMutex = Mutex()
@@ -64,9 +68,7 @@ internal class PendingMatchHistoryQueueEngine(
         }
     }
 
-    fun pendingCount(currentUserId: String?): Int {
-        return read(currentUserId).size
-    }
+    fun pendingCount(currentUserId: String?): Int = read(currentUserId).size
 
     fun enqueue(entry: PendingMatchHistoryEntry) {
         val uid = entry.userId?.takeIf { it.isNotBlank() } ?: return
@@ -79,14 +81,15 @@ internal class PendingMatchHistoryQueueEngine(
                 val prev = current[idx]
                 val mergedScore = maxOfNullable(prev.score, entry.score)
                 val mergedPlayers = if (entry.players.isNotEmpty()) entry.players else prev.players
-                current[idx] = entry.copy(
-                    userId = uid,
-                    players = mergedPlayers,
-                    endedAtIso = if (entry.durationSeconds >= prev.durationSeconds) entry.endedAtIso else prev.endedAtIso,
-                    durationSeconds = maxOf(prev.durationSeconds, entry.durationSeconds),
-                    score = mergedScore,
-                    queuedAtMs = maxOf(prev.queuedAtMs, entry.queuedAtMs)
-                )
+                current[idx] =
+                    entry.copy(
+                        userId = uid,
+                        players = mergedPlayers,
+                        endedAtIso = if (entry.durationSeconds >= prev.durationSeconds) entry.endedAtIso else prev.endedAtIso,
+                        durationSeconds = maxOf(prev.durationSeconds, entry.durationSeconds),
+                        score = mergedScore,
+                        queuedAtMs = maxOf(prev.queuedAtMs, entry.queuedAtMs),
+                    )
             } else {
                 current.add(entry)
                 if (current.size > MAX_ENTRIES) {
@@ -100,14 +103,18 @@ internal class PendingMatchHistoryQueueEngine(
         }
     }
 
-    fun removeBySessionId(clientSessionId: String, currentUserId: String? = null) {
+    fun removeBySessionId(
+        clientSessionId: String,
+        currentUserId: String? = null,
+    ) {
         if (clientSessionId.isBlank()) return
         synchronized(lock) {
             val current = store.read()
-            val filtered = current.filterNot { entry ->
-                entry.clientSessionId == clientSessionId &&
-                    (currentUserId.isNullOrBlank() || entry.userId == currentUserId)
-            }
+            val filtered =
+                current.filterNot { entry ->
+                    entry.clientSessionId == clientSessionId &&
+                        (currentUserId.isNullOrBlank() || entry.userId == currentUserId)
+                }
             if (filtered.size != current.size) {
                 store.write(filtered)
             }
@@ -124,14 +131,15 @@ internal class PendingMatchHistoryQueueEngine(
         val uid = client.currentUserId()?.takeIf { it.isNotBlank() } ?: return 0
 
         return flushMutex.withLock {
-            val snapshot = synchronized(lock) {
-                val all = store.read()
-                val own = all.filter { !it.userId.isNullOrBlank() && it.userId == uid }
-                if (all.size != own.size && own.isEmpty()) {
-                    store.write(emptyList())
+            val snapshot =
+                synchronized(lock) {
+                    val all = store.read()
+                    val own = all.filter { !it.userId.isNullOrBlank() && it.userId == uid }
+                    if (all.size != own.size && own.isEmpty()) {
+                        store.write(emptyList())
+                    }
+                    own
                 }
-                own
-            }
             if (snapshot.isEmpty()) return@withLock 0
 
             val remaining = mutableListOf<PendingMatchHistoryEntry>()
@@ -140,29 +148,32 @@ internal class PendingMatchHistoryQueueEngine(
 
             for (item in snapshot) {
                 if (item.isPrivate) continue
-                val resolvedPlayers = if (item.players.isEmpty() && item.mode == "local") {
-                    val username = cachedUsername ?: runCatching {
-                        client.fetchMyUsername()
-                    }.getOrNull()?.also { cachedUsername = it } ?: "Jugador"
-                    listOf(MatchHistoryPlayerDto(userId = uid, username = username, slot = 0))
-                } else {
-                    item.players
-                }
+                val resolvedPlayers =
+                    if (item.players.isEmpty() && item.mode == "local") {
+                        val username =
+                            cachedUsername ?: runCatching {
+                                client.fetchMyUsername()
+                            }.getOrNull()?.also { cachedUsername = it } ?: "Jugador"
+                        listOf(MatchHistoryPlayerDto(userId = uid, username = username, slot = 0))
+                    } else {
+                        item.players
+                    }
 
-                val result = runCatching {
-                    client.recordMatchHistory(
-                        clientSessionId = item.clientSessionId,
-                        gameId = item.gameId,
-                        mode = item.mode,
-                        roomId = item.roomId,
-                        isPrivate = item.isPrivate,
-                        players = resolvedPlayers,
-                        startedAtIso = item.startedAtIso,
-                        endedAtIso = item.endedAtIso,
-                        durationSeconds = item.durationSeconds,
-                        score = item.score
-                    )
-                }
+                val result =
+                    runCatching {
+                        client.recordMatchHistory(
+                            clientSessionId = item.clientSessionId,
+                            gameId = item.gameId,
+                            mode = item.mode,
+                            roomId = item.roomId,
+                            isPrivate = item.isPrivate,
+                            players = resolvedPlayers,
+                            startedAtIso = item.startedAtIso,
+                            endedAtIso = item.endedAtIso,
+                            durationSeconds = item.durationSeconds,
+                            score = item.score,
+                        )
+                    }
 
                 if (result.isSuccess) {
                     syncedCount++
@@ -188,16 +199,20 @@ internal class PendingMatchHistoryQueueEngine(
                         mergedById[latestItem.clientSessionId] = latestItem
                     }
                 }
-                val merged = mergedById.values
-                    .sortedBy { it.queuedAtMs }
-                    .takeLast(MAX_ENTRIES)
+                val merged =
+                    mergedById.values
+                        .sortedBy { it.queuedAtMs }
+                        .takeLast(MAX_ENTRIES)
                 store.write(merged)
             }
             syncedCount
         }
     }
 
-    private fun isNewerOrBetter(latest: PendingMatchHistoryEntry, snap: PendingMatchHistoryEntry): Boolean {
+    private fun isNewerOrBetter(
+        latest: PendingMatchHistoryEntry,
+        snap: PendingMatchHistoryEntry,
+    ): Boolean {
         if (latest.durationSeconds > snap.durationSeconds) return true
         val latestScore = latest.score ?: Long.MIN_VALUE
         val snapScore = snap.score ?: Long.MIN_VALUE
@@ -206,46 +221,51 @@ internal class PendingMatchHistoryQueueEngine(
         return false
     }
 
-    private fun isPermanentError(msg: String): Boolean {
-        return permanentErrorSubstrings.any { msg.contains(it, ignoreCase = true) }
-    }
+    private fun isPermanentError(msg: String): Boolean = permanentErrorSubstrings.any { msg.contains(it, ignoreCase = true) }
 
-    private fun maxOfNullable(a: Long?, b: Long?): Long? {
-        return when {
+    private fun maxOfNullable(
+        a: Long?,
+        b: Long?,
+    ): Long? =
+        when {
             a == null -> b
             b == null -> a
             else -> maxOf(a, b)
         }
-    }
 
     companion object {
         private const val MAX_ENTRIES = 100
 
-        private val permanentErrorSubstrings = listOf(
-            "Invalid match mode",
-            "Invalid mode",
-            "not a participant",
-            "Game not found",
-            "Valid started room not found",
-            "Room metadata mismatch",
-            "Participant mismatch",
-            "Netplay match requires at least 2 participants",
-            "Cannot overwrite another session",
-            "Registered user required",
-            "room_id is required"
-        )
+        private val permanentErrorSubstrings =
+            listOf(
+                "Invalid match mode",
+                "Invalid mode",
+                "not a participant",
+                "Game not found",
+                "Valid started room not found",
+                "Room metadata mismatch",
+                "Participant mismatch",
+                "Netplay match requires at least 2 participants",
+                "Cannot overwrite another session",
+                "Registered user required",
+                "room_id is required",
+            )
     }
 }
 
-private class SharedPreferencesMatchHistoryQueueStore(context: Context) : MatchHistoryQueueStore {
+private class SharedPreferencesMatchHistoryQueueStore(
+    context: Context,
+) : MatchHistoryQueueStore {
     private val appCtx = context.applicationContext
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun read(): List<PendingMatchHistoryEntry> {
-        val raw = appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_QUEUE, null)
-            ?.takeIf { it.isNotBlank() }
-            ?: return emptyList()
+        val raw =
+            appCtx
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_QUEUE, null)
+                ?.takeIf { it.isNotBlank() }
+                ?: return emptyList()
         return runCatching { json.decodeFromString<List<PendingMatchHistoryEntry>>(raw) }
             .getOrDefault(emptyList())
     }
@@ -260,7 +280,8 @@ private class SharedPreferencesMatchHistoryQueueStore(context: Context) : MatchH
     }
 
     override fun clear() {
-        appCtx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        appCtx
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .clear()
             .apply()
@@ -272,7 +293,9 @@ private class SharedPreferencesMatchHistoryQueueStore(context: Context) : MatchH
     }
 }
 
-private class ArcadeMatchHistorySyncClient(private val repo: ArcadeRepository) : MatchHistorySyncClient {
+private class ArcadeMatchHistorySyncClient(
+    private val repo: ArcadeRepository,
+) : MatchHistorySyncClient {
     override fun currentUserId(): String? = repo.currentUserId()
 
     override suspend fun fetchMyUsername(): String? = repo.fetchMyProfile()?.username
@@ -287,7 +310,7 @@ private class ArcadeMatchHistorySyncClient(private val repo: ArcadeRepository) :
         startedAtIso: String,
         endedAtIso: String,
         durationSeconds: Int,
-        score: Long?
+        score: Long?,
     ) {
         repo.recordMatchHistory(
             clientSessionId = clientSessionId,
@@ -299,7 +322,7 @@ private class ArcadeMatchHistorySyncClient(private val repo: ArcadeRepository) :
             startedAtIso = startedAtIso,
             endedAtIso = endedAtIso,
             durationSeconds = durationSeconds,
-            score = score
+            score = score,
         )
     }
 }
@@ -313,23 +336,30 @@ object PendingMatchHistoryQueue {
     private var engineInstance: PendingMatchHistoryQueueEngine? = null
     private val initLock = Any()
 
-    private fun engine(context: Context): PendingMatchHistoryQueueEngine {
-        return engineInstance ?: synchronized(initLock) {
+    private fun engine(context: Context): PendingMatchHistoryQueueEngine =
+        engineInstance ?: synchronized(initLock) {
             engineInstance ?: PendingMatchHistoryQueueEngine(
-                store = SharedPreferencesMatchHistoryQueueStore(context)
+                store = SharedPreferencesMatchHistoryQueueStore(context),
             ).also { engineInstance = it }
         }
-    }
 
-    fun pendingCount(context: Context, currentUserId: String? = null): Int {
-        return engine(context).pendingCount(currentUserId)
-    }
+    fun pendingCount(
+        context: Context,
+        currentUserId: String? = null,
+    ): Int = engine(context).pendingCount(currentUserId)
 
-    fun enqueue(context: Context, entry: PendingMatchHistoryEntry) {
+    fun enqueue(
+        context: Context,
+        entry: PendingMatchHistoryEntry,
+    ) {
         engine(context).enqueue(entry)
     }
 
-    fun removeBySessionId(context: Context, clientSessionId: String, currentUserId: String? = null) {
+    fun removeBySessionId(
+        context: Context,
+        clientSessionId: String,
+        currentUserId: String? = null,
+    ) {
         engine(context).removeBySessionId(clientSessionId, currentUserId)
     }
 
@@ -341,7 +371,8 @@ object PendingMatchHistoryQueue {
         clear(context)
     }
 
-    suspend fun flushAll(context: Context, repo: ArcadeRepository): Int {
-        return engine(context).flushAll(ArcadeMatchHistorySyncClient(repo))
-    }
+    suspend fun flushAll(
+        context: Context,
+        repo: ArcadeRepository,
+    ): Int = engine(context).flushAll(ArcadeMatchHistorySyncClient(repo))
 }
