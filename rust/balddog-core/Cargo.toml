@@ -17,7 +17,7 @@ wgpu = "23.0"
 pollster = "1.0"
 bytemuck = { version = "1.16", features = ["derive"] }
 raw-window-handle = "0.6"
-ringbuf = "0.4"
+ringbuf = "0.6"
 flate2 = "1.0"
 png = "0.18"
 
