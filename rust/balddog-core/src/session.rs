@@ -81,8 +81,10 @@ pub const RETRO_START_MASK: u16 = 1 << 3;
 #[derive(Debug, Clone, Default)]
 pub struct CoinTracker {
     prev_coins: [bool; 4],
+    prev_starts: [bool; 4],
     prev_active: bool,
     player_started: bool,
+    saw_continue_input_since_inactive: bool,
     runs_started: u32,
     in_game_coins: u32,
 }
@@ -104,23 +106,41 @@ impl CoinTracker {
         if !self.player_started {
             for (port, &mask) in inputs.iter().enumerate() {
                 self.prev_coins[port] = (mask & RETRO_COIN_MASK) != 0;
+                self.prev_starts[port] = (mask & RETRO_START_MASK) != 0;
             }
             self.prev_active = false;
             return 1;
         }
 
+        let mut any_continue_edge = false;
+        for (port, &mask) in inputs.iter().enumerate() {
+            let coin_pressed = (mask & RETRO_COIN_MASK) != 0;
+            let start_pressed = (mask & RETRO_START_MASK) != 0;
+            if active && coin_pressed && !self.prev_coins[port] {
+                self.in_game_coins = self.in_game_coins.saturating_add(1);
+            }
+            if !active
+                && ((coin_pressed && !self.prev_coins[port])
+                    || (start_pressed && !self.prev_starts[port]))
+            {
+                any_continue_edge = true;
+            }
+            self.prev_coins[port] = coin_pressed;
+            self.prev_starts[port] = start_pressed;
+        }
+
+        if !active && any_continue_edge {
+            self.saw_continue_input_since_inactive = true;
+        }
+
         if active && !self.prev_active {
-            self.runs_started = self.runs_started.saturating_add(1);
+            if self.runs_started == 0 || self.saw_continue_input_since_inactive {
+                self.runs_started = self.runs_started.saturating_add(1);
+            }
+            self.saw_continue_input_since_inactive = false;
         }
         self.prev_active = active;
 
-        for (port, &mask) in inputs.iter().enumerate() {
-            let pressed = (mask & RETRO_COIN_MASK) != 0;
-            if active && pressed && !self.prev_coins[port] {
-                self.in_game_coins = self.in_game_coins.saturating_add(1);
-            }
-            self.prev_coins[port] = pressed;
-        }
         self.credits_used()
     }
 
@@ -1170,8 +1190,9 @@ mod tests {
     fn preloaded_coins_used_to_continue_disqualify_1cc() {
         let mut tracker = CoinTracker::new();
         assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
-        // Game Over / Continue screen (active = false)
-        assert_eq!(tracker.observe_frame(false, &[0, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
+        // Game Over / Continue screen (active = false), player presses START to continue
+        assert_eq!(tracker.observe_frame(false, &[RETRO_START_MASK, 0, 0, 0]), 1);
         // Second run started using preloaded credits (active = true again)
         assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 2);
         assert_eq!(tracker.coins_inserted(), 2);
@@ -1336,7 +1357,17 @@ mod tests {
         assert!(stats.ranking_eligible.load(Ordering::Acquire));
         assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 5_000);
 
-        // Run 2: continue using preloaded credit (active becomes true again)
+        // Run 2: continue using preloaded credit (player presses START while inactive, then active becomes true)
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 5_000,
+                triggered_score: None,
+            },
+            &[RETRO_START_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
         super::apply_leaderboard_frame(
             crate::retro::leaderboard::LeaderboardFrameOutput {
                 active: true,
@@ -1352,6 +1383,54 @@ mod tests {
         assert_eq!(stats.current_score.load(Ordering::Relaxed), 5_000);
         assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 5_000);
         assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 5_000);
+    }
+
+    #[test]
+    fn ram_oscillation_without_continue_input_does_not_disqualify() {
+        use std::sync::atomic::Ordering;
+
+        let stats = super::SharedStats::default();
+        stats.ranking_eligible.store(true, Ordering::Release);
+        stats.credits_used.store(1, Ordering::Release);
+        let mut tracker = CoinTracker::new();
+
+        // Start game with 1 credit
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 1_400,
+                triggered_score: None,
+            },
+            &[RETRO_START_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+
+        // RAM flag flickers 1 -> 0 -> 1 without any START or COIN input
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 1_400,
+                triggered_score: Some(1_400),
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 2_800,
+                triggered_score: None,
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+
+        assert!(stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.credits_used.load(Ordering::Acquire), 1);
+        assert_eq!(stats.current_score.load(Ordering::Relaxed), 2_800);
     }
 
     #[test]
