@@ -625,6 +625,7 @@ class GameActivity : ComponentActivity() {
                                     replayManuallyPaused = nextPaused
                                     updateEnginePaused(nextPaused)
                                     replayHud = getReplayHudInfo()
+                                    AnalyticsHelper.logReplayControl(if (nextPaused) "pause" else "resume")
                                 },
                                 onRestart = {
                                     replayManuallyPaused = false
@@ -868,11 +869,13 @@ class GameActivity : ComponentActivity() {
                                     touchConfig = TouchLayoutConfig(forceShowTouch = touchConfig.forceShowTouch)
                                     TouchLayoutPrefs.save(this@GameActivity, touchConfig)
                                     menuStatusMsg = "Layout restaurado"
+                                    AnalyticsHelper.logInGameMenuAction("reset_layout", romSlug)
                                 },
                                 onSaveState = {
                                     try {
                                         saveGameState(stateFile.absolutePath)
                                         menuStatusMsg = "Partida guardada"
+                                        AnalyticsHelper.logInGameMenuAction("save_state", romSlug)
                                     } catch (t: Throwable) {
                                         menuStatusMsg = t.message ?: "Error al guardar"
                                     }
@@ -882,6 +885,7 @@ class GameActivity : ComponentActivity() {
                                         if (stateFile.exists()) {
                                             loadGameState(stateFile.absolutePath)
                                             menuStatusMsg = "Partida cargada"
+                                            AnalyticsHelper.logInGameMenuAction("load_state", romSlug)
                                         } else {
                                             menuStatusMsg = "No hay estado guardado aún"
                                         }
@@ -1535,12 +1539,31 @@ class GameActivity : ComponentActivity() {
                         "INFO",
                         "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}",
                     )
+                    AnalyticsHelper.logLeaderboardSubmit(
+                        romSlug = gid,
+                        score = score,
+                        creditsUsed = credits,
+                        outcome = if (dto.accepted) "accepted" else "rejected:${dto.reason ?: "unknown"}",
+                    )
+                    if (dto.accepted && dto.isNewRecord) {
+                        AnalyticsHelper.logNewRecordAchieved(
+                            romSlug = gid,
+                            score = score,
+                            rank = dto.rank?.toInt(),
+                        )
+                    }
                     if (!dto.accepted) {
                         Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
                     }
                 } else {
                     val errMsg = result.exceptionOrNull()?.message ?: "unknown"
                     logFromAndroid("WARN", "submit_high_score falló ($errMsg), encolando offline")
+                    AnalyticsHelper.logLeaderboardSubmit(
+                        romSlug = gid,
+                        score = score,
+                        creditsUsed = credits,
+                        outcome = "queued_offline",
+                    )
                     PendingScoreQueue.enqueue(
                         appCtx,
                         PendingScoreSubmission(
@@ -1595,6 +1618,7 @@ class GameActivity : ComponentActivity() {
                     tmpPng.delete()
                 }
             if (coroutineContext.isActive && !isFinishing && !isDestroyed) {
+                AnalyticsHelper.logMediaExport("png", title, captured.isSuccess)
                 voiceNoticeMsg =
                     if (captured.isSuccess) {
                         "Captura guardada: ${captured.getOrNull()}"

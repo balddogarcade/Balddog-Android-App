@@ -102,12 +102,14 @@ class MainActivity : ComponentActivity() {
                             val uid = status.session.user?.id ?: repo.currentUserId()
                             if (!uid.isNullOrBlank()) {
                                 lastAuthenticatedUserId = uid
+                                dog.bald.arcade.diagnostics.AnalyticsHelper.setUserId(uid)
                             }
                             PendingScoreQueue.flushAll(this@MainActivity, repo)
                             PendingMatchHistoryQueue.flushAll(this@MainActivity, repo)
                         }
                         is SessionStatus.NotAuthenticated -> {
                             lastAuthenticatedUserId = null
+                            dog.bald.arcade.diagnostics.AnalyticsHelper.setUserId(null)
                         }
                         else -> Unit
                     }

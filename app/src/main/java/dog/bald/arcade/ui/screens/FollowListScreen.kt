@@ -235,6 +235,7 @@ fun FollowListScreen(
                                         val res =
                                             runCatching {
                                                 if (following) repo.unfollowUser(user.userId) else repo.followUser(user.userId)
+                                                dog.bald.arcade.diagnostics.AnalyticsHelper.logFollowToggled(!following, "follow_list")
                                             }
                                         if (res.isSuccess) {
                                             onFollowChanged()

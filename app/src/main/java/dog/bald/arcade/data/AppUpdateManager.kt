@@ -155,6 +155,7 @@ class AppUpdateManager(
                         publishedAt = release.publishedAt,
                     )
                 CrashlyticsHelper.log("AppUpdateManager: update available ${info.tagName}")
+                dog.bald.arcade.diagnostics.AnalyticsHelper.logAppUpdateEvent("available", info.tagName)
                 _state.value = AppUpdateState.Available(info)
                 _state.value
             } catch (t: Throwable) {
@@ -176,6 +177,7 @@ class AppUpdateManager(
 
             try {
                 CrashlyticsHelper.log("AppUpdateManager: downloading ${info.tagName}")
+                dog.bald.arcade.diagnostics.AnalyticsHelper.logAppUpdateEvent("download_started", info.tagName)
                 _state.value = AppUpdateState.Downloading(0f, 0L, info.sizeBytes)
 
                 val apkReq =
@@ -242,6 +244,7 @@ class AppUpdateManager(
                 }
 
                 CrashlyticsHelper.log("AppUpdateManager: APK verified and ready (${targetFile.name})")
+                dog.bald.arcade.diagnostics.AnalyticsHelper.logAppUpdateEvent("ready_to_install", info.tagName)
                 _state.value = AppUpdateState.ReadyToInstall(targetFile)
                 _state.value
             } catch (t: Throwable) {

@@ -78,6 +78,9 @@ fun AuthScreen(
     var needsEmailVerification by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        dog.bald.arcade.diagnostics.AnalyticsHelper.logScreenView("auth", "AuthScreen")
+    }
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
@@ -224,12 +227,15 @@ fun AuthScreen(
                             try {
                                 if (isRecovery) {
                                     repo.resetPasswordForEmail(email)
+                                    dog.bald.arcade.diagnostics.AnalyticsHelper.logPasswordResetRequested()
                                     infoMsg = "Te enviamos un enlace a tu correo para restablecer la contraseña."
                                 } else if (isRegister) {
                                     repo.signUpWithEmail(email, password, trimmedUsername)
+                                    dog.bald.arcade.diagnostics.AnalyticsHelper.logAuthEvent("email", isSignUp = true)
                                     onAuthenticated()
                                 } else {
                                     repo.signInWithEmail(email, password)
+                                    dog.bald.arcade.diagnostics.AnalyticsHelper.logAuthEvent("email", isSignUp = false)
                                     onAuthenticated()
                                 }
                             } catch (t: Throwable) {
@@ -306,6 +312,7 @@ fun AuthScreen(
                                 infoMsg = "Completa el inicio de sesión en Google..."
                                 try {
                                     repo.signInWithGoogle()
+                                    dog.bald.arcade.diagnostics.AnalyticsHelper.logAuthEvent("google", isSignUp = false)
                                 } catch (t: Throwable) {
                                     awaitingGoogleOAuth = false
                                     loading = false

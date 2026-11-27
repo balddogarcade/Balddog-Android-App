@@ -761,6 +761,7 @@ fun RoomLobbyScreen(
                         onClick = {
                             val gameTitle = game?.title ?: "Arcade Match"
                             val magicLink = "https://bald.dog/room/${room.id}"
+                            AnalyticsHelper.logShare("room", room.id, "android_sharesheet")
                             val shareBody = "¡Únete a mi sala en bald.dog ARCADE!\nJuego: $gameTitle\nCódigo: #${room.code} (${room.mode.uppercase()})\nLink directo: $magicLink"
                             val sendIntent =
                                 Intent(Intent.ACTION_SEND).apply {

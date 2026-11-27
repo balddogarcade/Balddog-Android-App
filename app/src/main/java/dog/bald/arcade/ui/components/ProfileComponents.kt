@@ -944,6 +944,7 @@ fun shareReplayLink(
     gameTitle: String,
     formattedScore: String,
 ) {
+    dog.bald.arcade.diagnostics.AnalyticsHelper.logShare("replay", replayId, "android_sharesheet")
     val url = "https://bald.dog/replays/$replayId"
     val shareText = "¡Mira esta repetición en $gameTitle ($formattedScore pts) en bald.dog ARCADE!\n$url"
     val sendIntent =

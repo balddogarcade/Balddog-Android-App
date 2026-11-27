@@ -366,6 +366,7 @@ fun MainShellScreen(
             syncError = null
             try {
                 val wasDownloaded = romManager.isGameDownloaded(game)
+                AnalyticsHelper.logRomDownloadStarted(game.slug)
                 romManager.ensureGameReady(
                     game = game,
                     allGames = games,
@@ -373,6 +374,7 @@ fun MainShellScreen(
                 ) { _, progress ->
                     downloadProgress = progress
                 }
+                AnalyticsHelper.logRomDownloadCompleted(game.slug, fromCache = wasDownloaded)
                 if (!wasDownloaded) {
                     runCatching { repo.incrementGameDownload(game.id) }
                     games =
@@ -385,6 +387,7 @@ fun MainShellScreen(
                     onLaunchLocalRom(game)
                 }
             } catch (t: Throwable) {
+                AnalyticsHelper.logRomDownloadFailed(game.slug, t::class.simpleName ?: "error")
                 syncError = t.toUserMessage("Error descargando ROM")
             } finally {
                 downloadingGameId = null
@@ -394,6 +397,27 @@ fun MainShellScreen(
 
     LaunchedEffect(currentUserId) {
         refreshAll()
+    }
+
+    LaunchedEffect(pagerState.currentPage, overlayStack, activeRoom, showDiagnosticsSheet, leaderboardGame) {
+        when {
+            showDiagnosticsSheet -> AnalyticsHelper.logScreenView("diagnostics_sheet", "DiagnosticsSheet")
+            leaderboardGame != null -> AnalyticsHelper.logScreenView("leaderboard_sheet", "GameLeaderboardSheet")
+            activeRoom != null -> AnalyticsHelper.logScreenView("room_lobby", "RoomLobbyScreen")
+            overlayStack.isNotEmpty() -> {
+                when (overlayStack.last()) {
+                    is AppOverlay.GameDetail -> Unit // GameDetailScreen logs game_detail_viewed + screen
+                    is AppOverlay.PublicProfile -> AnalyticsHelper.logScreenView("public_profile", "PublicProfileScreen")
+                    is AppOverlay.FollowList -> AnalyticsHelper.logScreenView("follow_list", "FollowListScreen")
+                    is AppOverlay.GameRanking -> AnalyticsHelper.logScreenView("game_ranking", "GameRankingScreen")
+                    is AppOverlay.WikiHelp -> AnalyticsHelper.logScreenView("wiki_help", "WikiHelpScreen")
+                }
+            }
+            else -> {
+                val tab = MainTab.entries[pagerState.currentPage]
+                AnalyticsHelper.logScreenView("tab_${tab.name.lowercase()}", "MainShellScreen")
+            }
+        }
     }
 
     // Sincronizar sesión y datos al volver a primer plano (sin disparar modal de nuevo récord)
@@ -970,7 +994,11 @@ fun MainShellScreen(
                                     onDismissRoomNotice = { roomNoticeMsg = null },
                                     onGoToCatalog = { scope.launch { pagerState.animateScrollToPage(MainTab.CATALOG.ordinal) } },
                                     onRefresh = { refreshAll() },
-                                    onLookupRoom = { codeOrId -> repo.fetchRoomByCodeOrId(codeOrId) },
+                                    onLookupRoom = { codeOrId ->
+                                        repo.fetchRoomByCodeOrId(codeOrId).also { foundRoom ->
+                                            AnalyticsHelper.logRoomLookup(foundRoom != null)
+                                        }
+                                    },
                                     onCreateRoom = { game, mode, isPrivate ->
                                         roomNoticeMsg = null
                                         scope.launch {
@@ -999,6 +1027,7 @@ fun MainShellScreen(
                                                         avatarSeed = avatarSeed,
                                                     )
                                                 activeRoom = created
+                                                AnalyticsHelper.logNetplayRoomCreated(game.slug, mode, isPrivate)
                                             } catch (t: Throwable) {
                                                 syncError = t.toUserMessage("Error creando sala")
                                             }
@@ -1025,6 +1054,8 @@ fun MainShellScreen(
                                                         voiceEndpoint = voiceEndpoint.ifBlank { null },
                                                     )
                                                 activeRoom = joinedRoom
+                                                val joinedSlug = games.firstOrNull { it.id == joinedRoom.gameId }?.slug.orEmpty()
+                                                AnalyticsHelper.logNetplayRoomJoined(joinedSlug, room.mode, "rooms_list")
                                             } catch (ce: CancellationException) {
                                                 throw ce
                                             } catch (t: Throwable) {
@@ -1130,6 +1161,7 @@ fun MainShellScreen(
                                     },
                                     onDeleteAccount = {
                                         repo.deleteAccount()
+                                        AnalyticsHelper.logAccountDeleted()
                                         performSignOut()
                                     },
                                 )
@@ -1560,6 +1592,14 @@ private fun CatalogTab(
                 .toList()
         }
 
+    LaunchedEffect(searchQuery, filtered.size) {
+        val trimmed = searchQuery.trim()
+        if (trimmed.isNotEmpty()) {
+            kotlinx.coroutines.delay(600L)
+            AnalyticsHelper.logCatalogSearch(trimmed, filtered.size)
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
         ArcadeSearchBar(
             query = searchQuery,
@@ -1576,7 +1616,9 @@ private fun CatalogTab(
                 label = "Nuevos",
                 selected = isRecent,
                 onClick = {
-                    selectedSort = if (isRecent) CatalogSortOption.NAME else CatalogSortOption.RECENT
+                    val next = if (isRecent) CatalogSortOption.NAME else CatalogSortOption.RECENT
+                    selectedSort = next
+                    AnalyticsHelper.logFilterChange("sort", next.name.lowercase(), "catalog")
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -1585,7 +1627,9 @@ private fun CatalogTab(
                 label = "Más descargados",
                 selected = isMostDownloaded,
                 onClick = {
-                    selectedSort = if (isMostDownloaded) CatalogSortOption.NAME else CatalogSortOption.MOST_DOWNLOADED
+                    val next = if (isMostDownloaded) CatalogSortOption.NAME else CatalogSortOption.MOST_DOWNLOADED
+                    selectedSort = next
+                    AnalyticsHelper.logFilterChange("sort", next.name.lowercase(), "catalog")
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -1594,14 +1638,20 @@ private fun CatalogTab(
                 label = "Más jugados",
                 selected = isMostPlayed,
                 onClick = {
-                    selectedSort = if (isMostPlayed) CatalogSortOption.NAME else CatalogSortOption.MOST_PLAYED
+                    val next = if (isMostPlayed) CatalogSortOption.NAME else CatalogSortOption.MOST_PLAYED
+                    selectedSort = next
+                    AnalyticsHelper.logFilterChange("sort", next.name.lowercase(), "catalog")
                 },
                 modifier = Modifier.weight(1f),
             )
             CatalogFilterChip(
                 label = "Biblioteca",
                 selected = downloadedOnly,
-                onClick = { downloadedOnly = !downloadedOnly },
+                onClick = {
+                    val next = !downloadedOnly
+                    downloadedOnly = next
+                    AnalyticsHelper.logFilterChange("downloaded_only", next.toString(), "catalog")
+                },
                 modifier = Modifier.weight(1f),
             )
         }

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved replay seeking UX with an in-memory keyframe cache (`ReplayKeyframeCache` every 300 frames, up to 60 states) in `balddog-core` for faster forward/backward jumps, plus an `Avanzando...` progress indicator in `ReplayHudOverlay` while seeking is active.
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Quick Matchmaking system (`048_matchmaking_and_room_bans.sql`, `QuickMatchmakingCard`, `MatchmakingPolicy`) with atomic public `waiting`-room backfill (prioritizing most populated, then oldest), 25s heartbeat, Supabase Realtime + fallback queue matching, floating `MatchmakingMiniBanner` across tabs, and `GameDetailScreen` quick-match shortcut.
 - Live matchmaking and active-player metrics (`get_matchmaking_stats()`) refreshed every 12s in the Rooms tab and displayed alphabetically per game.
 - Per-room host ban support (`ban_room_player` RPC + `banned_user_ids`), automatic host promotion on waiting-room leave, automatic closing of empty rooms, and automatic background BIOS+ROM download with progress bar on the Lobby Ready button.
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0] - 2026-11-27
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Certified 1CC `rcheevos` leaderboard `score_config` expressions (`043_seed_tmnt_snowbro2_pbobble_score_configs.sql`) and lifecycle unit tests in `leaderboard.rs` for *TMNT: Turtles in Time* (`tmnt2`: `0x00B0` / `b0x 0104`), *Teenage Mutant Ninja Turtles* (`tmnt`: `0x00A0` / `b0x 0104`), *Snow Bros. 2: With New Elves* (`snowbro2`: `0x00DE` / `0x00DA..0x00DC`), and *Puzzle Bobble / Bust-A-Move* (`pbobble`: `0x26E4` / `0x7058..0x705A`), verified against headless `.bsv.gz` replays with `verify_replay`.
 
 ### Fixed
@@ -45,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `-Wl,-z,max-page-size=16384` to `scripts/build-rust.sh` for 16 KB page alignment.
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Added in-app **Eliminar cuenta** flow in `ProfileScreen` and legal links (`https://bald.dog/privacy`, `https://bald.dog/terms`).
 
 ### Changed
@@ -56,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Migrated all game cover images (`cover_url`) from bundled `assets/covers/*.webp` to Pinata IPFS (`public.games.cover_url`), refactored `GameCoverImage` and `RemoteImage` to share a unified memory + disk cache (`RemoteImageCache`), and removed local cover assets from the APK.
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Added `GameDetailScreen` (`GameDetailHeader`, `GameDetailGallery`, `GameDetailSpecsCard`, `GameDetailHistoryCard`) in Android to display full Arcade Database metadata, IPFS image gallery, hardware specs, history, and YouTube gameplay links, instrumented with `AnalyticsHelper`, `CrashlyticsHelper`, and `PerformanceHelper`.
 - Expanded `GameDto` with 22 Arcade Database metadata and IPFS media fields (`manufacturer`, `year`, `genre`, `serie`, `players`, `nplayers`, `input_controls`, `input_buttons`, `buttons_colors`, `history`, `youtube_video_id`, and IPFS gallery URLs) plus `AnalyticsHelper` / `CrashlyticsHelper` instrumentation for ROM detail views.
 - Centralized `PerformanceHelper` (`dog.bald.arcade.diagnostics.PerformanceHelper`) wrapping Firebase Performance Monitoring (`firebase-perf`) with custom traces (`rom_startup_trace`, `netplay_sync_trace`) in `GameActivity`.
@@ -81,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed residual anonymous/guest accounts (`is_anonymous = true`) and enforced registered-only user accounts across the platform (`028_public_web_stats_rpc.sql`).
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Public read-only Supabase RPC `get_public_web_profile(p_username)` for web user profile pages (`/u/[username]`), respecting `is_private` and enriching 1CC high scores with replay playback metadata (`031_public_web_profile_rpc.sql`).
 - Automatic idempotent welcome email delivery (`send-welcome-email` Edge Function via Resend) triggered on first profile load for newly registered users (email sign-up and Google OAuth), tracked with `public.profiles.welcome_email_sent` (`029_welcome_email_sent_flag.sql`).
 - Public read-only Supabase RPC `get_public_arcade_stats()` for aggregated landing page metrics and Top 6 game rankings (`028_public_web_stats_rpc.sql`).
@@ -95,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-11-25
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Dynamic SemVer versioning (`-PversionName` / `-PversionCode` and environment variables) in `app/build.gradle.kts`.
 - Consistent release signing configuration supporting `ANDROID_KEYSTORE_*` environment variables and `local.properties` fallback.
 - Automated GitHub Actions release pipeline with SLSA build provenance attestation and informative VirusTotal API v3 scanning.
@@ -109,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-11-25
 
 ### Added
+- Comprehensive Firebase Analytics (GA4) instrumentation across `AuthScreen`, `MainShellScreen` (tabs, overlays, catalog search/filters, ROM downloads), `GameActivity` (1CC score submissions, new records, in-game quick menu, media exports, replay controls), `RoomLobbyScreen`, `PublicProfileScreen`, `FollowListScreen`, and `AppUpdateManager`, with parameter sanitization (`AnalyticsHelper.sanitizeParam`), `AnalyticsHelperTest`, and unified Web+Android taxonomy in `docs/ANALYTICS.md`.
 - Initial release of **bald.dog ARCADE** (`dog.bald.arcade`) for Android (`arm64-v8a`).
 - Rust core (`balddog-android` / `balddog-core`) with Libretro + FinalBurn Neo (`libfbneo_libretro.so`).
 - P2P Netplay with GGRS rollback, dual-candidate endpoint resolution, and voice chat.

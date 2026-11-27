@@ -275,7 +275,7 @@ Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, 
    - `app/google-services.json` está ignorado en `.gitignore`; **NUNCA** lo agregues al repositorio.
 4. **Referencia y consulta:**
    - Guía técnica completa: [docs/CRASHLYTICS_AND_DIAGNOSTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/CRASHLYTICS_AND_DIAGNOSTICS.md).
-   - Analítica (GA4): Usa `dog.bald.arcade.diagnostics.AnalyticsHelper` (sin PII); guía en [docs/ANALYTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/ANALYTICS.md).
+   - Analítica (GA4): Toda nueva pantalla, tab, overlay o acción clave debe instrumentarse en `dog.bald.arcade.diagnostics.AnalyticsHelper` (`logScreenView` + eventos tipados sin PII, saneados a ≤ 100 chars en paridad con `Balddog-Main-Webpage`) y cubrirse en `AnalyticsHelperTest.kt`; guía en [docs/ANALYTICS.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/ANALYTICS.md).
    - Rendimiento: Usa `dog.bald.arcade.diagnostics.PerformanceHelper` para trazas personalizadas; guía en [docs/PERFORMANCE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/PERFORMANCE.md).
    - Runbook operativo (build de símbolos, `logcat` `balddog-panic`, consulta en Firebase): `.agents/skills/crashlytics-diagnostics/SKILL.md`.
 

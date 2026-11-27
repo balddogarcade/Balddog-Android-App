@@ -342,6 +342,9 @@ fun PublicProfileScreen(
                                             scope.launch {
                                                 togglingFollow = true
                                                 runCatching { repo.unfollowUser(p.id) }
+                                                    .onSuccess {
+                                                        dog.bald.arcade.diagnostics.AnalyticsHelper.logFollowToggled(false, "public_profile")
+                                                    }
                                                     .onSuccess { onFollowChanged() }
                                                     .onFailure { profile = prev }
                                                 togglingFollow = false
@@ -376,6 +379,9 @@ fun PublicProfileScreen(
                                             scope.launch {
                                                 togglingFollow = true
                                                 runCatching { repo.followUser(p.id) }
+                                                    .onSuccess {
+                                                        dog.bald.arcade.diagnostics.AnalyticsHelper.logFollowToggled(true, "public_profile")
+                                                    }
                                                     .onSuccess { onFollowChanged() }
                                                     .onFailure { profile = prev }
                                                 togglingFollow = false
