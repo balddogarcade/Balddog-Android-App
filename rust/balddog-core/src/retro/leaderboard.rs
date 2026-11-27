@@ -480,6 +480,37 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_snowbros_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:b0xH0D70*1000000_A:b0xH0D71*10000_A:b0xH0D72*100_M:b0xH0D73",
+        )
+        .expect("snowbros lboard válido");
+
+        let mut ram = vec![0u8; 32768];
+        // 1. Boot / Attract: 0x0036=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x0036=1, puntaje=4700 ([00, 00, 47, 00])
+        ram[0x0036] = 1;
+        ram[0x0D70] = 0x00;
+        ram[0x0D71] = 0x00;
+        ram[0x0D72] = 0x47;
+        ram[0x0D73] = 0x00;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 4700);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Game Over / Continue: 0x0036=0 -> dispara SUB con 4700
+        ram[0x0036] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(4700));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
             "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
@@ -489,7 +520,7 @@ mod tests {
             "STA:0xH5AE1=1::CAN:0=1::SUB:0xH5AE1=0::VAL:A:b0x 5BAA*10000_M:b0x 5BAC",
             "STA:0xH86C8=1::CAN:0=1::SUB:0xH86C8=0::VAL:A:b0x 8748*10000_M:b0x 874A",
             "STA:0xH8155=1::CAN:0=1::SUB:0xH8155=0::VAL:A:b0x 81B6*10000_M:b0x 81B8",
-            "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:b0xH1403*1000000_A:b0xH1404*10000_A:b0xH1405*100_M:b0xH1406",
+            "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:b0xH0D70*1000000_A:b0xH0D71*10000_A:b0xH0D72*100_M:b0xH0D73",
             "STA:0xH004C=1::CAN:0=1::SUB:0xH004C=0::VAL:A:b0x 0206*10000_M:b0x 0208",
             "STA:0xH0820=1::CAN:0=1::SUB:0xH0820=0::VAL:A:b0x 2000*10000_M:b0x 2002",
             "STA:0xH000B=1::CAN:0=1::SUB:0xH000B=0::VAL:A:b0x 62CE*10000_M:b0x 62D0",
