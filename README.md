@@ -18,7 +18,7 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
   - Downloads from IPFS with integrity verification (`sha256` / `crc32`) based on the catalog and BIOS (`game_bios`) defined in Supabase.
 - **Competitive Leaderboards & 1CC Engine (`rcheevos`)**:
   - Real-time memory scanning of `RETRO_MEMORY_SYSTEM_RAM` via the embedded `rcheevos` evaluation engine.
-  - Strict **1CC (One Coin Clear)** enforcement: scores are only submitted if completed with 1 credit.
+  - Strict **1CC (One Coin Clear)** enforcement from frame 0 (boot, title screen, character select, and in-game): sessions with 2+ credits inserted at any point are immediately disqualified and scores freeze permanently after any continue.
   - In-game live score indicator & 1CC eligibility in `InGameQuickMenu`.
   - Global Top 50 leaderboards and personal rank sheets with offline score queuing (`PendingScoreQueue`).
 - **Deterministic Replays & Anti-Cheat (`.bsv.gz` / MP4)**:

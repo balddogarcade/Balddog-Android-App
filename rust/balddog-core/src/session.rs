@@ -69,13 +69,13 @@ pub struct ScoreHudStats {
 pub const RETRO_COIN_MASK: u16 = 1 << 2;
 pub const RETRO_START_MASK: u16 = 1 << 3;
 
-/// Rastrea créditos 1CC sin falsos positivos durante la pantalla de arranque del core:
-/// - No activa el conteo ni la lectura de puntaje hasta que P1 pulsa START al menos una vez
-///   (`player_started == true`), evitando que pulsaciones de COIN durante la carga de la ROM
-///   o valores de attract mode descalifiquen o contaminen el historial.
-/// - Una vez iniciado (`player_started == true`), descalifica si se inserta cualquier moneda
-///   en P1-P4 mientras el juego está activo (`active == true`) o si inicia una 2ª partida
-///   (`active` pasa de `false -> true` > 1 vez, cerrando fichas precargadas).
+/// Rastrea créditos 1CC desde el frame 0 a nivel de bitmasks Libretro (`RETRO_COIN_MASK` y `RETRO_START_MASK`):
+/// - Cuenta toda inserción de moneda (`P1..P4`) desde el arranque, pantalla de título y selección de personaje,
+///   descalificando de inmediato si se cargan 2 o más créditos antes o durante la partida.
+/// - No habilita la lectura de puntaje hasta que P1 pulsa START al menos una vez (`player_started == true`),
+///   evitando que valores de attract mode contaminen el historial.
+/// - Una vez iniciada la 1.ª partida (`runs_started >= 1`), cualquier moneda adicional (`post_first_run_coins`)
+///   o un continue mediante `START` tras Game Over (`runs_started > 1`) descalifica de forma permanente.
 #[derive(Debug, Clone, Default)]
 pub struct CoinTracker {
     prev_coins: [bool; 4],
@@ -84,7 +84,8 @@ pub struct CoinTracker {
     player_started: bool,
     saw_continue_input_since_inactive: bool,
     runs_started: u32,
-    in_game_coins: u32,
+    total_coins: u32,
+    post_first_run_coins: u32,
 }
 
 impl CoinTracker {
@@ -101,30 +102,31 @@ impl CoinTracker {
             self.player_started = true;
         }
 
-        if !self.player_started {
-            for (port, &mask) in inputs.iter().enumerate() {
-                self.prev_coins[port] = (mask & RETRO_COIN_MASK) != 0;
-                self.prev_starts[port] = (mask & RETRO_START_MASK) != 0;
-            }
-            self.prev_active = false;
-            return 1;
-        }
-
         let mut any_continue_edge = false;
         for (port, &mask) in inputs.iter().enumerate() {
             let coin_pressed = (mask & RETRO_COIN_MASK) != 0;
             let start_pressed = (mask & RETRO_START_MASK) != 0;
-            if active && coin_pressed && !self.prev_coins[port] {
-                self.in_game_coins = self.in_game_coins.saturating_add(1);
+            let coin_rising = coin_pressed && !self.prev_coins[port];
+            let start_rising = start_pressed && !self.prev_starts[port];
+
+            if coin_rising {
+                self.total_coins = self.total_coins.saturating_add(1);
+                if self.runs_started >= 1 {
+                    self.post_first_run_coins = self.post_first_run_coins.saturating_add(1);
+                }
             }
-            if !active
-                && ((coin_pressed && !self.prev_coins[port])
-                    || (start_pressed && !self.prev_starts[port]))
-            {
+
+            if self.player_started && !active && (coin_rising || start_rising) {
                 any_continue_edge = true;
             }
+
             self.prev_coins[port] = coin_pressed;
             self.prev_starts[port] = start_pressed;
+        }
+
+        if !self.player_started {
+            self.prev_active = false;
+            return self.credits_used();
         }
 
         if !active && any_continue_edge {
@@ -143,7 +145,11 @@ impl CoinTracker {
     }
 
     pub fn coins_inserted(&self) -> u32 {
-        self.runs_started.max(1).saturating_add(self.in_game_coins)
+        self.total_coins.max(
+            self.runs_started
+                .max(1)
+                .saturating_add(self.post_first_run_coins),
+        )
     }
 
     pub fn credits_used(&self) -> u8 {
@@ -1196,20 +1202,109 @@ mod tests {
     use super::{CoinTracker, RETRO_COIN_MASK, RETRO_START_MASK};
 
     #[test]
-    fn coin_presses_during_boot_before_start_do_not_disqualify_even_if_active_is_true() {
+    fn single_coin_before_start_or_after_stray_start_allows_1cc() {
         let mut tracker = CoinTracker::new();
         assert_eq!(tracker.credits_used(), 1);
         assert!(!tracker.has_player_started());
 
-        // Even if ROM boot/attract mode sets active=true, COIN before START is ignored
-        for _ in 0..3 {
-            assert_eq!(tracker.observe_frame(true, &[RETRO_COIN_MASK, 0, 0, 0]), 1);
-            assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
-        }
-        // Player presses START -> game begins with 1 credit
-        assert_eq!(tracker.observe_frame(true, &[RETRO_START_MASK, 0, 0, 0]), 1);
+        // 1st COIN during boot/title screen -> still 1 credit (valid 1CC)
+        assert_eq!(tracker.observe_frame(false, &[RETRO_COIN_MASK, 0, 0, 0]), 1);
+        assert_eq!(tracker.observe_frame(false, &[0, 0, 0, 0]), 1);
+
+        // Player presses START -> character select (active = false) -> gameplay (active = true)
+        assert_eq!(
+            tracker.observe_frame(false, &[RETRO_START_MASK, 0, 0, 0]),
+            1
+        );
         assert!(tracker.has_player_started());
+        assert_eq!(tracker.observe_frame(true, &[0, 0, 0, 0]), 1);
         assert_eq!(tracker.coins_inserted(), 1);
+
+        // Stray START before inserting the 1st coin also must not double-count
+        let mut stray = CoinTracker::new();
+        assert_eq!(stray.observe_frame(false, &[RETRO_START_MASK, 0, 0, 0]), 1);
+        assert_eq!(stray.observe_frame(false, &[RETRO_COIN_MASK, 0, 0, 0]), 1);
+        assert_eq!(stray.observe_frame(false, &[RETRO_START_MASK, 0, 0, 0]), 1);
+        assert_eq!(stray.observe_frame(true, &[0, 0, 0, 0]), 1);
+        assert_eq!(stray.coins_inserted(), 1);
+    }
+
+    #[test]
+    fn multiple_coins_at_boot_or_character_select_disqualify_immediately() {
+        use std::sync::atomic::Ordering;
+
+        // Case A: 2 coins inserted on boot/title screen before START
+        let stats = super::SharedStats::default();
+        stats.ranking_eligible.store(true, Ordering::Release);
+        stats.credits_used.store(1, Ordering::Release);
+        let mut tracker = CoinTracker::new();
+
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 0,
+                triggered_score: None,
+            },
+            &[RETRO_COIN_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert!(stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.credits_used.load(Ordering::Acquire), 1);
+
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 0,
+                triggered_score: None,
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        // 2nd coin on title screen -> immediate disqualification
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 0,
+                triggered_score: None,
+            },
+            &[RETRO_COIN_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert!(!stats.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats.credits_used.load(Ordering::Acquire), 2);
+
+        // Case B: 1 coin on title, START, then 2nd coin on character select (active = false)
+        let stats_b = super::SharedStats::default();
+        stats_b.ranking_eligible.store(true, Ordering::Release);
+        stats_b.credits_used.store(1, Ordering::Release);
+        let mut tracker_b = CoinTracker::new();
+
+        for inputs in [
+            [RETRO_COIN_MASK, 0, 0, 0],
+            [0, 0, 0, 0],
+            [RETRO_START_MASK, 0, 0, 0],
+            [0, 0, 0, 0],
+        ] {
+            super::apply_leaderboard_frame(
+                crate::retro::leaderboard::LeaderboardFrameOutput::default(),
+                &inputs,
+                &mut tracker_b,
+                &stats_b,
+            );
+        }
+        assert!(stats_b.ranking_eligible.load(Ordering::Acquire));
+
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput::default(),
+            &[RETRO_COIN_MASK, 0, 0, 0],
+            &mut tracker_b,
+            &stats_b,
+        );
+        assert!(!stats_b.ranking_eligible.load(Ordering::Acquire));
+        assert_eq!(stats_b.credits_used.load(Ordering::Acquire), 2);
     }
 
     #[test]

@@ -272,10 +272,10 @@ El estándar RetroAchievements (`rcheevos`) adoptado por bald.dog utiliza cadena
 > Al iniciar partida, docenas de bytes en RAM transicionan a `1` (temporizadores de sprites, animaciones iniciales, punteros de interfaz, selección de personajes). Si configuras `STA` o `SUB` con un byte que no sea la bandera maestra del ciclo de vida, **el ranking 1CC se descalificará falsamente**.
 
 #### ¿Cómo opera el detector 1CC (`CoinTracker`)?
-En `rust/balddog-core/src/session.rs`, el monitor `CoinTracker` vigila las transiciones de la bandera `active` reportada por `rcheevos`:
-- Cuando el jugador pulsa START por primera vez, `CoinTracker` inicializa `runs_started = 1` y `credits_used = 1`.
-- Si durante la partida la condición de `rcheevos` cae brevemente a `0` (disparando `SUB`) y luego vuelve a `1` (disparando `STA`), `CoinTracker` detecta la transición `false -> true` y asume que el jugador **ha iniciado una 2ª partida o ha usado un Continue con fichas precargadas** (`runs_started += 1`).
-- En consecuencia, `credits_used` pasa a ser 2, el ranking se congela y la sesión queda descalificada de inmediato sin que el jugador haya insertado ninguna moneda.
+En `rust/balddog-core/src/session.rs`, el monitor `CoinTracker` vigila tanto los bitmasks crudos de Libretro (`RETRO_COIN_MASK` y `RETRO_START_MASK` en `P1..P4`) desde el **frame 0** como las transiciones de la bandera `active` reportada por `rcheevos`:
+- Cuenta toda inserción de moneda (`total_coins`) desde el arranque, pantalla de título y selección de personaje: si se cargan **2 o más fichas** antes o durante la partida, `credits_used` sube a `>= 2` y la sesión queda descalificada de inmediato.
+- Cuando el jugador pulsa `START` e inicia la partida (`active == true`), `CoinTracker` fija `runs_started = 1`.
+- Si durante la partida la condición de `rcheevos` cae a `0` (disparando `SUB`) y luego vuelve a `1` (disparando `STA`) tras un input de continue (`COIN` o `START`), `CoinTracker` detecta el continue (`runs_started += 1`), congela los puntajes y bloquea permanentemente cualquier segundo récord en la sesión.
 
 #### Requisitos para elegir la condición `STA` y `SUB`
 1. **Inactividad en Boot / Attract / Menú de Selección:** La condición `STA` **no debe cumplirse** mientras el core esté en demo o en la pantalla de selección de personajes.

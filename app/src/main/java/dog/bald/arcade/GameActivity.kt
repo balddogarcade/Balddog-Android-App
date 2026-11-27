@@ -1287,7 +1287,7 @@ class GameActivity : ComponentActivity() {
                     if (lastSubmittedSessionScore > 0L) {
                         "Récord 1CC guardado · Continue bloqueado para nuevos puntos"
                     } else {
-                        "Ranking 1-Crédito desactivado (usaste Continue)"
+                        "Ranking 1-Crédito desactivado ($credits créditos detectados)"
                     }
                 } else {
                     "Ranking desactivado en esta sesión (Save State)"
