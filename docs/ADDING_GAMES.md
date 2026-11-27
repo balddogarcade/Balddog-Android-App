@@ -433,5 +433,5 @@ where coalesce(score_config->>'lboard', '') = ''
 order by slug;
 ```
 
-Actualmente (tras las migraciones `008`–`014`), 22 de los 30 títulos curados cuentan con `score_config` verificado; restan por certificar con ROM local y `ram_probe`: `btoads`, `nbajam`, `pbobble`, `snowbro2`, `spidman`, `tmnt`, `tmnt2`, `wwfwfestu`.
+Actualmente (tras las migraciones `008`–`043`), 26 de los 30 títulos curados cuentan con `score_config` verificado; restan por certificar con ROM local y `ram_probe`: `btoads`, `nbajam`, `spidman`, `wwfwfestu`.
 
