@@ -736,6 +736,7 @@ fun MainShellScreen(
                                     onOpenGameRanking = { game ->
                                         overlayStack = overlayStack + AppOverlay.GameRanking(game)
                                     },
+                                    onOpenGameDetail = openGameDetail,
                                 )
 
                             MainTab.ROOMS ->

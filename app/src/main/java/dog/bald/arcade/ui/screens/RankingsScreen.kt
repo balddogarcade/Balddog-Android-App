@@ -77,6 +77,7 @@ fun RankingsScreen(
     games: List<GameDto>,
     onOpenPublicProfile: (String) -> Unit,
     onOpenGameRanking: (GameDto) -> Unit,
+    onOpenGameDetail: (GameDto) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var selectedSubTab by remember { mutableIntStateOf(RankingsSubTab.GLOBAL.ordinal) }
@@ -346,6 +347,7 @@ fun RankingsScreen(
                                 summary = gameSummaries[game.id],
                                 numberFmt = numberFmt,
                                 onOpenGameRanking = { onOpenGameRanking(game) },
+                                onOpenGameDetail = { onOpenGameDetail(game) },
                                 onOpenUserProfile = onOpenPublicProfile,
                             )
                         }
@@ -465,6 +467,7 @@ private fun GameRankingSummaryCard(
     summary: GameRankingSummaryDto?,
     numberFmt: NumberFormat,
     onOpenGameRanking: () -> Unit,
+    onOpenGameDetail: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
 ) {
     Column(
@@ -486,7 +489,8 @@ private fun GameRankingSummaryCard(
                     Modifier
                         .size(54.dp)
                         .background(ObsidianBlack, RectangleShape)
-                        .border(1.dp, SteelBorder, RectangleShape),
+                        .border(1.dp, SteelBorder, RectangleShape)
+                        .clickable(onClick = onOpenGameDetail),
             ) {
                 GameCoverImage(
                     slug = game.slug,
@@ -505,6 +509,7 @@ private fun GameRankingSummaryCard(
                     fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable(onClick = onOpenGameDetail),
                 )
                 Text(
                     text = "${game.system.uppercase()} · ${summary?.totalPlayers ?: 0} jugadores 1CC",
