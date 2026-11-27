@@ -67,4 +67,52 @@ class AvatarRandomizerTest {
             currentSeed = newSeed
         }
     }
+
+    @Test
+    fun parseDiceBearSvgLayersResolvesDefsAndUseTransforms() {
+        val svg =
+            """
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+              <defs>
+                <g id="clothes-variant21">
+                  <path d="M3 1H2v3h3V3H4V2H3z" fill="#ffc425"/>
+                </g>
+                <g id="eyes-variant09">
+                  <path fill="#ffffff" d="M0 0h3v3H0z"/>
+                  <path fill="#697b94" d="M6 1h1v1H6z"/>
+                </g>
+                <g id="mouth-happy05">
+                  <path d="M1 0v2h2V1H2V0z" fill="#de0f0d"/>
+                </g>
+              </defs>
+              <g clip-path="url(#clip-1)">
+                <path d="M4 2h8v1h1v3h1v2h-1v3h-1v1H9v1h4v1h1v2H2v-2h1v-1h4v-1H4v-1H3V8H2V6h1V3h1z" fill="#ffdbac"/>
+                <use transform="translate(2 12)" href="#clothes-variant21"/>
+                <use transform="translate(4 5)" href="#eyes-variant09"/>
+                <use transform="translate(6 9)" href="#mouth-happy05"/>
+              </g>
+            </svg>
+            """.trimIndent()
+
+        val layers = parseDiceBearSvgLayers(svg)
+        assertEquals(5, layers.size)
+
+        // Base head
+        assertEquals(0f, layers[0].offsetX, 0.001f)
+        assertEquals(0f, layers[0].offsetY, 0.001f)
+
+        // Clothes translated to (2, 12)
+        assertEquals(2f, layers[1].offsetX, 0.001f)
+        assertEquals(12f, layers[1].offsetY, 0.001f)
+
+        // Eyes (2 paths) translated to (4, 5)
+        assertEquals(4f, layers[2].offsetX, 0.001f)
+        assertEquals(5f, layers[2].offsetY, 0.001f)
+        assertEquals(4f, layers[3].offsetX, 0.001f)
+        assertEquals(5f, layers[3].offsetY, 0.001f)
+
+        // Mouth translated to (6, 9)
+        assertEquals(6f, layers[4].offsetX, 0.001f)
+        assertEquals(9f, layers[4].offsetY, 0.001f)
+    }
 }

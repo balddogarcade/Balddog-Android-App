@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
 import io.ktor.client.HttpClient
@@ -22,7 +23,10 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 import java.io.File
+import java.io.StringReader
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -66,11 +70,21 @@ fun DiceBearPixelArtAvatar(
             pivot = Offset.Zero,
         ) {
             for (layer in layers) {
-                drawPath(
-                    path = layer.path,
-                    color = layer.color,
-                    alpha = layer.alpha,
-                )
+                if (layer.offsetX != 0f || layer.offsetY != 0f) {
+                    translate(left = layer.offsetX, top = layer.offsetY) {
+                        drawPath(
+                            path = layer.path,
+                            color = layer.color,
+                            alpha = layer.alpha,
+                        )
+                    }
+                } else {
+                    drawPath(
+                        path = layer.path,
+                        color = layer.color,
+                        alpha = layer.alpha,
+                    )
+                }
             }
         }
     }
@@ -105,26 +119,116 @@ private suspend fun fetchOrLoadCachedDiceBearLayers(
     return svg?.let(::parseDiceBearSvgLayers)
 }
 
-private val svgPathTagRegex = Regex("""<path\b([^>]*)/?>""")
-private val svgAttrRegex = Regex("""(\w[\w-]*)\s*=\s*"([^"]*)"""")
+private data class ParsedSvgPath(
+    val path: Path,
+    val color: Color,
+    val alpha: Float,
+)
 
-private fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
+private val svgTranslateRegex = Regex("""translate\(\s*([+-]?\d+(?:\.\d+)?)(?:[\s,]+([+-]?\d+(?:\.\d+)?))?\s*\)""")
+
+internal fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
     val result = mutableListOf<ResolvedLayer>()
-    for (match in svgPathTagRegex.findAll(svg)) {
-        val attrs = svgAttrRegex.findAll(match.groupValues[1])
-            .associate { it.groupValues[1] to it.groupValues[2] }
-        val d = attrs["d"] ?: continue
-        val fill = attrs["fill"] ?: continue
-        if (fill.equals("none", ignoreCase = true)) continue
-        val color = parseHexColor(fill) ?: continue
-        val alpha = attrs["fill-opacity"]?.toFloatOrNull() ?: 1f
-        val path = runCatching {
-            PathParser().parsePathString(d).toPath().apply {
-                fillType = PathFillType.EvenOdd
+    val defsGroups = mutableMapOf<String, MutableList<ParsedSvgPath>>()
+
+    runCatching {
+        val factory = XmlPullParserFactory.newInstance().apply { isNamespaceAware = false }
+        val parser = factory.newPullParser()
+        parser.setInput(StringReader(svg))
+
+        var inDefs = false
+        var currentDefGroupId: String? = null
+        var defGroupDepth = 0
+
+        var eventType = parser.eventType
+        while (eventType != XmlPullParser.END_DOCUMENT) {
+            when (eventType) {
+                XmlPullParser.START_TAG -> {
+                    val tag = parser.name
+                    when (tag) {
+                        "defs" -> inDefs = true
+                        "g" -> {
+                            if (inDefs) {
+                                val id = parser.getAttributeValue(null, "id")
+                                if (currentDefGroupId == null && !id.isNullOrBlank()) {
+                                    currentDefGroupId = id
+                                    defGroupDepth = 1
+                                    defsGroups.getOrPut(id) { mutableListOf() }
+                                } else if (currentDefGroupId != null) {
+                                    defGroupDepth++
+                                }
+                            }
+                        }
+                        "path" -> {
+                            val d = parser.getAttributeValue(null, "d")
+                            val fill = parser.getAttributeValue(null, "fill")
+                            if (d != null && fill != null && !fill.equals("none", ignoreCase = true)) {
+                                val color = parseHexColor(fill)
+                                val alpha = parser.getAttributeValue(null, "fill-opacity")?.toFloatOrNull() ?: 1f
+                                val path = runCatching {
+                                    PathParser().parsePathString(d).toPath().apply {
+                                        fillType = PathFillType.EvenOdd
+                                    }
+                                }.getOrNull()
+                                if (color != null && path != null) {
+                                    if (inDefs && currentDefGroupId != null) {
+                                        defsGroups[currentDefGroupId]?.add(ParsedSvgPath(path, color, alpha))
+                                    } else if (!inDefs) {
+                                        result.add(ResolvedLayer(path = path, color = color, alpha = alpha))
+                                    }
+                                }
+                            }
+                        }
+                        "use" -> {
+                            if (!inDefs) {
+                                val href = parser.getAttributeValue(null, "href")
+                                    ?: parser.getAttributeValue(null, "xlink:href")
+                                val refId = href?.removePrefix("#")
+                                val groupPaths = refId?.let { defsGroups[it] }
+                                if (!groupPaths.isNullOrEmpty()) {
+                                    val transform = parser.getAttributeValue(null, "transform").orEmpty()
+                                    val match = svgTranslateRegex.find(transform)
+                                    val tx = match?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f
+                                    val ty = match?.groupValues?.getOrNull(2)?.toFloatOrNull() ?: 0f
+                                    for (p in groupPaths) {
+                                        result.add(
+                                            ResolvedLayer(
+                                                path = p.path,
+                                                color = p.color,
+                                                alpha = p.alpha,
+                                                offsetX = tx,
+                                                offsetY = ty,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                XmlPullParser.END_TAG -> {
+                    when (parser.name) {
+                        "defs" -> {
+                            inDefs = false
+                            currentDefGroupId = null
+                            defGroupDepth = 0
+                        }
+                        "g" -> {
+                            if (inDefs && currentDefGroupId != null) {
+                                defGroupDepth--
+                                if (defGroupDepth <= 0) {
+                                    currentDefGroupId = null
+                                    defGroupDepth = 0
+                                }
+                            }
+                        }
+                    }
+                }
             }
-        }.getOrNull() ?: continue
-        result.add(ResolvedLayer(path = path, color = color, alpha = alpha))
+            eventType = parser.next()
+        }
     }
+
     return result
 }
 
@@ -276,10 +380,12 @@ fun randomAvatarSeed(currentSeed: String? = null): String {
     return bestSeed
 }
 
-private data class ResolvedLayer(
+internal data class ResolvedLayer(
     val path: Path,
     val color: Color,
     val alpha: Float,
+    val offsetX: Float = 0f,
+    val offsetY: Float = 0f,
 )
 
 private sealed interface FillRef {
