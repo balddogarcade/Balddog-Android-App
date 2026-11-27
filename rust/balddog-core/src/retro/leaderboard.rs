@@ -419,6 +419,36 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_ddragon2_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xH000F=1::CAN:0=1::SUB:0xH000F=0::VAL:A:b0xH03EC*100_M:b0xH03EB",
+        )
+        .expect("ddragon2 lboard válido");
+
+        let mut ram = vec![0u8; 22656];
+        // 1. Boot / Attract: 0x000F=0, aunque 0x03ED tenga datos de estado (ej. 0x50)
+        ram[0x03ED] = 0x50;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x000F=1, puntaje=1100 (0x03EC=0x11, 0x03EB=0x00)
+        ram[0x000F] = 1;
+        ram[0x03EC] = 0x11;
+        ram[0x03EB] = 0x00;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 1100);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Game Over / Continue: 0x000F=0 -> dispara SUB con 1100 (sin contaminación de 0x03ED)
+        ram[0x000F] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(1100));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
             "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
@@ -437,7 +467,7 @@ mod tests {
             "STA:0xH040D=1::CAN:0=1::SUB:0xH040D=0::VAL:A:b0x 3D02*10000_M:b0x 3D04",
             "STA:0xH02D4=1::CAN:0=1::SUB:0xH02D4=0::VAL:A:b0x 07F2*10000_M:b0x 07F4",
             "STA:0xH14E3B>0_0xH1117E>0::CAN:0=1::SUB:0xH14E3B=0_0xH1117E=0::VAL:A:b0xH14E37*1000000_A:b0xH14E36*10000_A:b0xH14E35*100_M:b0xH14E34",
-            "STA:0xH000F=1::CAN:0=1::SUB:0xH000F=0::VAL:A:b0xH03EE*1000000_A:b0xH03ED*10000_A:b0xH03EC*100_M:b0xH03EB",
+            "STA:0xH000F=1::CAN:0=1::SUB:0xH000F=0::VAL:A:b0xH03EC*100_M:b0xH03EB",
             "STA:0xH1050=1::CAN:0=1::SUB:0xH1050=0::VAL:A:b0xH11D4*100_M:b0xH11D5",
             "STA:0xH04A1=1::CAN:0=1::SUB:0xH04A1=0::VAL:A:b0x 3214*10000_M:b0x 3216",
             "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHED16*1000000_A:b0xHED17*10000_A:b0xHED18*100_M:b0xHED19",
