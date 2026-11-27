@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Pinned all GitHub Actions in `.github/workflows/verify-replays.yml` (`actions/checkout`, `actions/cache`, `dtolnay/rust-toolchain`, `Swatinem/rust-cache`) to full commit SHAs to satisfy OpenSSF Scorecard `Pinned-Dependencies` checks.
 - Improved replay seeking UX with an in-memory keyframe cache (`ReplayKeyframeCache` every 300 frames, up to 60 states) in `balddog-core` for faster forward/backward jumps, plus an `Avanzando...` progress indicator in `ReplayHudOverlay` while seeking is active.
 
 ### Added
