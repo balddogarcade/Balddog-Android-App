@@ -223,3 +223,7 @@ Check the repository files (Rust workspace licensed under `MIT`).
 - **Automated Database Maintenance (`pg_cron`):** Supabase runs `public.cleanup_stale_rooms()` every 5 minutes via `pg_cron` (`036_enable_pg_cron_maintenance.sql`) to close orphaned netplay rooms inactive for more than 30 minutes.
 - **Dual Analytics:** Both the Android app and the public web (`bald.dog`) share the same Firebase project (`balddog`) for unified GA4 event tracking without PII ([docs/ANALYTICS.md](docs/ANALYTICS.md)), complemented on the web by cookie-free Cloudflare Web Analytics.
 - **Quick Matchmaking & Magic Links:** Players can queue by game with automatic `waiting`-room backfill, live searching/playing counters, per-room host bans, and direct QR/App Link joining via `https://bald.dog/room/<room_id>` ([docs/NETPLAY_ARCHITECTURE.md](docs/NETPLAY_ARCHITECTURE.md)).
+
+
+## Replays Deterministas
+Los replays se graban en formato Libretro `BSV1` comprimido con **Zstandard** (`.bsv.zst`) para reducir tamaño y acelerar la carga, manteniendo compatibilidad retroactiva con `.bsv.gz`.

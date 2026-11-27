@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `scripts/verify-replays-worker.py` ROM lookup failing with `HTTP 400 Bad Request` by querying `ipfs_cid,system` instead of the non-existent `rom_url` column and downloading ROMs from IPFS gateways with fallback.
 
 ### Changed
+- Migrated deterministic replay compression from `gzip` (`.bsv.gz`) to **Zstandard** (`.bsv.zst`, level 3) in `balddog-core` (`ReplayRecorder` / `SessionCommand::ExportReplay`), `ArcadeRepository.uploadReplay`, `GameActivity`, `verify-replays-worker.py`, and Supabase Storage RLS (`049_support_zstd_replays.sql`), while preserving full backward-compatible playback and verification for legacy `.bsv.gz` replays via magic-byte auto-detection.
 - Removed separate BIOS fetching and IPFS download flow (`GameBiosDto`, `fetchBios`, `biosId` handling in `IpfsRomManager`) since catalog ROMs already bundle any required BIOS files inside their `.zip` archives.
 - Rotated the official release signing keystore (`.cache/balddog-release.keystore`, RSA 4096), backed up signing credentials in `local.properties`, synchronized GitHub Actions Secrets, and updated `assetlinks.json` with the new SHA-256 fingerprint.
 - Pinned all GitHub Actions in `.github/workflows/verify-replays.yml` (`actions/checkout`, `actions/cache`, `dtolnay/rust-toolchain`, `Swatinem/rust-cache`) to full commit SHAs to satisfy OpenSSF Scorecard `Pinned-Dependencies` checks.

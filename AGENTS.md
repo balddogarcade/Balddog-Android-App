@@ -376,3 +376,10 @@ Al agregar nuevos juegos al catálogo (`public.games`), ejecuta el seeder para p
 - **Cola y Backfill (`find_or_enqueue_match`):** Siempre priorizar el relleno de salas públicas `waiting` (`player_count DESC, created_at ASC`, excluyendo `banned_user_ids`) antes de crear salas nuevas desde `matchmaking_queue`.
 - **Invariante de Privacidad Web (`get_public_open_rooms`):** Nunca exponer IPs (`endpoint`, `local_ip`, `host_endpoint`) ni correos en RPCs anónimos; solo `room_id`, `code`, datos del juego y `username` + `avatar_seed`.
 - **App Links (`https://bald.dog/room/<uuid>`):** Mantener `assetlinks.json` sincronizado con el SHA-256 del keystore de release en `Balddog-Main-Webpage/public/.well-known/assetlinks.json` (huella actual: `45:4F:DE:27:03:83:76:78:D6:68:1B:00:10:CD:80:A2:9D:1A:DD:08:C8:5A:94:86:B6:46:D3:FE:7C:09:7A:0B`).
+
+
+---
+
+## Protocolo de Replays (`.bsv.zst` + `.bsv.gz`)
+- Todo replay nuevo se exporta y sube en formato **Zstandard** (`.bsv.zst`, `application/zstd`) desde `balddog-core` y `ArcadeRepository`.
+- La lectura/verificación (`ReplayPlayer::from_compressed_bytes`, `verify_replay`, Supabase Storage RLS `049_support_zstd_replays.sql`) debe mantener compatibilidad retroactiva con replays `.bsv.gz` mediante detección por *magic bytes*.

@@ -81,3 +81,8 @@ El workflow [verify-replays.yml](file:///media/carlos/DATA1/DEV/Balddog-Android-
 
 - **Corto/Mediano plazo:** GitHub Actions + caché de `fbneo_libretro.so`, `verify_replay` y ROMs descargadas bajo demanda cubre el volumen actual a costo cero.
 - **Alto volumen:** Si la cola supera la capacidad de un cron cada 15 min, `scripts/verify-replays-worker.py` está listo para desplegarse como contenedor Docker en **Google Cloud Run Jobs** o en una VM **Oracle Cloud Always Free** sin cambiar la lógica de base de datos ni de Rust.
+
+
+## Formato de Compresión (`.bsv.zst` + `.bsv.gz`)
+- Los nuevos replays se exportan y suben en **Zstandard** (`.bsv.zst`, nivel 3) desde `balddog-core` (`ReplayRecorder::write_zstd_file`).
+- `ReplayPlayer::from_compressed_bytes` y `verify_replay` detectan automáticamente por *magic bytes* (`0x28 0xB5 0x2F 0xFD` para Zstd, `0x1F 0x8B` para Gzip, o `BSV1` crudo), manteniendo compatibilidad total con replays `.bsv.gz` existentes.
