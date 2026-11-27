@@ -2,6 +2,8 @@ package dog.bald.arcade.data
 
 import android.content.Context
 import dog.bald.arcade.BuildConfig
+import dog.bald.arcade.diagnostics.CrashlyticsHelper
+import dog.bald.arcade.diagnostics.PerformanceHelper
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.handleDeeplinks
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -9,8 +11,18 @@ import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.decodeRecord
+import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -244,6 +256,105 @@ class ArcadeRepository(
 
     suspend fun touchRoomHeartbeat(roomId: String) {
         updateRoomSlot(roomId = roomId, action = "status")
+    }
+
+    suspend fun banRoomPlayer(
+        roomId: String,
+        targetUserId: String,
+    ): RoomDto {
+        val params =
+            buildJsonObject {
+                put("p_room_id", roomId)
+                put("p_target_user_id", targetUserId)
+            }
+        return client.postgrest.rpc("ban_room_player", params).decodeAs<RoomDto>()
+    }
+
+    suspend fun findOrEnqueueMatch(
+        gameSlug: String,
+        endpoint: String,
+        voiceEndpoint: String? = null,
+    ): MatchmakingResultDto {
+        val trace = PerformanceHelper.startTrace("matchmaking_enqueue_rpc")
+        return try {
+            val params =
+                buildJsonObject {
+                    put("p_game_slug", gameSlug)
+                    put("p_endpoint", endpoint)
+                    voiceEndpoint?.ifBlank { null }?.let { put("p_voice_endpoint", it) }
+                }
+            val result = client.postgrest.rpc("find_or_enqueue_match", params).decodeAs<MatchmakingResultDto>()
+            PerformanceHelper.stopTrace(
+                trace,
+                mapOf(
+                    "rom_slug" to gameSlug,
+                    "result_status" to result.status,
+                    "source" to result.source,
+                ),
+            )
+            result
+        } catch (t: Throwable) {
+            PerformanceHelper.stopTrace(
+                trace,
+                mapOf(
+                    "rom_slug" to gameSlug,
+                    "result_status" to "error",
+                ),
+            )
+            CrashlyticsHelper.logMatchmakingError(gameSlug, "find_or_enqueue", t)
+            throw t
+        }
+    }
+
+    suspend fun touchMatchmakingHeartbeat() {
+        runCatching {
+            client.postgrest.rpc("touch_matchmaking_heartbeat")
+        }.onFailure { t ->
+            CrashlyticsHelper.logMatchmakingError("queue", "heartbeat", t)
+        }
+    }
+
+    suspend fun cancelMatchmaking() {
+        runCatching {
+            client.postgrest.rpc("cancel_matchmaking")
+        }.onFailure { t ->
+            CrashlyticsHelper.logMatchmakingError("queue", "cancel", t)
+        }
+    }
+
+    suspend fun fetchMatchmakingStats(): MatchmakingStatsDto =
+        PerformanceHelper.measureTrace("matchmaking_stats_fetch") {
+            client.postgrest.rpc("get_matchmaking_stats").decodeAs<MatchmakingStatsDto>()
+        }
+
+    suspend fun fetchMyMatchmakingRow(): MatchmakingQueueRowDto? {
+        val uid = currentUserId() ?: return null
+        return client
+            .from("matchmaking_queue")
+            .select {
+                filter { eq("user_id", uid) }
+                limit(1)
+            }.decodeList<MatchmakingQueueRowDto>()
+            .firstOrNull()
+    }
+
+    suspend fun observeMatchmakingMatch(userId: String): Flow<MatchmakingQueueRowDto> {
+        val channelName = "mm_queue_$userId"
+        val channel = client.realtime.channel(channelName)
+        val changeFlow =
+            channel.postgresChangeFlow<PostgresAction.Update>(schema = "public") {
+                table = "matchmaking_queue"
+                filter("user_id", FilterOperator.EQ, userId)
+            }
+        channel.subscribe()
+        return changeFlow
+            .mapNotNull { action ->
+                runCatching { action.decodeRecord<MatchmakingQueueRowDto>() }.getOrNull()
+            }.filter { row ->
+                row.status == "matched" && !row.roomId.isNullOrBlank()
+            }.onCompletion {
+                runCatching { channel.unsubscribe() }
+            }
     }
 
     suspend fun fetchRoomMessages(roomId: String): List<RoomMessageDto> =

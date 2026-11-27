@@ -104,6 +104,62 @@ object AnalyticsHelper {
         }
     }
 
+    fun logMatchmakingStarted(romSlug: String) {
+        logEvent("matchmaking_started") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+        }
+    }
+
+    fun logMatchmakingMatched(
+        romSlug: String,
+        source: String,
+        waitTimeSec: Long,
+    ) {
+        logEvent("matchmaking_matched") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+            putString("source", source.ifBlank { "queue" })
+            putLong("wait_time_sec", waitTimeSec.coerceAtLeast(0L))
+        }
+    }
+
+    fun logMatchmakingCancelled(
+        romSlug: String,
+        waitTimeSec: Long,
+        reason: String,
+    ) {
+        logEvent("matchmaking_cancelled") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+            putLong("wait_time_sec", waitTimeSec.coerceAtLeast(0L))
+            putString("reason", reason.ifBlank { "user" })
+        }
+    }
+
+    fun logMatchmakingFailed(
+        romSlug: String,
+        errorType: String,
+    ) {
+        logEvent("matchmaking_failed") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+            putString("error_type", errorType.ifBlank { "unknown" })
+        }
+    }
+
+    fun logRoomPlayerBanned(romSlug: String) {
+        logEvent("room_player_banned") {
+            putString("rom_slug", romSlug.ifBlank { "unknown" })
+        }
+    }
+
+    fun logRoomDeepLinkOpened(
+        roomIdPresent: Boolean,
+        outcome: String,
+    ) {
+        logEvent("room_deeplink_opened") {
+            putString("room_id_present", roomIdPresent.toString())
+            putString("outcome", outcome.ifBlank { "unknown" })
+        }
+    }
+
     private inline fun logEvent(
         name: String,
         block: Bundle.() -> Unit,

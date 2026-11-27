@@ -125,7 +125,41 @@ data class RoomDto(
     @SerialName("local_ip") val localIp: String? = null,
     @SerialName("local_port") val localPort: Int? = null,
     @SerialName("is_private") val isPrivate: Boolean = false,
+    @SerialName("banned_user_ids") val bannedUserIds: List<String> = emptyList(),
     @SerialName("updated_at") val updatedAt: String = "",
+)
+
+@Serializable
+data class MatchmakingResultDto(
+    val status: String,
+    @SerialName("room_id") val roomId: String? = null,
+    val source: String = "queue",
+)
+
+@Serializable
+data class MatchmakingQueueRowDto(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("game_id") val gameId: String,
+    @SerialName("game_slug") val gameSlug: String,
+    val status: String,
+    @SerialName("room_id") val roomId: String? = null,
+    @SerialName("updated_at") val updatedAt: String = "",
+)
+
+@Serializable
+data class GameMatchmakingStatDto(
+    @SerialName("game_slug") val gameSlug: String,
+    val searching: Int = 0,
+    val playing: Int = 0,
+    @SerialName("open_rooms") val openRooms: Int = 0,
+)
+
+@Serializable
+data class MatchmakingStatsDto(
+    @SerialName("total_searching") val totalSearching: Int = 0,
+    @SerialName("total_playing") val totalPlaying: Int = 0,
+    @SerialName("by_game") val byGame: List<GameMatchmakingStatDto> = emptyList(),
 )
 
 @Serializable

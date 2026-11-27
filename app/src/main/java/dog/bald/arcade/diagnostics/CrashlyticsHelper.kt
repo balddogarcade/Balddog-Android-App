@@ -63,4 +63,37 @@ object CrashlyticsHelper {
             recordException(throwable)
         }
     }
+
+    fun setMatchmakingContext(
+        state: String,
+        romSlug: String,
+    ) {
+        instance()?.apply {
+            setCustomKey("matchmaking_state", state.ifBlank { "idle" })
+            setCustomKey("matchmaking_rom_slug", romSlug.ifBlank { "unknown" })
+            log("Matchmaking state=$state rom=$romSlug")
+        }
+    }
+
+    fun logMatchmakingError(
+        romSlug: String,
+        stage: String,
+        throwable: Throwable,
+    ) {
+        instance()?.apply {
+            setCustomKey("matchmaking_stage", stage.ifBlank { "unknown" })
+            log("Matchmaking error ($stage) on $romSlug: ${throwable.message}")
+            recordException(throwable)
+        }
+    }
+
+    fun logDeepLinkEvent(
+        stage: String,
+        message: String,
+    ) {
+        instance()?.apply {
+            setCustomKey("deeplink_stage", stage.ifBlank { "unknown" })
+            log("DeepLink [$stage]: $message")
+        }
+    }
 }
