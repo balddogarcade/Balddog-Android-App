@@ -1821,6 +1821,7 @@ private fun RoomsTab(
                             val isLan = selectedMode == "lan"
                             Button(
                                 onClick = { selectedMode = "lan" },
+                                shape = RectangleShape,
                                 colors =
                                     ButtonDefaults.buttonColors(
                                         containerColor = if (isLan) PureWhite else ObsidianBlack,
@@ -1833,6 +1834,7 @@ private fun RoomsTab(
                             }
                             Button(
                                 onClick = { selectedMode = "online" },
+                                shape = RectangleShape,
                                 colors =
                                     ButtonDefaults.buttonColors(
                                         containerColor = if (!isLan) PureWhite else ObsidianBlack,
@@ -1847,6 +1849,7 @@ private fun RoomsTab(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
                                 onClick = { isPrivateRoom = false },
+                                shape = RectangleShape,
                                 colors =
                                     ButtonDefaults.buttonColors(
                                         containerColor = if (!isPrivateRoom) PureWhite else ObsidianBlack,
@@ -1859,6 +1862,7 @@ private fun RoomsTab(
                             }
                             Button(
                                 onClick = { isPrivateRoom = true },
+                                shape = RectangleShape,
                                 colors =
                                     ButtonDefaults.buttonColors(
                                         containerColor = if (isPrivateRoom) PureWhite else ObsidianBlack,
@@ -1937,6 +1941,7 @@ private fun RoomsTab(
                             showCreateRoomDialog = false
                             onGoToCatalog()
                         },
+                        shape = RectangleShape,
                         colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                     ) {
                         Text("IR AL CATÁLOGO", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1950,6 +1955,7 @@ private fun RoomsTab(
                                 onCreateRoom(game, selectedMode, isPrivateRoom)
                             }
                         },
+                        shape = RectangleShape,
                         colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                     ) {
                         Text("CREAR SALA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -1957,7 +1963,10 @@ private fun RoomsTab(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateRoomDialog = false }) {
+                TextButton(
+                    onClick = { showCreateRoomDialog = false },
+                    shape = RectangleShape,
+                ) {
                     Text("CANCELAR", color = SilverGray)
                 }
             },
@@ -2028,6 +2037,7 @@ private fun RoomsTab(
                 }
                 showCreateRoomDialog = true
             },
+            shape = RectangleShape,
             colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -2074,6 +2084,7 @@ private fun RoomsTab(
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
+                shape = RectangleShape,
             ) {
                 Text(if (joinBusy) "..." else "UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
@@ -2167,6 +2178,7 @@ private fun RoomsTab(
                         }
                         Button(
                             onClick = { joinLan() },
+                            shape = RectangleShape,
                             colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                         ) {
                             Text("UNIRSE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -2240,6 +2252,7 @@ private fun RoomsTab(
                             }
                             Button(
                                 onClick = { onJoinRoom(room) },
+                                shape = RectangleShape,
                                 colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
                             ) {
                                 Text("ENTRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
