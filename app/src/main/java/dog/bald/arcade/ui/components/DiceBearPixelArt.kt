@@ -1,6 +1,8 @@
 package dog.bald.arcade.ui.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.runtime.LaunchedEffect
@@ -11,8 +13,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.PathParser
@@ -20,7 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -36,11 +41,12 @@ import kotlin.math.floor
 
 private val diceBearHttpClient by lazy { HttpClient(OkHttp) }
 private val diceBearMemoryCache = ConcurrentHashMap<String, List<ResolvedLayer>>()
+private val diceBearBitmapCache = ConcurrentHashMap<String, ImageBitmap>()
 
 /**
  * DiceBear Pixel Art (11.x) avatar with local disk/memory cache and offline v9.4.2 fallback.
- * Fetches deterministic 16x16 SVG from api.dicebear.com/11.x/pixel-art/svg so avatars match
- * the web client identically for any given seed.
+ * Fetches deterministic 128x128 PNG from api.dicebear.com/11.x/pixel-art/png so avatars match
+ * the web client identically for any given seed without SVG path parsing artifacts.
  */
 @Composable
 fun DiceBearPixelArtAvatar(
@@ -48,84 +54,101 @@ fun DiceBearPixelArtAvatar(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var layers by remember {
-        mutableStateOf(diceBearMemoryCache[seed] ?: emptyList())
+    var bitmap by remember {
+        mutableStateOf(diceBearBitmapCache[seed])
+    }
+    var fallbackLayers by remember {
+        mutableStateOf<List<ResolvedLayer>>(emptyList())
     }
 
     LaunchedEffect(seed) {
         if (seed.isBlank()) {
-            layers = emptyList()
+            bitmap = null
+            fallbackLayers = emptyList()
             return@LaunchedEffect
         }
-        diceBearMemoryCache[seed]?.let { cached ->
-            layers = cached
+        diceBearBitmapCache[seed]?.let { cached ->
+            bitmap = cached
             return@LaunchedEffect
         }
-        val remoteLayers = withContext(Dispatchers.IO) {
-            fetchOrLoadCachedDiceBearLayers(context.cacheDir, seed)
+        val remoteBitmap = withContext(Dispatchers.IO) {
+            fetchOrLoadCachedDiceBearBitmap(context.cacheDir, seed)
         }
-        if (remoteLayers != null && remoteLayers.isNotEmpty()) {
-            diceBearMemoryCache[seed] = remoteLayers
-            layers = remoteLayers
+        if (remoteBitmap != null) {
+            diceBearBitmapCache[seed] = remoteBitmap
+            bitmap = remoteBitmap
         } else {
-            layers = buildPixelArtLayers(seed)
+            bitmap = null
+            fallbackLayers = buildPixelArtLayers(seed)
         }
     }
 
-    Canvas(modifier = modifier.clipToBounds()) {
-        scale(
-            scaleX = size.width / 16f,
-            scaleY = size.height / 16f,
-            pivot = Offset.Zero,
-        ) {
-            for (layer in layers) {
-                if (layer.offsetX != 0f || layer.offsetY != 0f) {
-                    translate(left = layer.offsetX, top = layer.offsetY) {
+    val currentBitmap = bitmap
+    if (currentBitmap != null) {
+        Image(
+            bitmap = currentBitmap,
+            contentDescription = null,
+            modifier = modifier.clipToBounds(),
+            filterQuality = FilterQuality.None,
+        )
+    } else if (fallbackLayers.isNotEmpty()) {
+        Canvas(modifier = modifier.clipToBounds()) {
+            scale(
+                scaleX = size.width / 16f,
+                scaleY = size.height / 16f,
+                pivot = Offset.Zero,
+            ) {
+                for (layer in fallbackLayers) {
+                    if (layer.offsetX != 0f || layer.offsetY != 0f) {
+                        translate(left = layer.offsetX, top = layer.offsetY) {
+                            drawPath(
+                                path = layer.path,
+                                color = layer.color,
+                                alpha = layer.alpha,
+                            )
+                        }
+                    } else {
                         drawPath(
                             path = layer.path,
                             color = layer.color,
                             alpha = layer.alpha,
                         )
                     }
-                } else {
-                    drawPath(
-                        path = layer.path,
-                        color = layer.color,
-                        alpha = layer.alpha,
-                    )
                 }
             }
         }
     }
 }
 
-private suspend fun fetchOrLoadCachedDiceBearLayers(
+private suspend fun fetchOrLoadCachedDiceBearBitmap(
     cacheDir: File,
     seed: String,
-): List<ResolvedLayer>? {
-    val avatarDir = File(cacheDir, "avatars_11x").apply { mkdirs() }
+): ImageBitmap? {
+    val avatarDir = File(cacheDir, "avatars_11x_png").apply { mkdirs() }
     val key = MessageDigest.getInstance("SHA-256")
         .digest(seed.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
-    val cacheFile = File(avatarDir, "$key.svg")
+    val cacheFile = File(avatarDir, "$key.png")
 
-    val svg = if (cacheFile.exists() && cacheFile.length() > 0L) {
-        runCatching { cacheFile.readText(Charsets.UTF_8) }.getOrNull()
+    val bytes = if (cacheFile.exists() && cacheFile.length() > 0L) {
+        runCatching { cacheFile.readBytes() }.getOrNull()
     } else {
         null
     } ?: runCatching {
         val encoded = URLEncoder.encode(seed, "UTF-8")
-        val response = diceBearHttpClient.get("https://api.dicebear.com/11.x/pixel-art/svg?seed=$encoded")
+        val response = diceBearHttpClient.get("https://api.dicebear.com/11.x/pixel-art/png?seed=$encoded&size=128")
         if (response.status.isSuccess()) {
-            response.bodyAsText().also { body ->
-                runCatching { cacheFile.writeText(body, Charsets.UTF_8) }
+            response.readRawBytes().also { raw ->
+                runCatching { cacheFile.writeBytes(raw) }
             }
         } else {
             null
         }
-    }.getOrNull()
+    }.getOrNull() ?: return null
 
-    return svg?.let(::parseDiceBearSvgLayers)
+    return runCatching {
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    }.getOrNull()
 }
 
 private data class ParsedSvgPath(
