@@ -1444,6 +1444,8 @@ class GameActivity : ComponentActivity() {
 
         val scoreJob =
             CoroutineScope(Dispatchers.IO).launch {
+                val submitTrace = PerformanceHelper.startTrace("score_submit_trace")
+                var submitOutcome = "unknown"
                 val exportedReplay =
                     try {
                         runCatching {
@@ -1459,19 +1461,29 @@ class GameActivity : ComponentActivity() {
                     }
 
                 if (exportedReplay == null) {
+                    submitOutcome = "export_failed"
+                    CrashlyticsHelper.log("exportRecordedReplay vacío o fallido para game=$gid score=$score")
                     logFromAndroid("WARN", "exportRecordedReplay vacío o fallido para score=$score; omitiendo envío")
+                    PerformanceHelper.stopTrace(
+                        submitTrace,
+                        attributes = mapOf("game_id" to gid, "outcome" to submitOutcome),
+                    )
                     return@launch
                 }
 
                 try {
                     val repo = ArcadeRepository(appCtx)
                     val uid = repo.currentUserId()
-                    if (uid.isNullOrBlank()) return@launch
+                    if (uid.isNullOrBlank()) {
+                        submitOutcome = "no_uid"
+                        return@launch
+                    }
 
                     val rankResult = runCatching { repo.fetchMyGameRank(gid) }
                     if (rankResult.isSuccess) {
                         val currentBest = rankResult.getOrNull()?.score
                         if (currentBest != null && score < currentBest) {
+                            submitOutcome = "below_best"
                             logFromAndroid("INFO", "Score $score < mejor online ($currentBest); replay descartado")
                             return@launch
                         }
@@ -1479,6 +1491,8 @@ class GameActivity : ComponentActivity() {
 
                     val uploadedReplay = runCatching { repo.uploadReplay(gid, exportedReplay) }.getOrNull()
                     if (uploadedReplay == null) {
+                        submitOutcome = "upload_failed"
+                        CrashlyticsHelper.log("uploadReplay falló para game=$gid score=$score")
                         logFromAndroid("WARN", "uploadReplay falló para score=$score")
                         AnalyticsHelper.logLeaderboardSubmit(
                             romSlug = gid,
@@ -1504,6 +1518,7 @@ class GameActivity : ComponentActivity() {
                         }
                     val dto = result.getOrNull()
                     if (result.isSuccess && dto != null) {
+                        submitOutcome = if (dto.accepted) "accepted" else "rejected:${dto.reason ?: "unknown"}"
                         logFromAndroid(
                             "INFO",
                             "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}",
@@ -1512,7 +1527,7 @@ class GameActivity : ComponentActivity() {
                             romSlug = gid,
                             score = score,
                             creditsUsed = credits,
-                            outcome = if (dto.accepted) "accepted" else "rejected:${dto.reason ?: "unknown"}",
+                            outcome = submitOutcome,
                         )
                         if (dto.accepted && dto.isNewRecord) {
                             AnalyticsHelper.logNewRecordAchieved(
@@ -1522,10 +1537,14 @@ class GameActivity : ComponentActivity() {
                             )
                         }
                         if (!dto.accepted) {
+                            CrashlyticsHelper.log("submit_high_score rechazado game=$gid reason=${dto.reason}")
                             Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
                         }
                     } else {
-                        val errMsg = result.exceptionOrNull()?.message ?: "unknown"
+                        submitOutcome = "error"
+                        val err = result.exceptionOrNull()
+                        if (err != null) CrashlyticsHelper.recordNonFatal(err)
+                        val errMsg = err?.message ?: "unknown"
                         logFromAndroid("WARN", "submit_high_score falló ($errMsg)")
                         AnalyticsHelper.logLeaderboardSubmit(
                             romSlug = gid,
@@ -1536,6 +1555,11 @@ class GameActivity : ComponentActivity() {
                     }
                 } finally {
                     exportedReplay.delete()
+                    PerformanceHelper.stopTrace(
+                        submitTrace,
+                        attributes = mapOf("game_id" to gid, "outcome" to submitOutcome),
+                        metrics = mapOf("score" to score),
+                    )
                 }
             }
         ExitSyncCoordinator.register(scoreJob)

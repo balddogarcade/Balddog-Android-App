@@ -294,9 +294,11 @@ fn apply_leaderboard_frame(
         return;
     }
     if coin_tracker.has_player_started() {
-        stats
-            .current_score
-            .store(out.current_score, Ordering::Relaxed);
+        if out.active || out.current_score > 0 {
+            stats
+                .current_score
+                .store(out.current_score, Ordering::Relaxed);
+        }
         if out.current_score > 0 {
             stats
                 .best_session_score
@@ -309,6 +311,11 @@ fn apply_leaderboard_frame(
                 stats.best_session_score.load(Ordering::Relaxed)
             };
             if score_to_submit > 0 {
+                if !out.active && out.current_score == 0 {
+                    stats
+                        .current_score
+                        .store(score_to_submit, Ordering::Relaxed);
+                }
                 stats
                     .pending_submit_score
                     .fetch_max(score_to_submit, Ordering::Release);
@@ -1676,6 +1683,7 @@ mod tests {
 
         assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 123);
         assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 123);
+        assert_eq!(stats.current_score.load(Ordering::Relaxed), 123);
     }
 
     #[test]

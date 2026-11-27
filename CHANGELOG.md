@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed `submit_high_score` and `claim_pending_replay_verifications` in Supabase (`051_fix_zstd_replay_rpc_regex.sql`) rejecting `.bsv.zst` replays with `invalid_replay_path`, preserved `current_score` from dropping to `0` on the Continue/Game Over screen in `apply_leaderboard_frame`, and added `score_submit_trace` + Crashlytics breadcrumbs in `GameActivity.submitScoreWithReplay`.
 - Fixed `.bsv.zst` replay uploads failing in Supabase Storage by adding `application/zstd` to `storage.buckets.allowed_mime_types` for the `replays` bucket (`050_allow_zstd_mime_type.sql`), restoring automatic immediate replay synchronization.
 - Fixed 1CC leaderboard score submission failing on the Continue/Game Over screen in games that clear score RAM before or on the `SUB` trigger frame (such as *The Simpsons*) by falling back to `best_session_score` in `apply_leaderboard_frame` when `triggered_score` is `0`, covered by `publishes_best_session_score_when_triggered_score_is_zero_on_continue`.
 
