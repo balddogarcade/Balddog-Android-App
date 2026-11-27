@@ -927,26 +927,30 @@ fun MainShellScreen(
             ) {
                 when (topOverlay) {
                     is AppOverlay.PublicProfile ->
-                        PublicProfileScreen(
-                            userId = topOverlay.userId,
-                            repo = repo,
-                            games = games,
-                            onBack = { overlayStack = overlayStack.dropLast(1) },
-                            onOpenGameRanking = { game ->
-                                overlayStack = overlayStack + AppOverlay.GameRanking(game)
-                            },
-                            onOpenFollowList = { uid, dir, uname ->
-                                overlayStack = overlayStack + AppOverlay.FollowList(uid, dir, uname)
-                            },
-                            onFollowChanged = {
-                                scope.launch {
-                                    myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
-                                    repo.currentUserId()?.let { uid ->
-                                        runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            dog.bald.arcade.ui.components.LocalOpenGameDetail provides openGameDetail,
+                        ) {
+                            PublicProfileScreen(
+                                userId = topOverlay.userId,
+                                repo = repo,
+                                games = games,
+                                onBack = { overlayStack = overlayStack.dropLast(1) },
+                                onOpenGameRanking = { game ->
+                                    overlayStack = overlayStack + AppOverlay.GameRanking(game)
+                                },
+                                onOpenFollowList = { uid, dir, uname ->
+                                    overlayStack = overlayStack + AppOverlay.FollowList(uid, dir, uname)
+                                },
+                                onFollowChanged = {
+                                    scope.launch {
+                                        myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
+                                        repo.currentUserId()?.let { uid ->
+                                            runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
+                                        }
                                     }
-                                }
-                            },
-                        )
+                                },
+                            )
+                        }
                     is AppOverlay.FollowList ->
                         FollowListScreen(
                             targetUserId = topOverlay.userId,
@@ -957,7 +961,6 @@ fun MainShellScreen(
                             onOpenUserProfile = { uid ->
                                 overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
                             },
-                            onOpenGameDetail = { openGameDetail(topOverlay.game) },
                             onFollowChanged = {
                                 scope.launch {
                                     myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
