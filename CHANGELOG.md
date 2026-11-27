@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-27
+
 ### Fixed
 - Fixed `submit_high_score` and `claim_pending_replay_verifications` in Supabase (`051_fix_zstd_replay_rpc_regex.sql`) rejecting `.bsv.zst` replays with `invalid_replay_path`, preserved `current_score` from dropping to `0` on the Continue/Game Over screen in `apply_leaderboard_frame`, and added `score_submit_trace` + Crashlytics breadcrumbs in `GameActivity.submitScoreWithReplay`.
 - Fixed `.bsv.zst` replay uploads failing in Supabase Storage by adding `application/zstd` to `storage.buckets.allowed_mime_types` for the `replays` bucket (`050_allow_zstd_mime_type.sql`), restoring automatic immediate replay synchronization.
@@ -137,7 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - P2P Netplay with GGRS rollback, dual-candidate endpoint resolution, and voice chat.
 - 1CC leaderboards, replay recording/playback, and Firebase Crashlytics NDK diagnostics.
 
-[Unreleased]: https://github.com/balddogarcade/Balddog-Android-App/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/balddogarcade/Balddog-Android-App/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.5.0
 [0.4.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.4.0
 [0.3.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.3.0
 [0.2.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.2.0
