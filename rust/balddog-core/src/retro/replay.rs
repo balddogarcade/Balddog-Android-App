@@ -212,6 +212,10 @@ impl ReplayPlayer {
         self.cursor = 0;
     }
 
+    pub fn seek_to_frame(&mut self, frame: u64) {
+        self.cursor = (frame as usize).min(self.frames.len());
+    }
+
     pub fn current_frame(&self) -> u64 {
         self.cursor as u64
     }

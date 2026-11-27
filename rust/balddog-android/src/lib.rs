@@ -123,6 +123,7 @@ pub struct ReplayHudInfo {
     pub speed: u8,
     pub paused: bool,
     pub finished: bool,
+    pub seeking: bool,
 }
 
 static PANIC_HOOK_INIT: Once = Once::new();
@@ -565,6 +566,7 @@ pub fn get_replay_hud_info() -> ReplayHudInfo {
             speed: st.speed,
             paused: st.paused,
             finished: st.finished,
+            seeking: st.seeking,
         }
     })
     .unwrap_or(ReplayHudInfo {
@@ -574,6 +576,7 @@ pub fn get_replay_hud_info() -> ReplayHudInfo {
         speed: 1,
         paused: false,
         finished: false,
+        seeking: false,
     })
 }
 

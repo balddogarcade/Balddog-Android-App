@@ -165,6 +165,42 @@ pub struct ReplayHudStats {
     pub speed: u8,
     pub paused: bool,
     pub finished: bool,
+    pub seeking: bool,
+}
+
+const REPLAY_KEYFRAME_INTERVAL: u64 = 300;
+const REPLAY_KEYFRAME_MAX_ENTRIES: usize = 60;
+
+#[derive(Default)]
+struct ReplayKeyframeCache {
+    frames: std::collections::BTreeMap<u64, Vec<u8>>,
+}
+
+impl ReplayKeyframeCache {
+    fn maybe_insert(&mut self, frame: u64, core: &mut crate::retro::core::LibretroCore) {
+        if frame == 0 || frame % REPLAY_KEYFRAME_INTERVAL != 0 || self.frames.contains_key(&frame) {
+            return;
+        }
+        if let Ok(state) = core.save_state_bytes() {
+            if self.frames.len() >= REPLAY_KEYFRAME_MAX_ENTRIES {
+                if let Some(&oldest) = self.frames.keys().next() {
+                    self.frames.remove(&oldest);
+                }
+            }
+            self.frames.insert(frame, state);
+        }
+    }
+
+    fn nearest_before_or_at(&self, target_frame: u64) -> Option<(u64, &[u8])> {
+        self.frames
+            .range(..=target_frame)
+            .next_back()
+            .map(|(&f, s)| (f, s.as_slice()))
+    }
+
+    fn clear(&mut self) {
+        self.frames.clear();
+    }
 }
 
 #[derive(Default)]
@@ -188,6 +224,7 @@ struct SharedStats {
     replay_speed: AtomicU8,
     replay_paused: AtomicBool,
     replay_finished: AtomicBool,
+    replay_seeking: AtomicBool,
 }
 
 pub struct EmulationSession {
@@ -536,6 +573,7 @@ impl EmulationSession {
                     Ordering::Release,
                 );
                 let mut replay_player = initial_replay_player;
+                let mut replay_keyframes = ReplayKeyframeCache::default();
                 let mut recorder = if netplay.is_none() && replay_player.is_none() && leaderboard.is_some() {
                     let rom_crc = compute_file_crc32(&rom_path).unwrap_or(0);
                     Some(ReplayRecorder::new(rom_crc))
@@ -624,6 +662,7 @@ impl EmulationSession {
                                             };
                                             if state_ok {
                                                 p.restart();
+                                                replay_keyframes.clear();
                                                 if let Some(ref mut lb) = leaderboard {
                                                     lb.reset();
                                                 }
@@ -650,7 +689,25 @@ impl EmulationSession {
                                     let max_frame = p.total_frames();
                                     let target = target_frame.min(max_frame);
                                     let curr = p.current_frame();
-                                    if target < curr {
+                                    let best_kf = replay_keyframes.nearest_before_or_at(target);
+                                    let use_kf = match best_kf {
+                                        Some((kf_frame, _)) if target < curr || kf_frame > curr => {
+                                            Some(kf_frame)
+                                        }
+                                        _ => None,
+                                    };
+                                    if let Some(kf_frame) = use_kf {
+                                        if let Some((_, state_bytes)) = replay_keyframes.nearest_before_or_at(target) {
+                                            if core.load_state_bytes(state_bytes).is_ok() {
+                                                p.seek_to_frame(kf_frame);
+                                                if let Some(ref mut lb) = leaderboard {
+                                                    lb.reset();
+                                                }
+                                                reset_replay_stats(&stats_clone, &mut coin_tracker);
+                                                last_frame_rgba.invalidate();
+                                            }
+                                        }
+                                    } else if target < curr {
                                         clear_deterministic_nvram(&save_dir, &rom_path);
                                         if core.load_game(&rom_path).is_ok() {
                                             let state_ok = if !p.initial_state().is_empty() {
@@ -674,6 +731,7 @@ impl EmulationSession {
                                         };
                                         core.set_inputs(frame_inputs);
                                         core.run_frame();
+                                        replay_keyframes.maybe_insert(p.current_frame(), &mut core);
                                         if let Some(ref mut lb) = leaderboard {
                                             if let Some(ram) = core.system_ram() {
                                                 let out = lb.evaluate_frame(ram);
@@ -697,6 +755,7 @@ impl EmulationSession {
                                         renderer.render_frame(w, h, rgba, rot);
                                     });
                                 }
+                                stats_clone.replay_seeking.store(false, Ordering::Release);
                             }
                             SessionCommand::ExportReplay { path, ack } => {
                                 let res = match recorder.as_ref() {
@@ -922,6 +981,7 @@ impl EmulationSession {
                             };
                             core.set_inputs(frame_inputs);
                             core.run_frame();
+                            replay_keyframes.maybe_insert(player.current_frame(), &mut core);
                             if let Some(ref mut lb) = leaderboard {
                                 if let Some(ram) = core.system_ram() {
                                     let out = lb.evaluate_frame(ram);
@@ -1133,7 +1193,14 @@ impl EmulationSession {
     }
 
     pub fn seek_replay(&self, target_frame: u64) {
-        let _ = self.cmd_tx.send(SessionCommand::SeekReplay(target_frame));
+        self.stats.replay_seeking.store(true, Ordering::Release);
+        if self
+            .cmd_tx
+            .send(SessionCommand::SeekReplay(target_frame))
+            .is_err()
+        {
+            self.stats.replay_seeking.store(false, Ordering::Release);
+        }
     }
 
     pub fn replay_hud_stats(&self) -> ReplayHudStats {
@@ -1144,6 +1211,7 @@ impl EmulationSession {
             speed: self.stats.replay_speed.load(Ordering::Relaxed),
             paused: self.stats.replay_paused.load(Ordering::Relaxed),
             finished: self.stats.replay_finished.load(Ordering::Acquire),
+            seeking: self.stats.replay_seeking.load(Ordering::Acquire),
         }
     }
 
