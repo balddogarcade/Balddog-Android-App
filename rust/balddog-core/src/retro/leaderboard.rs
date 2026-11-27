@@ -449,6 +449,37 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_mslug3_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHF04C*1000000_A:b0xHF04D*10000_A:b0xHF04E*100_M:b0xHF04F",
+        )
+        .expect("mslug3 lboard válido");
+
+        let mut ram = vec![0u8; 65536];
+        // 1. Boot / Attract: 0xED5C=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0xED5C=1, puntaje=470600 ([00, 47, 06, 00])
+        ram[0xED5C] = 1;
+        ram[0xF04C] = 0x00;
+        ram[0xF04D] = 0x47;
+        ram[0xF04E] = 0x06;
+        ram[0xF04F] = 0x00;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 470600);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Game Over / Continue: 0xED5C=0 -> dispara SUB con 470600
+        ram[0xED5C] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(470600));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
             "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
@@ -470,7 +501,7 @@ mod tests {
             "STA:0xH000F=1::CAN:0=1::SUB:0xH000F=0::VAL:A:b0xH03EC*100_M:b0xH03EB",
             "STA:0xH1050=1::CAN:0=1::SUB:0xH1050=0::VAL:A:b0xH11D4*100_M:b0xH11D5",
             "STA:0xH04A1=1::CAN:0=1::SUB:0xH04A1=0::VAL:A:b0x 3214*10000_M:b0x 3216",
-            "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHED16*1000000_A:b0xHED17*10000_A:b0xHED18*100_M:b0xHED19",
+            "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHF04C*1000000_A:b0xHF04D*10000_A:b0xHF04E*100_M:b0xHF04F",
             "STA:0xH0053=1::CAN:0=1::SUB:0xH0053=0::VAL:A:b0x 0810*10000_M:b0x 0812",
         ];
         for def in defs {
