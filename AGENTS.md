@@ -265,6 +265,11 @@ Al trabajar en la capa de red, señalización en Supabase, sockets UDP o el moto
 
 Al implementar nuevas funcionalidades, pantallas, flujos de red/netplay, audio, replays o código nativo (`rust/`, FBNeo):
 
+0. **Regla Mandatoria — Los 3 servicios de Firebase en cada bloque fundacional:**
+   - **SIEMPRE** que se construya un bloque fundacional (nuevas pantallas, flujos, servicios, integraciones o correcciones estructurales) se deben incorporar por defecto los **3 servicios de Firebase**:
+     1. **Crashlytics (`CrashlyticsHelper`):** contexto (`setCustomKey` vía helpers), breadcrumbs (`log()`) en transiciones de estado y `recordNonFatal(t)` en `catch` críticos.
+     2. **Analytics (`AnalyticsHelper`):** `logScreenView` y eventos tipados sin PII.
+     3. **Performance (`PerformanceHelper`):** trazas personalizadas en operaciones críticas o de latencia.
 1. **Instrumentación automática con `CrashlyticsHelper`:**
    - Usa `dog.bald.arcade.diagnostics.CrashlyticsHelper` (`setCustomKey` vía helpers dedicados, `log()` para breadcrumbs de transiciones de estado, y `recordNonFatal(t)` en `catch` críticos o fallos recuperables).
    - **NUNCA** envíes credenciales, tokens, contraseñas ni PII en logs o Custom Keys.

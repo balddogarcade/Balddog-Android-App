@@ -303,10 +303,15 @@ fn apply_leaderboard_frame(
                 .fetch_max(out.current_score, Ordering::Relaxed);
         }
         if let Some(triggered) = out.triggered_score {
-            if triggered > 0 {
+            let score_to_submit = if triggered > 0 {
+                triggered
+            } else {
+                stats.best_session_score.load(Ordering::Relaxed)
+            };
+            if score_to_submit > 0 {
                 stats
                     .pending_submit_score
-                    .fetch_max(triggered, Ordering::Release);
+                    .fetch_max(score_to_submit, Ordering::Release);
             }
         }
     }
@@ -1634,6 +1639,43 @@ mod tests {
         assert!(stats.ranking_eligible.load(Ordering::Acquire));
         assert_eq!(stats.credits_used.load(Ordering::Acquire), 1);
         assert_eq!(stats.current_score.load(Ordering::Relaxed), 2_800);
+    }
+
+    #[test]
+    fn publishes_best_session_score_when_triggered_score_is_zero_on_continue() {
+        use std::sync::atomic::Ordering;
+
+        let stats = super::SharedStats::default();
+        stats.ranking_eligible.store(true, Ordering::Release);
+        let mut tracker = CoinTracker::new();
+
+        // 1. Inicia partida con 1 crédito y alcanza puntaje 123
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: true,
+                current_score: 123,
+                triggered_score: None,
+            },
+            &[RETRO_START_MASK, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+        assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 123);
+
+        // 2. Llega a Continue: el juego limpia RAM de puntaje (triggered_score = Some(0))
+        super::apply_leaderboard_frame(
+            crate::retro::leaderboard::LeaderboardFrameOutput {
+                active: false,
+                current_score: 0,
+                triggered_score: Some(0),
+            },
+            &[0, 0, 0, 0],
+            &mut tracker,
+            &stats,
+        );
+
+        assert_eq!(stats.pending_submit_score.load(Ordering::Acquire), 123);
+        assert_eq!(stats.best_session_score.load(Ordering::Relaxed), 123);
     }
 
     #[test]

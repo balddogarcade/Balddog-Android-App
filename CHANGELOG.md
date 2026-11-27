@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed 1CC leaderboard score submission failing on the Continue/Game Over screen in games that clear score RAM before or on the `SUB` trigger frame (such as *The Simpsons*) by falling back to `best_session_score` in `apply_leaderboard_frame` when `triggered_score` is `0`, covered by `publishes_best_session_score_when_triggered_score_is_zero_on_continue`.
 - Fixed `GameLeaderboardSheet` displaying outdated player avatars by adding `avatar_seed` to `LeaderboardEntryDto` and passing `entry.avatarSeed` (falling back to `entry.username`) to `DiceBearPixelArtAvatar`, prevented `AUDITORÍA`/`✓ VERIF.`/`TÚ` badges from wrapping onto multiple lines, and aligned the `"TU POSICIÓN ACTUAL"` row with replay playback actions.
 - Fixed `scripts/verify-replays-worker.py` ROM lookup failing with `HTTP 400 Bad Request` by querying `ipfs_cid,system` instead of the non-existent `rom_url` column and downloading ROMs from IPFS gateways with fallback.
 
