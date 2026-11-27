@@ -355,3 +355,16 @@ Al agregar nuevos juegos al catálogo (`public.games`), ejecuta el seeder para p
 2. **Analítica Dual:**
    - **App Android:** Firebase Analytics (GA4) vía `AnalyticsHelper` (sin PII).
    - **Web pública (`bald.dog`):** Cloudflare Web Analytics (sin cookies, inyección automática vía `auto_install: True`).
+
+---
+
+## Protocolo: Verificación Automática de Replays (GitHub Actions)
+
+1. **Principio Anti-Cheat:**
+   - **NUNCA** permitir que el cliente Android marque un replay como `verified`. Toda certificación ocurre en servidor/CI mediante `verify_replay` + `fbneo_libretro.so` (Linux) compilado desde el mismo commit fijado (`5f6bdff9451d5c3dedd3d992d7412660eb202cf4`) y con flags deterministas (`scripts/build-fbneo-linux.sh`).
+2. **Pipeline Serverless (`.github/workflows/verify-replays.yml`):**
+   - Se ejecuta cada 15 minutos (`schedule`), manualmente (`workflow_dispatch`) o vía `repository_dispatch` (`verify-replays`).
+   - El job `check-queue` verifica primero si existen `high_scores` en `pending` o `verifying`; si la cola está vacía, omite el build de Rust/FBNeo.
+   - `scripts/verify-replays-worker.py` descarga bajo demanda las ROMs faltantes desde `public.games.rom_url` y audita con `ONCE=1`.
+   - Requiere `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` configurados en GitHub Secrets.
+3. **Referencia:** Consultar [docs/REPLAY_VERIFICATION.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/REPLAY_VERIFICATION.md).
