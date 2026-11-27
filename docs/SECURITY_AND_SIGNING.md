@@ -46,3 +46,10 @@ El workflow sube `app-release.apk` a VirusTotal y adjunta el enlace `https://www
 - **`cargo-audit`:** Analiza `rust/Cargo.lock` en pushes/PRs a `main` y semanalmente.
 - **GitHub CodeQL:** Análisis estático para `java-kotlin`.
 - **Dependabot:** Actualizaciones semanales automáticas para `gradle`, `cargo` (`/rust`) y `github-actions`.
+
+---
+
+## 4. Rotación de Keystore y App Links
+
+- El keystore local reside en `.cache/balddog-release.keystore` (ignorado por Git) y sus credenciales (`ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) están respaldadas en `local.properties` (ignorado por Git).
+- Al rotar el keystore, se deben actualizar los 4 Secrets en GitHub Actions (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) y la huella SHA-256 en `Balddog-Main-Webpage/public/.well-known/assetlinks.json` (actual: `45:4F:DE:27:03:83:76:78:D6:68:1B:00:10:CD:80:A2:9D:1A:DD:08:C8:5A:94:86:B6:46:D3:FE:7C:09:7A:0B`).
