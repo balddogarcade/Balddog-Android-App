@@ -27,6 +27,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -79,6 +80,59 @@ def download_replay(base_url: str, service_key: str, replay_path: str, dest: Pat
         dest.write_bytes(resp.read())
 
 
+def lookup_game_rom_info(base_url: str, service_key: str, rom_filename: str) -> dict | None:
+    encoded = urllib.parse.quote(rom_filename, safe="")
+    url = f"{base_url.rstrip('/')}/rest/v1/games?rom_filename=eq.{encoded}&select=rom_url,system&limit=1"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        rows = json.loads(resp.read().decode("utf-8"))
+        return rows[0] if rows else None
+
+
+def download_file(url: str, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp_dest = dest.with_suffix(dest.suffix + ".part")
+    req = urllib.request.Request(url, headers={"User-Agent": "balddog-replay-verifier/1.0"})
+    with urllib.request.urlopen(req, timeout=180) as resp, tmp_dest.open("wb") as out:
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+    tmp_dest.replace(dest)
+
+
+def ensure_rom_available(
+    base_url: str,
+    service_key: str,
+    roms_dir: Path,
+    rom_filename: str,
+) -> Path | None:
+    rom_path = roms_dir / rom_filename
+    if rom_path.exists():
+        return rom_path
+
+    info = lookup_game_rom_info(base_url, service_key, rom_filename)
+    if not info or not info.get("rom_url"):
+        return None
+
+    download_file(info["rom_url"], rom_path)
+
+    system = (info.get("system") or "").lower()
+    neogeo_zip = roms_dir / "neogeo.zip"
+    neogeo_url = os.environ.get("NEOGEO_BIOS_URL", "").strip()
+    if "neo" in system and not neogeo_zip.exists() and neogeo_url:
+        download_file(neogeo_url, neogeo_zip)
+
+    return rom_path if rom_path.exists() else None
+
+
 def verify_item(
     item: dict,
     base_url: str,
@@ -97,6 +151,14 @@ def verify_item(
     expected_replay_sha = (item.get("replay_sha256") or "").lower()
 
     rom_path = roms_dir / rom_filename
+    if not rom_path.exists():
+        try:
+            downloaded = ensure_rom_available(base_url, service_key, roms_dir, rom_filename)
+            if downloaded is not None:
+                rom_path = downloaded
+        except Exception as e:
+            print(f"[WARN] Failed to download ROM {rom_filename}: {e}", file=sys.stderr)
+
     if not rom_path.exists():
         rpc_call(
             base_url,
