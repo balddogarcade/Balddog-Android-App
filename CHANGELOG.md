@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Automated serverless replay verification pipeline via GitHub Actions (`.github/workflows/verify-replays.yml`), Linux deterministic FBNeo build script (`scripts/build-fbneo-linux.sh`), and on-demand ROM fetching in `scripts/verify-replays-worker.py`.
+- Comprehensive replay verification architecture and operations guide in `docs/REPLAY_VERIFICATION.md`.
+
 ## [0.4.0] - 2026-11-27
 
 ### Added

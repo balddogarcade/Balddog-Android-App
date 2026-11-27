@@ -23,7 +23,7 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
   - Global Top 50 leaderboards and personal rank sheets with offline score queuing (`PendingScoreQueue`).
 - **Deterministic Replays & Anti-Cheat (`.bsv.gz` / MP4)**:
   - Automatic frame-by-frame `BSV1` input recording (gzip-compressed) during ranked 1CC sessions, stored in Supabase Storage.
-  - Headless server-side replay verifier (`verify_replay.rs` and Python worker) preventing hacked score submissions.
+  - Headless server-side replay verifier (`verify_replay.rs` and `scripts/verify-replays-worker.py`) running automatically on GitHub Actions (`.github/workflows/verify-replays.yml`) with deterministic Linux `fbneo_libretro.so` builds, on-demand ROM fetching, and strict 1CC/SHA-256/CRC32 validation (see [docs/REPLAY_VERIFICATION.md](docs/REPLAY_VERIFICATION.md)).
   - Watch any Top 50 replay from `GameLeaderboardSheet` with `1x / 2x / 4x` speed controls, play/pause, restart, and progress HUD (`ReplayHudOverlay`).
   - Export PNG screenshots (`Pictures/balddog ARCADE/`) and H.264 MP4 video clips (`Movies/balddog ARCADE/`) locally via Android `MediaCodec` + `MediaMuxer` + `MediaStore`.
 - **P2P Netplay & Voice Chat**:
