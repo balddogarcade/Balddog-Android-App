@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Improved replay seeking UX with an in-memory keyframe cache (`ReplayKeyframeCache` every 300 frames, up to 60 states) in `balddog-core` for faster forward/backward jumps, plus an `Avanzando...` progress indicator in `ReplayHudOverlay` while seeking is active.
+
 ### Added
 - Automated serverless replay verification pipeline via GitHub Actions (`.github/workflows/verify-replays.yml`), Linux deterministic FBNeo build script (`scripts/build-fbneo-linux.sh`), and on-demand ROM fetching in `scripts/verify-replays-worker.py`.
 - Comprehensive replay verification architecture and operations guide in `docs/REPLAY_VERIFICATION.md`.
