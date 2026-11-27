@@ -1438,7 +1438,7 @@ class GameActivity : ComponentActivity() {
         val replayFile =
             File(
                 pendingDir,
-                "${gid}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.bsv.gz",
+                "${gid}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.bsv.zst",
             )
         val exportDone = CompletableDeferred<Unit>()
         synchronized(pendingExportLock) {

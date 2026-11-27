@@ -408,7 +408,7 @@ class ArcadeRepository(
                 .getInstance("SHA-256")
                 .digest(bytes)
                 .joinToString("") { "%02x".format(it) }
-        val objectPath = "$gameId/$uid/${UUID.randomUUID()}.bsv.gz"
+        val objectPath = "$gameId/$uid/${UUID.randomUUID()}.bsv.zst"
         val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/object/replays/$objectPath"
 
         return withContext(Dispatchers.IO) {
@@ -422,7 +422,7 @@ class ArcadeRepository(
                     readTimeout = 30_000
                     setRequestProperty("Authorization", "Bearer $token")
                     setRequestProperty("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                    setRequestProperty("Content-Type", "application/gzip")
+                    setRequestProperty("Content-Type", "application/zstd")
                 }
             try {
                 conn.outputStream.use { it.write(bytes) }
