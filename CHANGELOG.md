@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `GameActivity` `configChanges` (`screenLayout|smallestScreenSize|uiMode|density`), `rom_startup_trace` leak, transient `fetchRoomById` netplay disconnects, and `LaunchedEffect(Unit)` polling.
 
 ### Performance
+- Moved game cover images (`public.games.cover_url`) from Pinata IPFS back to Supabase Storage (`covers` public bucket, `046_supabase_storage_covers.sql`, `scripts/upload-covers-supabase.py`) for faster catalog loading, while keeping ROMs (`ipfs_cid`) and secondary detail gallery images on IPFS.
 - Optimized `GameCoverImage` with shared `OkHttpClient`, in-flight deduplication, atomic disk writes, `inSampleSize` downsampling, and KB-bounded `LruCache`.
 - Parallelized `MainShellScreen.refreshAll()` with `coroutineScope { async ... }` and skipped Opus decoding when voice `listen_enabled` is false.
 - Added `-Wl,-z,max-page-size=16384` to `scripts/build-rust.sh` for 16 KB page alignment.

@@ -185,7 +185,7 @@ INSERT INTO public.games (
     true,
     null,
     null,
-    'https://gateway.pinata.cloud/ipfs/QmCoverHash...',
+    'https://<SUPABASE_PROJECT_ID>.supabase.co/storage/v1/object/public/covers/slug_juego.webp',
     99999990,
     jsonb_build_object(
         'max_valid_score', 99999990,
@@ -202,7 +202,7 @@ ON CONFLICT (slug) DO UPDATE SET
 ```
 
 > [!NOTE]
-> Las carátulas visuales de los juegos se cargan directamente de los assets empaquetados en la aplicación Android (`app/src/main/assets/covers/<slug>.webp`). Al agregar un nuevo juego, asegúrate de colocar su portada en formato `.webp` con el mismo nombre que el `slug`.
+> Las portadas principales (`cover_url`) se sirven en formato `.webp` desde el bucket público `covers` en Supabase Storage para carga rápida en el catálogo. Para subir una portada nueva ejecuta `python3 scripts/upload-covers-supabase.py --dir <carpeta> --slug <slug>`. Las ROMs (`ipfs_cid`) y las imágenes secundarias de detalle (`url_image_*`, `url_icon`) permanecen en IPFS (Pinata).
 
 ---
 
