@@ -85,6 +85,7 @@ fun GameRankingScreen(
     onBack: () -> Unit,
     onPlayOrDownload: () -> Unit,
     onOpenUserProfile: (String) -> Unit,
+    onOpenGameDetail: () -> Unit = {},
     replayLaunchState: ReplayLaunchState? = null,
     onWatchReplay: (GameLeaderboardV2EntryDto) -> Unit,
     modifier: Modifier = Modifier,
@@ -177,6 +178,7 @@ fun GameRankingScreen(
                     fontSize = 15.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable(onClick = onOpenGameDetail),
                 )
             }
 

@@ -953,6 +953,7 @@ fun MainShellScreen(
                             onOpenUserProfile = { uid ->
                                 overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
                             },
+                            onOpenGameDetail = { openGameDetail(topOverlay.game) },
                             onFollowChanged = {
                                 scope.launch {
                                     myFollowingIds = runCatching { repo.fetchMyFollowingIds() }.getOrDefault(myFollowingIds)
@@ -995,6 +996,7 @@ fun MainShellScreen(
                             onOpenUserProfile = { uid ->
                                 overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
                             },
+                            onOpenGameDetail = { openGameDetail(topOverlay.game) },
                             replayLaunchState = replayLaunchState,
                             onWatchReplay = { entry ->
                                 val rPath = entry.replayPath ?: return@GameRankingScreen
