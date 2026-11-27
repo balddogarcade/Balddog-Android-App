@@ -82,7 +82,7 @@ def download_replay(base_url: str, service_key: str, replay_path: str, dest: Pat
 
 def lookup_game_rom_info(base_url: str, service_key: str, rom_filename: str) -> dict | None:
     encoded = urllib.parse.quote(rom_filename, safe="")
-    url = f"{base_url.rstrip('/')}/rest/v1/games?rom_filename=eq.{encoded}&select=rom_url,system&limit=1"
+    url = f"{base_url.rstrip('/')}/rest/v1/games?rom_filename=eq.{encoded}&select=ipfs_cid,system&limit=1"
     req = urllib.request.Request(
         url,
         headers={
@@ -108,6 +108,28 @@ def download_file(url: str, dest: Path) -> None:
     tmp_dest.replace(dest)
 
 
+def download_from_ipfs(cid_or_url: str, dest: Path) -> None:
+    raw = cid_or_url.strip()
+    if raw.startswith("http://") or raw.startswith("https://"):
+        download_file(raw, dest)
+        return
+
+    gateways = [
+        f"https://gateway.pinata.cloud/ipfs/{raw}",
+        f"https://ipfs.io/ipfs/{raw}",
+        f"https://dweb.link/ipfs/{raw}",
+    ]
+    last_err: Exception | None = None
+    for gw_url in gateways:
+        try:
+            download_file(gw_url, dest)
+            return
+        except Exception as e:
+            last_err = e
+    if last_err is not None:
+        raise last_err
+
+
 def ensure_rom_available(
     base_url: str,
     service_key: str,
@@ -119,10 +141,10 @@ def ensure_rom_available(
         return rom_path
 
     info = lookup_game_rom_info(base_url, service_key, rom_filename)
-    if not info or not info.get("rom_url"):
+    if not info or not info.get("ipfs_cid"):
         return None
 
-    download_file(info["rom_url"], rom_path)
+    download_from_ipfs(info["ipfs_cid"], rom_path)
 
     system = (info.get("system") or "").lower()
     neogeo_zip = roms_dir / "neogeo.zip"
