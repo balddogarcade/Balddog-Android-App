@@ -37,6 +37,19 @@
                 <data android:scheme="dog.bald.arcade" android:host="login-callback" />
                 <data android:scheme="dog.bald.arcade" android:host="reset-password" />
             </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="bald.dog" android:pathPrefix="/room/" />
+                <data android:scheme="https" android:host="www.bald.dog" android:pathPrefix="/room/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="balddog" android:host="room" />
+            </intent-filter>
         </activity>
 
         <activity

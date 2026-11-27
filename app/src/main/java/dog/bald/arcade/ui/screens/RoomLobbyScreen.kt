@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -58,6 +59,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -86,11 +88,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.ArcadeRepository
+import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
+import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.RoomMessageDto
 import dog.bald.arcade.data.RoomSlotInfo
 import dog.bald.arcade.data.toUserMessage
+import dog.bald.arcade.diagnostics.AnalyticsHelper
+import dog.bald.arcade.diagnostics.CrashlyticsHelper
 import dog.bald.arcade.net.LanNsdManager
 import dog.bald.arcade.net.LobbyLatencyMonitor
 import dog.bald.arcade.net.LobbyPeerTarget
@@ -133,6 +139,9 @@ fun RoomLobbyScreen(
     myUdpPort: Int,
     myVoiceEndpoint: String = "",
     myAvatarSeed: String? = null,
+    romManager: IpfsRomManager? = null,
+    allGames: List<GameDto> = emptyList(),
+    allBios: List<GameBiosDto> = emptyList(),
     hasActiveOverlay: Boolean = false,
     onOpenUserProfile: (String) -> Unit = {},
     onOpenGameDetail: (GameDto) -> Unit = {},
@@ -161,6 +170,36 @@ fun RoomLobbyScreen(
     }
     var showHostExitConfirm by remember { mutableStateOf(false) }
     var copiedRoomCode by remember { mutableStateOf(false) }
+    var banCandidateSlot by remember { mutableStateOf<RoomSlotInfo?>(null) }
+    var romPrepProgress by remember(game?.id) { mutableStateOf<Float?>(null) }
+    var romPrepStage by remember(game?.id) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(game?.id, romManager) {
+        val g = game ?: return@LaunchedEffect
+        val rm = romManager ?: return@LaunchedEffect
+        runCatching {
+            rm.ensureGameReady(
+                game = g,
+                allGames = allGames,
+                allBios = allBios,
+            ) { stage, progress ->
+                romPrepStage = stage
+                romPrepProgress = progress.coerceIn(0f, 1f)
+            }
+        }.onFailure { t ->
+            CrashlyticsHelper.recordNonFatal(t)
+            errorMsg = "Error descargando ROM: ${t.toUserMessage()}"
+        }
+        romPrepProgress = null
+        romPrepStage = null
+    }
+
+    LaunchedEffect(room.bannedUserIds, myUid) {
+        if (!leftRoom && myUid.isNotBlank() && room.bannedUserIds.any { it.equals(myUid, ignoreCase = true) }) {
+            leftRoom = true
+            onLeave("Fuiste baneado de esta sala por el anfitrión.")
+        }
+    }
 
     val isOnlineRoom = room.mode != "lan"
     val latencyMonitor =
@@ -721,14 +760,15 @@ fun RoomLobbyScreen(
                     OutlinedButton(
                         onClick = {
                             val gameTitle = game?.title ?: "Arcade Match"
-                            val shareBody = "¡Únete a mi sala en bald.dog ARCADE!\nJuego: $gameTitle\nCódigo de sala: #${room.code} (${room.mode.uppercase()})"
+                            val magicLink = "https://bald.dog/room/${room.id}"
+                            val shareBody = "¡Únete a mi sala en bald.dog ARCADE!\nJuego: $gameTitle\nCódigo: #${room.code} (${room.mode.uppercase()})\nLink directo: $magicLink"
                             val sendIntent =
                                 Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
                                     putExtra(Intent.EXTRA_SUBJECT, "Sala #${room.code} · $gameTitle")
                                     putExtra(Intent.EXTRA_TEXT, shareBody)
                                 }
-                            context.startActivity(Intent.createChooser(sendIntent, "Compartir ID de sala"))
+                            context.startActivity(Intent.createChooser(sendIntent, "Compartir link de sala"))
                         },
                         shape = RectangleShape,
                         border = BorderStroke(1.dp, SteelBorder),
@@ -855,8 +895,10 @@ fun RoomLobbyScreen(
                     isOnlineRoom = isOnlineRoom,
                     pingMs = pingMs,
                     myAvatarSeed = myAvatarSeed,
+                    canBan = isHost && occupant != null && !isMine && room.status == "waiting",
                     onClaim = { claimSlot(slot) },
                     onInspectOccupant = occupant?.let { occ -> { onOpenUserProfile(occ.userId) } },
+                    onBanOccupant = occupant?.let { occ -> { banCandidateSlot = occ } },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -1034,14 +1076,17 @@ fun RoomLobbyScreen(
                     }
                 } else {
                     val amReady = room.slotsJson[mySlot.toString()]?.ready == true
+                    val isDownloadingRom = romPrepProgress != null
                     Button(
-                        enabled = !preparingMatch && !matchLaunched && !leftRoom,
+                        enabled = !isDownloadingRom && !preparingMatch && !matchLaunched && !leftRoom,
                         onClick = { toggleReady() },
                         shape = RectangleShape,
                         colors =
                             ButtonDefaults.buttonColors(
                                 containerColor = if (amReady) GraphiteSurface else PureWhite,
                                 contentColor = if (amReady) PureWhite else PureBlack,
+                                disabledContainerColor = GraphiteSurface,
+                                disabledContentColor = PureWhite,
                             ),
                         border = BorderStroke(1.dp, if (amReady) ReadyGreenAccent else PureWhite),
                         modifier =
@@ -1049,19 +1094,45 @@ fun RoomLobbyScreen(
                                 .weight(1f)
                                 .height(48.dp),
                     ) {
-                        Icon(
-                            imageVector = if (amReady) Icons.Default.CheckCircle else Icons.Default.Check,
-                            contentDescription = null,
-                            tint = if (amReady) ReadyGreenAccent else PureBlack,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (amReady) "LISTO · TOCA PARA ESPERAR" else "MARCAR LISTO",
-                            fontFamily = SpaceGroteskFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                        )
+                        if (isDownloadingRom) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text = (romPrepStage ?: "DESCARGANDO ROM...").uppercase(),
+                                    fontFamily = JetBrainsMonoFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                LinearProgressIndicator(
+                                    progress = { romPrepProgress ?: 0f },
+                                    color = ReadyGreenAccent,
+                                    trackColor = CharcoalBorder,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp),
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = if (amReady) Icons.Default.CheckCircle else Icons.Default.Check,
+                                contentDescription = null,
+                                tint = if (amReady) ReadyGreenAccent else PureBlack,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (amReady) "LISTO · TOCA PARA ESPERAR" else "MARCAR LISTO",
+                                fontFamily = SpaceGroteskFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                            )
+                        }
                     }
                 }
             }
@@ -1153,6 +1224,55 @@ fun RoomLobbyScreen(
             }
         }
     }
+
+    banCandidateSlot?.let { target ->
+        AlertDialog(
+            onDismissRequest = { banCandidateSlot = null },
+            containerColor = GraphiteSurface,
+            title = {
+                Text(
+                    text = "Banear a ${target.username}",
+                    color = PureWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                )
+            },
+            text = {
+                Text(
+                    text = "${target.username} será expulsado, sus mensajes en esta sala se eliminarán y no podrá volver a entrar a menos que se cree una nueva sala.",
+                    color = SilverGray,
+                    fontSize = 13.sp,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        banCandidateSlot = null
+                        scope.launch {
+                            runCatching {
+                                repo.banRoomPlayer(room.id, target.userId)
+                            }.onSuccess { updated ->
+                                room = updated
+                                AnalyticsHelper.logRoomPlayerBanned(game?.slug.orEmpty())
+                            }.onFailure { t ->
+                                CrashlyticsHelper.recordNonFatal(t)
+                                errorMsg = t.toUserMessage()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DangerRed, contentColor = PureWhite),
+                    shape = RectangleShape,
+                ) {
+                    Text("BANEAR", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { banCandidateSlot = null }) {
+                    Text("CANCELAR", color = PureWhite)
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -1164,8 +1284,10 @@ private fun PlayerSlotCard(
     isOnlineRoom: Boolean,
     pingMs: Int?,
     myAvatarSeed: String? = null,
+    canBan: Boolean = false,
     onClaim: () -> Unit,
     onInspectOccupant: (() -> Unit)? = null,
+    onBanOccupant: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val borderColor =
@@ -1249,6 +1371,17 @@ private fun PlayerSlotCard(
                         fontWeight = FontWeight.Medium,
                         fontSize = 9.sp,
                         modifier = Modifier.align(Alignment.CenterEnd),
+                    )
+                } else if (canBan && onBanOccupant != null) {
+                    Icon(
+                        imageVector = Icons.Default.Block,
+                        contentDescription = "Banear jugador",
+                        tint = DangerRed,
+                        modifier =
+                            Modifier
+                                .size(14.dp)
+                                .align(Alignment.CenterEnd)
+                                .clickable { onBanOccupant() },
                     )
                 }
             }

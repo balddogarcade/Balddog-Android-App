@@ -47,6 +47,7 @@ fun GameDetailScreen(
     onBack: () -> Unit,
     onPlayClick: (GameDto) -> Unit,
     onRankingClick: (GameDto) -> Unit,
+    onQuickMatchClick: ((GameDto) -> Unit)? = null,
     isLoading: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -105,6 +106,14 @@ fun GameDetailScreen(
                     onPlayClick = { onPlayClick(game) },
                     onRankingClick = { onRankingClick(game) },
                 )
+                if (onQuickMatchClick != null) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { onQuickMatchClick(game) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("BUSCAR PARTIDA RÁPIDA (ONLINE)")
+                    }
+                }
                 GameDetailGallery(
                     game = game,
                     onImageOpened = { imageType ->

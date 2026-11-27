@@ -67,6 +67,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import android.os.SystemClock
+import dog.bald.arcade.data.MatchmakingStatsDto
+import dog.bald.arcade.diagnostics.AnalyticsHelper
+import dog.bald.arcade.diagnostics.CrashlyticsHelper
+import dog.bald.arcade.diagnostics.PerformanceHelper
+import dog.bald.arcade.net.MatchmakingPolicy
+import dog.bald.arcade.net.RoomJoinEligibility
+import dog.bald.arcade.ui.components.MatchmakingMiniBanner
+import dog.bald.arcade.ui.components.QuickMatchmakingCard
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -178,6 +189,8 @@ fun MainShellScreen(
     nativeLibDir: String,
     currentUserId: String = repo.currentUserId().orEmpty(),
     gameReturnCounter: Int = 0,
+    pendingDeepLinkRoomId: String? = null,
+    onConsumePendingDeepLinkRoomId: () -> Unit = {},
     onActiveHostRoomChanged: (String?) -> Unit = {},
     onSignedOut: () -> Unit,
     onLaunchLocalRom: (GameDto) -> Unit,
@@ -206,6 +219,13 @@ fun MainShellScreen(
     var rankingSummaries by remember { mutableStateOf<Map<String, GameRankingSummaryDto>>(emptyMap()) }
     var myFollowingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var overlayStack by remember { mutableStateOf<List<AppOverlay>>(emptyList()) }
+    var isMatchmaking by remember { mutableStateOf(false) }
+    var matchmakingGame by remember { mutableStateOf<GameDto?>(null) }
+    var matchmakingElapsedSec by remember { mutableStateOf(0L) }
+    var matchmakingStats by remember { mutableStateOf<MatchmakingStatsDto?>(null) }
+    var lastMatchmakingClickMs by remember { mutableStateOf(0L) }
+    var deepLinkErrorDialog by remember { mutableStateOf<Pair<String, GameDto?>?>(null) }
+    var pendingRoomSwitchConfirm by remember { mutableStateOf<RoomDto?>(null) }
     val openGameDetail: (GameDto) -> Unit = { game ->
         val top = overlayStack.lastOrNull()
         if (top !is AppOverlay.GameDetail || top.game.id != game.id) {
@@ -485,6 +505,195 @@ fun MainShellScreen(
         }
     }
 
+    suspend fun enterMatchedRoom(roomId: String) {
+        val room = repo.fetchRoomById(roomId) ?: return
+        val port = (7000..7099).random()
+        val voicePort = port + 1000
+        myUdpPort = port
+        myVoiceUdpPort = voicePort
+        val localIp = lanNsd.getLocalIpv4Address()
+        val freshEndpoint = resolveUdpEndpoint(room.mode, port, localIp)
+        val freshVoiceEndpoint = resolveUdpEndpoint(room.mode, voicePort, localIp)
+        myEndpoint = freshEndpoint
+        myVoiceEndpoint = freshVoiceEndpoint
+        val updatedRoom =
+            runCatching {
+                repo.updateRoomSlot(
+                    roomId = room.id,
+                    action = "claim",
+                    endpoint = freshEndpoint,
+                    voiceEndpoint = freshVoiceEndpoint,
+                )
+            }.getOrDefault(room)
+        overlayStack = emptyList()
+        activeRoom = updatedRoom
+    }
+
+    fun startQuickMatch(game: GameDto) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastMatchmakingClickMs < 1000L) return
+        lastMatchmakingClickMs = now
+        if (isMatchmaking) return
+
+        roomNoticeMsg = null
+        matchmakingGame = game
+        matchmakingElapsedSec = 0L
+        isMatchmaking = true
+        AnalyticsHelper.logMatchmakingStarted(game.slug)
+        CrashlyticsHelper.setMatchmakingContext("searching", game.slug)
+
+        scope.launch {
+            runCatching {
+                val port = (7000..7099).random()
+                val voicePort = port + 1000
+                myUdpPort = port
+                myVoiceUdpPort = voicePort
+                val localIp = lanNsd.getLocalIpv4Address()
+                val endpoint = resolveUdpEndpoint("online", port, localIp)
+                val voiceEndpoint = resolveUdpEndpoint("online", voicePort, localIp)
+                myEndpoint = endpoint
+                myVoiceEndpoint = voiceEndpoint
+
+                val res = repo.findOrEnqueueMatch(game.slug, endpoint, voiceEndpoint)
+                if (res.status == "matched" && !res.roomId.isNullOrBlank()) {
+                    isMatchmaking = false
+                    AnalyticsHelper.logMatchmakingMatched(game.slug, res.source, matchmakingElapsedSec)
+                    CrashlyticsHelper.setMatchmakingContext("matched", game.slug)
+                    enterMatchedRoom(res.roomId)
+                }
+            }.onFailure { t ->
+                isMatchmaking = false
+                AnalyticsHelper.logMatchmakingFailed(game.slug, t::class.simpleName ?: "error")
+                CrashlyticsHelper.setMatchmakingContext("error", game.slug)
+                roomNoticeMsg = "Error en emparejamiento: ${t.toUserMessage()}"
+            }
+        }
+    }
+
+    fun cancelQuickMatch(reason: String = "user") {
+        if (!isMatchmaking) return
+        val slug = matchmakingGame?.slug.orEmpty()
+        val elapsed = matchmakingElapsedSec
+        isMatchmaking = false
+        AnalyticsHelper.logMatchmakingCancelled(slug, elapsed, reason)
+        CrashlyticsHelper.setMatchmakingContext("cancelled", slug)
+        scope.launch {
+            withContext(NonCancellable) {
+                repo.cancelMatchmaking()
+            }
+        }
+    }
+
+    // Refrescar métricas de matchmaking cada 12s en la pestaña Salas
+    LaunchedEffect(pagerState.currentPage, activeRoom, gameReturnCounter) {
+        if (MainTab.entries[pagerState.currentPage] == MainTab.ROOMS && activeRoom == null) {
+            while (true) {
+                runCatching { matchmakingStats = repo.fetchMatchmakingStats() }
+                    .onFailure { t -> CrashlyticsHelper.recordNonFatal(t) }
+                delay(12_000)
+            }
+        }
+    }
+
+    // Ciclo de vida mientras busca emparejamiento: timer 1s, heartbeat 25s, Realtime + fallback poll 4s
+    LaunchedEffect(isMatchmaking, currentUserId) {
+        if (!isMatchmaking) return@LaunchedEffect
+        val waitTrace = PerformanceHelper.startTrace("matchmaking_wait_to_match")
+        val slug = matchmakingGame?.slug.orEmpty()
+
+        val realtimeJob =
+            launch {
+                runCatching {
+                    repo.observeMatchmakingMatch(currentUserId).collect { row ->
+                        val matchedRoomId = row.roomId ?: return@collect
+                        if (isMatchmaking) {
+                            isMatchmaking = false
+                            PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "realtime"))
+                            AnalyticsHelper.logMatchmakingMatched(slug, "queue", matchmakingElapsedSec)
+                            CrashlyticsHelper.setMatchmakingContext("matched", slug)
+                            enterMatchedRoom(matchedRoomId)
+                        }
+                    }
+                }
+            }
+
+        var ticks = 0L
+        try {
+            while (isMatchmaking) {
+                delay(1000)
+                ticks++
+                matchmakingElapsedSec = ticks
+                if (ticks % 25L == 0L) {
+                    repo.touchMatchmakingHeartbeat()
+                }
+                if (ticks % 4L == 0L) {
+                    val row = runCatching { repo.fetchMyMatchmakingRow() }.getOrNull()
+                    if (row != null && row.status == "matched" && !row.roomId.isNullOrBlank()) {
+                        isMatchmaking = false
+                        PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "poll"))
+                        AnalyticsHelper.logMatchmakingMatched(slug, "queue", matchmakingElapsedSec)
+                        CrashlyticsHelper.setMatchmakingContext("matched", slug)
+                        enterMatchedRoom(row.roomId)
+                        break
+                    }
+                }
+            }
+        } finally {
+            realtimeJob.cancel()
+            if (isMatchmaking) {
+                PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "cancelled"))
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (isMatchmaking) {
+                isMatchmaking = false
+                scope.launch {
+                    withContext(NonCancellable) {
+                        repo.cancelMatchmaking()
+                    }
+                }
+            }
+        }
+    }
+
+    // Manejo de Links Mágicos / QR (https://bald.dog/room/<room_id>)
+    LaunchedEffect(pendingDeepLinkRoomId, isInitialLoading) {
+        val roomId = pendingDeepLinkRoomId ?: return@LaunchedEffect
+        if (isInitialLoading) return@LaunchedEffect
+        onConsumePendingDeepLinkRoomId()
+
+        val dlTrace = PerformanceHelper.startTrace("deeplink_room_join")
+        runCatching {
+            val targetRoom = repo.fetchRoomById(roomId)
+            when (val eligibility = MatchmakingPolicy.evaluateRoomJoinEligibility(targetRoom, currentUserId)) {
+                is RoomJoinEligibility.Ineligible -> {
+                    PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to eligibility.reasonCode))
+                    AnalyticsHelper.logRoomDeepLinkOpened(true, eligibility.reasonCode)
+                    val targetGame = targetRoom?.let { r -> games.firstOrNull { it.id == r.gameId } }
+                    deepLinkErrorDialog = eligibility.userMessage to targetGame
+                }
+                is RoomJoinEligibility.Eligible -> {
+                    val room = targetRoom!!
+                    PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "eligible"))
+                    AnalyticsHelper.logRoomDeepLinkOpened(true, "eligible")
+                    if (activeRoom != null && activeRoom?.id != room.id) {
+                        pendingRoomSwitchConfirm = room
+                    } else {
+                        enterMatchedRoom(room.id)
+                    }
+                }
+            }
+        }.onFailure { t ->
+            PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "error"))
+            CrashlyticsHelper.logDeepLinkEvent("error", t.message ?: "unknown")
+            AnalyticsHelper.logRoomDeepLinkOpened(true, "error")
+            roomNoticeMsg = "No se pudo abrir la sala desde el enlace: ${t.toUserMessage()}"
+        }
+    }
+
     val currentRoom = activeRoom
     LaunchedEffect(currentRoom?.id, currentRoom?.hostId) {
         val hostRoomId =
@@ -510,6 +719,9 @@ fun MainShellScreen(
                 myUdpPort = myUdpPort,
                 myVoiceEndpoint = myVoiceEndpoint,
                 myAvatarSeed = avatarSeed ?: currentUserId,
+                romManager = romManager,
+                allGames = games,
+                allBios = biosList,
                 hasActiveOverlay = topOverlay != null,
                 onOpenUserProfile = { uid ->
                     overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
@@ -748,6 +960,13 @@ fun MainShellScreen(
                                     lanNsd = lanNsd,
                                     followingIds = myFollowingIds,
                                     roomNoticeMsg = roomNoticeMsg,
+                                    matchmakingStats = matchmakingStats,
+                                    isMatchmaking = isMatchmaking,
+                                    matchmakingGame = matchmakingGame,
+                                    matchmakingElapsedSec = matchmakingElapsedSec,
+                                    onSelectMatchmakingGame = { matchmakingGame = it },
+                                    onStartMatchmaking = { startQuickMatch(it) },
+                                    onCancelMatchmaking = { cancelQuickMatch("user") },
                                     onDismissRoomNotice = { roomNoticeMsg = null },
                                     onGoToCatalog = { scope.launch { pagerState.animateScrollToPage(MainTab.CATALOG.ordinal) } },
                                     onRefresh = { refreshAll() },
@@ -985,6 +1204,13 @@ fun MainShellScreen(
                             onRankingClick = { game ->
                                 overlayStack = overlayStack + AppOverlay.GameRanking(game)
                             },
+                            onQuickMatchClick = { game ->
+                                overlayStack = emptyList()
+                                scope.launch {
+                                    pagerState.animateScrollToPage(MainTab.ROOMS.ordinal)
+                                }
+                                startQuickMatch(game)
+                            },
                         )
                     is AppOverlay.GameRanking ->
                         GameRankingScreen(
@@ -1052,6 +1278,98 @@ fun MainShellScreen(
                 }
             }
         }
+
+        if (isMatchmaking && currentRoom == null && MainTab.entries[pagerState.currentPage] != MainTab.ROOMS) {
+            MatchmakingMiniBanner(
+                gameTitle = matchmakingGame?.let { it.shortTitle ?: it.title } ?: "Juego",
+                elapsedSec = matchmakingElapsedSec,
+                onOpenRoomsTab = {
+                    overlayStack = emptyList()
+                    scope.launch { pagerState.animateScrollToPage(MainTab.ROOMS.ordinal) }
+                },
+                onCancel = { cancelQuickMatch("mini_banner") },
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 12.dp, vertical = 76.dp),
+            )
+        }
+    }
+
+    deepLinkErrorDialog?.let { (message, targetGame) ->
+        AlertDialog(
+            onDismissRequest = { deepLinkErrorDialog = null },
+            containerColor = GraphiteSurface,
+            title = {
+                Text("No se pudo unir a la sala", color = PureWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(message, color = SilverGray)
+            },
+            confirmButton = {
+                if (targetGame != null) {
+                    Button(
+                        onClick = {
+                            deepLinkErrorDialog = null
+                            scope.launch { pagerState.animateScrollToPage(MainTab.ROOMS.ordinal) }
+                            startQuickMatch(targetGame)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
+                    ) {
+                        Text("BUSCAR OTRA PARTIDA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                } else {
+                    TextButton(onClick = { deepLinkErrorDialog = null }) {
+                        Text("OK", color = PureWhite)
+                    }
+                }
+            },
+            dismissButton = {
+                if (targetGame != null) {
+                    TextButton(onClick = { deepLinkErrorDialog = null }) {
+                        Text("CERRAR", color = PureWhite)
+                    }
+                }
+            },
+        )
+    }
+
+    pendingRoomSwitchConfirm?.let { nextRoom ->
+        AlertDialog(
+            onDismissRequest = { pendingRoomSwitchConfirm = null },
+            containerColor = GraphiteSurface,
+            title = {
+                Text("¿Cambiar de sala?", color = PureWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Ya estás dentro de una sala. ¿Deseas salir de la sala actual para unirte a #${nextRoom.code}?",
+                    color = SilverGray,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingRoomSwitchConfirm = null
+                        val oldRoomId = activeRoom?.id
+                        scope.launch {
+                            if (!oldRoomId.isNullOrBlank()) {
+                                runCatching { repo.updateRoomSlot(oldRoomId, action = "leave") }
+                            }
+                            enterMatchedRoom(nextRoom.id)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
+                ) {
+                    Text("CAMBIAR DE SALA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRoomSwitchConfirm = null }) {
+                    Text("CANCELAR", color = PureWhite)
+                }
+            },
+        )
     }
 
     leaderboardGame?.let { game ->
@@ -1394,6 +1712,13 @@ private fun RoomsTab(
     lanNsd: LanNsdManager,
     followingIds: Set<String> = emptySet(),
     roomNoticeMsg: String?,
+    matchmakingStats: MatchmakingStatsDto? = null,
+    isMatchmaking: Boolean = false,
+    matchmakingGame: GameDto? = null,
+    matchmakingElapsedSec: Long = 0L,
+    onSelectMatchmakingGame: (GameDto) -> Unit = {},
+    onStartMatchmaking: (GameDto) -> Unit = {},
+    onCancelMatchmaking: () -> Unit = {},
     onDismissRoomNotice: () -> Unit,
     onGoToCatalog: () -> Unit,
     onRefresh: () -> Unit,
@@ -1632,6 +1957,17 @@ private fun RoomsTab(
                 }
             }
         }
+
+        QuickMatchmakingCard(
+            games = allGames,
+            selectedGame = matchmakingGame,
+            stats = matchmakingStats,
+            isSearching = isMatchmaking,
+            elapsedSec = matchmakingElapsedSec,
+            onSelectGame = onSelectMatchmakingGame,
+            onStartSearch = onStartMatchmaking,
+            onCancelSearch = onCancelMatchmaking,
+        )
 
         Button(
             onClick = {

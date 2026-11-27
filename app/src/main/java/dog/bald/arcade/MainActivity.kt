@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
     @Volatile
     private var activeHostRoomId: String? = null
 
+    private var pendingDeepLinkRoomId by mutableStateOf<String?>(null)
+
     override fun onDestroy() {
         super.onDestroy()
         if (isFinishing) {
@@ -54,6 +56,10 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         ArcadeRepository(applicationContext).handleAuthDeeplink(intent)
+        dog.bald.arcade.net.MatchmakingPolicy.parseRoomIdFromUri(intent.dataString)?.let { roomId ->
+            dog.bald.arcade.diagnostics.CrashlyticsHelper.logDeepLinkEvent("onNewIntent", "roomId=$roomId")
+            pendingDeepLinkRoomId = roomId
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +71,10 @@ class MainActivity : ComponentActivity() {
 
         val repo = ArcadeRepository(applicationContext)
         repo.handleAuthDeeplink(intent)
+        dog.bald.arcade.net.MatchmakingPolicy.parseRoomIdFromUri(intent?.dataString)?.let { roomId ->
+            dog.bald.arcade.diagnostics.CrashlyticsHelper.logDeepLinkEvent("onCreate", "roomId=$roomId")
+            pendingDeepLinkRoomId = roomId
+        }
         val isResetPasswordLink = intent?.data?.host == "reset-password"
         val romManager = IpfsRomManager(applicationContext)
         val lanNsd = LanNsdManager(applicationContext)
@@ -135,6 +145,8 @@ class MainActivity : ComponentActivity() {
                                 nativeLibDir = nativeLibDir,
                                 currentUserId = activeUserId,
                                 gameReturnCounter = gameReturnCounter,
+                                pendingDeepLinkRoomId = pendingDeepLinkRoomId,
+                                onConsumePendingDeepLinkRoomId = { pendingDeepLinkRoomId = null },
                                 onActiveHostRoomChanged = { roomId -> activeHostRoomId = roomId },
                                 onSignedOut = { lastAuthenticatedUserId = null },
                                 onLaunchLocalRom = { game ->
