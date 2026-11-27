@@ -979,6 +979,7 @@ fun MainShellScreen(
                             MainTab.ROOMS ->
                                 RoomsTab(
                                     rooms = rooms,
+                                    currentUserId = currentUserId,
                                     allGames = games,
                                     libraryGames = games.filter { downloadedFiles.contains(it.romFilename) },
                                     lanNsd = lanNsd,
@@ -1757,6 +1758,7 @@ private fun CatalogTab(
 @Composable
 private fun RoomsTab(
     rooms: List<RoomDto>,
+    currentUserId: String = "",
     allGames: List<GameDto>,
     libraryGames: List<GameDto>,
     lanNsd: LanNsdManager,
@@ -2099,10 +2101,22 @@ private fun RoomsTab(
                 discoveredLan.map { it.roomCode.uppercase() }.toSet()
             }
         var onlyFollowingRooms by remember { mutableStateOf(false) }
+        val myRooms =
+            remember(rooms, currentUserId) {
+                if (currentUserId.isBlank()) {
+                    emptyList()
+                } else {
+                    rooms.filter { room ->
+                        room.hostId.equals(currentUserId, ignoreCase = true) ||
+                            room.slotsJson.values.any { it.userId.equals(currentUserId, ignoreCase = true) }
+                    }
+                }
+            }
+        val myRoomIds = remember(myRooms) { myRooms.map { it.id }.toSet() }
         val otherRooms =
-            remember(rooms, lanCodes, onlyFollowingRooms, followingIds) {
+            remember(rooms, lanCodes, onlyFollowingRooms, followingIds, myRoomIds) {
                 rooms
-                    .filterNot { lanCodes.contains(it.code.uppercase()) }
+                    .filterNot { myRoomIds.contains(it.id) || lanCodes.contains(it.code.uppercase()) }
                     .filter { !onlyFollowingRooms || followingIds.contains(it.hostId) }
             }
         if (followingIds.isNotEmpty()) {
@@ -2131,6 +2145,65 @@ private fun RoomsTab(
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
                         )
+                    }
+                }
+            }
+        }
+
+        if (myRooms.isNotEmpty()) {
+            Text("TU SALA ACTUAL:", color = PureWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            myRooms.forEach { room ->
+                val roomGame = allGames.firstOrNull { it.id == room.gameId }
+                val roomGameTitle = roomGame?.title ?: "Arcade"
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = GraphiteSurface),
+                    border = BorderStroke(1.dp, PureWhite),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onJoinRoom(room) },
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        GameCoverImage(
+                            slug = roomGame?.slug,
+                            contentDescription = roomGameTitle,
+                            modifier = Modifier.size(48.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text("$roomGameTitle · #${room.code}", color = PureWhite, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "[TU SALA]",
+                                    color = PureBlack,
+                                    fontFamily = JetBrainsMonoFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    modifier =
+                                        Modifier
+                                            .background(PureWhite, RectangleShape)
+                                            .padding(horizontal = 4.dp, vertical = 1.dp),
+                                )
+                            }
+                            Text(
+                                "${room.mode.uppercase()} · Jugadores: ${room.slotsJson.size}/${room.maxPlayers}",
+                                color = MutedGray,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Button(
+                            onClick = { onJoinRoom(room) },
+                            shape = RectangleShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = PureWhite, contentColor = PureBlack),
+                        ) {
+                            Text("RE-ENTRAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -2188,7 +2261,7 @@ private fun RoomsTab(
             }
         }
 
-        if (otherRooms.isEmpty() && discoveredLan.isEmpty()) {
+        if (myRooms.isEmpty() && otherRooms.isEmpty() && discoveredLan.isEmpty()) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = CarbonSurface),
                 border = BorderStroke(1.dp, CharcoalBorder),
