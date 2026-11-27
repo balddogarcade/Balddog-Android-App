@@ -305,11 +305,25 @@ fun GameLeaderboardSheet(
                         color = SilverGray,
                     )
                     Spacer(modifier = Modifier.height(6.dp))
+                    val myLaunchState = replayLaunchState?.takeIf { it.replayPath == myEntry.replayPath }
                     LeaderboardRow(
                         entry = myEntry,
+                        gameTitle = game.title,
                         isMe = true,
                         formattedScore = numberFmt.format(myEntry.score),
                         onClick = { onOpenUserProfile(myEntry.userId) },
+                        onWatchReplay =
+                            if (!myEntry.replayPath.isNullOrBlank()) {
+                                {
+                                    if (replayLaunchState == null) {
+                                        onWatchReplay(myEntry)
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                        replayLoading = myLaunchState != null,
+                        launchState = myLaunchState,
                     )
                 } else {
                     Text(
@@ -368,7 +382,7 @@ private fun LeaderboardRow(
                 modifier = Modifier.width(38.dp),
             )
             DiceBearPixelArtAvatar(
-                seed = entry.username,
+                seed = entry.avatarSeed?.takeIf { it.isNotBlank() } ?: entry.username,
                 modifier =
                     Modifier
                         .size(26.dp)
@@ -384,6 +398,7 @@ private fun LeaderboardRow(
                         fontWeight = if (isMe) FontWeight.Bold else FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     if (isMe) {
                         Spacer(modifier = Modifier.width(6.dp))
@@ -393,6 +408,8 @@ private fun LeaderboardRow(
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             color = PureBlack,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier =
                                 Modifier
                                     .background(PureWhite)
@@ -408,6 +425,8 @@ private fun LeaderboardRow(
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF81C784),
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier =
                                     Modifier
                                         .border(1.dp, Color(0xFF388E3C), RectangleShape)
@@ -422,6 +441,8 @@ private fun LeaderboardRow(
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = SilverGray,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier =
                                     Modifier
                                         .border(1.dp, CharcoalBorder, RectangleShape)

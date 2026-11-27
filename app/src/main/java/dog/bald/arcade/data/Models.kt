@@ -188,6 +188,7 @@ data class LeaderboardEntryDto(
     @SerialName("user_id") val userId: String,
     val username: String,
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("avatar_seed") val avatarSeed: String? = null,
     @SerialName("is_anonymous") val isAnonymous: Boolean = false,
     val score: Long,
     @SerialName("achieved_at") val achievedAt: String = "",

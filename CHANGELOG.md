@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed `GameLeaderboardSheet` displaying outdated player avatars by adding `avatar_seed` to `LeaderboardEntryDto` and passing `entry.avatarSeed` (falling back to `entry.username`) to `DiceBearPixelArtAvatar`, prevented `AUDITORÍA`/`✓ VERIF.`/`TÚ` badges from wrapping onto multiple lines, and aligned the `"TU POSICIÓN ACTUAL"` row with replay playback actions.
 - Fixed `scripts/verify-replays-worker.py` ROM lookup failing with `HTTP 400 Bad Request` by querying `ipfs_cid,system` instead of the non-existent `rom_url` column and downloading ROMs from IPFS gateways with fallback.
 
 ### Changed
