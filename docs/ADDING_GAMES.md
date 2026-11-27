@@ -37,7 +37,7 @@ bald.dog ARCADE utiliza una arquitectura híbrida desacoplada:
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ Consulta metadatos
                                     ▼
-┌───────────────────────┐   Descarga ROM/BIOS    ┌───────────────────────┐
+┌───────────────────────┐   Descarga ROM (IPFS)  ┌───────────────────────┐
 │     IPFS / Pinata     │───────────────────────▶│     Android Client    │
 │ (ROM zips & Covers)   │    (Verifica hashes)   │  (Kotlin + Compose)   │
 └───────────────────────┘                        └──────────┬────────────┘
@@ -94,7 +94,7 @@ FinalBurn Neo requiere nombres de archivo y contenidos ROM específicos según s
 ### 3.1 Nombre y tipo de Set
 - El nombre del archivo `.zip` debe coincidir **exactamente** con el driver de FBNeo (ej. `captcomm.zip`, `dino.zip`, `ssriders.zip`).
 - Preferir siempre **Parent Sets** (sets completos independientes) o Non-Merged sets para evitar dependencias de ROMs padre faltantes.
-- Si el juego corre sobre un sistema con BIOS (como Neo Geo `neogeo.zip`), verificar que la BIOS requerida esté registrada en `public.game_bios`.
+- Si el juego corre sobre un sistema con BIOS (como Neo Geo `neogeo.zip`), verificar que la BIOS esté incluida dentro del propio `.zip` de la ROM.
 
 ### 3.2 Extracción de hashes de integridad
 Calcula el tamaño exacto en bytes, el CRC32 (en formato hexadecimal minúscula de 8 caracteres) y el SHA256 (64 caracteres hexadecimales):

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `scripts/verify-replays-worker.py` ROM lookup failing with `HTTP 400 Bad Request` by querying `ipfs_cid,system` instead of the non-existent `rom_url` column and downloading ROMs from IPFS gateways with fallback.
 
 ### Changed
+- Removed separate BIOS fetching and IPFS download flow (`GameBiosDto`, `fetchBios`, `biosId` handling in `IpfsRomManager`) since catalog ROMs already bundle any required BIOS files inside their `.zip` archives.
 - Rotated the official release signing keystore (`.cache/balddog-release.keystore`, RSA 4096), backed up signing credentials in `local.properties`, synchronized GitHub Actions Secrets, and updated `assetlinks.json` with the new SHA-256 fingerprint.
 - Pinned all GitHub Actions in `.github/workflows/verify-replays.yml` (`actions/checkout`, `actions/cache`, `dtolnay/rust-toolchain`, `Swatinem/rust-cache`) to full commit SHAs to satisfy OpenSSF Scorecard `Pinned-Dependencies` checks.
 - Improved replay seeking UX with an in-memory keyframe cache (`ReplayKeyframeCache` every 300 frames, up to 60 states) in `balddog-core` for faster forward/backward jumps, plus an `Avanzando...` progress indicator in `ReplayHudOverlay` while seeking is active.

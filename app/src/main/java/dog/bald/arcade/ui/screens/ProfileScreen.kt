@@ -432,7 +432,7 @@ fun ProfileScreen(
                                 fontWeight = FontWeight.Medium,
                             )
                             Text(
-                                text = "${"%.1f".format(cacheMb)} MB (ROMs, BIOS y States)",
+                                text = "${"%.1f".format(cacheMb)} MB (ROMs y States)",
                                 color = MutedGray,
                                 fontSize = 11.sp,
                                 fontFamily = JetBrainsMonoFamily,

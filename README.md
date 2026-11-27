@@ -1,6 +1,6 @@
 # bald.dog ARCADE (Android)
 
-Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a modern **Kotlin + Jetpack Compose** interface with an emulation and rollback netplay engine written in **Rust** (`wgpu`, `oboe`, `ggrs`) on top of **FinalBurn Neo (libretro)**, backed by **Supabase** and **IPFS** for the game catalog, multiplayer rooms, and verified ROM/BIOS downloads.
+Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a modern **Kotlin + Jetpack Compose** interface with an emulation and rollback netplay engine written in **Rust** (`wgpu`, `oboe`, `ggrs`) on top of **FinalBurn Neo (libretro)**, backed by **Supabase** and **IPFS** for the game catalog, multiplayer rooms, and verified ROM downloads.
 
 ---
 
@@ -14,8 +14,8 @@ Native **bald.dog ARCADE** client for Android (`arm64-v8a`). It combines a moder
   - P2P rollback netplay powered by **GGRS**.
   - Local network match discovery via Android NSD (`LanNsdManager`).
   - Real-time lobbies, player slots, and chat with **Supabase Realtime**.
-- **ROM & BIOS Management (`IpfsRomManager`)**:
-  - Downloads from IPFS with integrity verification (`sha256` / `crc32`) based on the catalog and BIOS (`game_bios`) defined in Supabase.
+- **ROM Management (`IpfsRomManager`)**:
+  - Downloads from IPFS with integrity verification (`sha256` / `crc32`) based on the catalog defined in Supabase (ROMs bundle any required BIOS files inside their `.zip`).
 - **Competitive Leaderboards & 1CC Engine (`rcheevos`)**:
   - Real-time memory scanning of `RETRO_MEMORY_SYSTEM_RAM` via the embedded `rcheevos` evaluation engine.
   - Strict **1CC (One Coin Clear)** enforcement from frame 0 (boot, title screen, character select, and in-game): sessions with 2+ credits inserted at any point are immediately disqualified and scores freeze permanently after any continue.

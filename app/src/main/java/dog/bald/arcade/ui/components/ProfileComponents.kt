@@ -848,7 +848,7 @@ fun ConfirmClearCacheDialog(
         },
         text = {
             Text(
-                text = "Se eliminarán ROMs, BIOS y Save States locales (${"%.1f".format(
+                text = "Se eliminarán ROMs y Save States locales (${"%.1f".format(
                     cacheMb,
                 )} MB). Tus récords y estadísticas en la nube permanecerán intactos.",
                 color = SilverGray,

@@ -95,7 +95,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import dog.bald.arcade.R
 import dog.bald.arcade.data.ArcadeRepository
 import dog.bald.arcade.data.ExitSyncCoordinator
-import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.GameRankingSummaryDto
 import dog.bald.arcade.data.IpfsRomManager
@@ -206,7 +205,6 @@ fun MainShellScreen(
         )
     var isInitialLoading by remember { mutableStateOf(true) }
     var games by remember { mutableStateOf<List<GameDto>>(emptyList()) }
-    var biosList by remember { mutableStateOf<List<GameBiosDto>>(emptyList()) }
     var rooms by remember { mutableStateOf<List<RoomDto>>(emptyList()) }
     var profile by remember(currentUserId) {
         mutableStateOf(ProfileCache.load(context, currentUserId))
@@ -313,7 +311,6 @@ fun MainShellScreen(
                     runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
                     kotlinx.coroutines.coroutineScope {
                         val gamesDef = async { repo.fetchGames() }
-                        val biosDef = async { repo.fetchBios() }
                         val roomsDef = async { repo.fetchOpenRooms() }
                         val profileDef = async { runCatching { repo.fetchMyProfile() }.getOrNull() }
                         val scoresDef = async { runCatching { repo.fetchMyHighScores() } }
@@ -330,7 +327,6 @@ fun MainShellScreen(
                         val followingDef = async { runCatching { repo.fetchMyFollowingIds() }.getOrDefault(emptySet()) }
 
                         games = gamesDef.await()
-                        biosList = biosDef.await()
                         rooms = roomsDef.await()
                         profileDef.await()?.let { profile = it }
                         scoresDef.await().onSuccess { fetchedScores ->
@@ -370,7 +366,6 @@ fun MainShellScreen(
                 romManager.ensureGameReady(
                     game = game,
                     allGames = games,
-                    allBios = biosList,
                 ) { _, progress ->
                     downloadProgress = progress
                 }
@@ -745,7 +740,6 @@ fun MainShellScreen(
                 myAvatarSeed = avatarSeed ?: currentUserId,
                 romManager = romManager,
                 allGames = games,
-                allBios = biosList,
                 hasActiveOverlay = topOverlay != null,
                 onOpenUserProfile = { uid ->
                     overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
@@ -766,7 +760,7 @@ fun MainShellScreen(
                     } else {
                         try {
                             val wasDownloaded = romManager.isGameDownloaded(roomGame)
-                            romManager.ensureGameReady(roomGame, games, biosList) { _, p ->
+                            romManager.ensureGameReady(roomGame, games) { _, p ->
                                 downloadProgress = p
                             }
                             if (!wasDownloaded) {
@@ -1118,7 +1112,7 @@ fun MainShellScreen(
                                         if (!rPath.isNullOrBlank() && replayLaunchState == null) {
                                             replayLaunchState = ReplayLaunchState(rPath, "Verificando juego...", -1f)
                                             runCatching {
-                                                romManager.ensureGameReady(game, games, biosList) { stage, p ->
+                                                romManager.ensureGameReady(game, games) { stage, p ->
                                                     replayLaunchState = ReplayLaunchState(rPath, stage, p)
                                                 }
                                                 replayLaunchState = ReplayLaunchState(rPath, "Descargando replay...", -1f)
@@ -1272,7 +1266,7 @@ fun MainShellScreen(
                                 scope.launch {
                                     replayLaunchState = ReplayLaunchState(rPath, "Verificando juego...", -1f)
                                     runCatching {
-                                        romManager.ensureGameReady(g, games, biosList) { stage, p ->
+                                        romManager.ensureGameReady(g, games) { stage, p ->
                                             replayLaunchState = ReplayLaunchState(rPath, stage, p)
                                         }
                                         replayLaunchState = ReplayLaunchState(rPath, "Descargando replay...", -1f)
@@ -1420,7 +1414,7 @@ fun MainShellScreen(
                 scope.launch {
                     replayLaunchState = ReplayLaunchState(rPath, "Verificando juego...", -1f)
                     runCatching {
-                        romManager.ensureGameReady(game, games, biosList) { stage, p ->
+                        romManager.ensureGameReady(game, games) { stage, p ->
                             replayLaunchState = ReplayLaunchState(rPath, stage, p)
                         }
                         replayLaunchState = ReplayLaunchState(rPath, "Descargando replay...", -1f)

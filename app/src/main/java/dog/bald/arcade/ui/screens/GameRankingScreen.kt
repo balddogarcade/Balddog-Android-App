@@ -274,7 +274,7 @@ fun GameRankingScreen(
             if (isDownloading) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Descargando ROM/BIOS por IPFS... ${(downloadProgress * 100).toInt()}%",
+                        text = "Descargando ROM por IPFS... ${(downloadProgress * 100).toInt()}%",
                         color = SilverGray,
                         fontFamily = JetBrainsMonoFamily,
                         fontSize = 10.sp,

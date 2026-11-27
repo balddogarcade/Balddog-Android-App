@@ -139,8 +139,6 @@ class ArcadeRepository(
             }
         }
 
-    suspend fun fetchBios(): List<GameBiosDto> = client.from("game_bios").select().decodeList<GameBiosDto>()
-
     suspend fun fetchOpenRooms(): List<RoomDto> =
         client
             .from("rooms")

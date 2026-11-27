@@ -107,31 +107,9 @@ class IpfsRomManager(context: Context) {
     suspend fun ensureGameReady(
         game: GameDto,
         allGames: List<GameDto>,
-        allBios: List<GameBiosDto>,
         onProgress: (stage: String, progress: Float) -> Unit
     ): File = withContext(Dispatchers.IO) {
-        // 1. BIOS requerida (ej. neogeo.zip)
-        if (!game.biosId.isNullOrBlank()) {
-            val bios = allBios.firstOrNull { it.id == game.biosId }
-                ?: throw RomIntegrityException("BIOS requerida no encontrada en catálogo")
-            val biosInRoms = File(romsDir, bios.filename)
-            val biosInSys = File(systemDir, bios.filename)
-            val valid = biosInRoms.exists() && (biosInSys.exists() || runCatching { biosInRoms.copyTo(biosInSys, overwrite = true) }.isSuccess) &&
-                (bios.sizeBytes <= 0L || biosInRoms.length() == bios.sizeBytes)
-            if (!valid) {
-                onProgress("Descargando BIOS ${bios.filename}...", 0f)
-                downloadAndVerify(
-                    cid = bios.ipfsCid,
-                    destFile = biosInRoms,
-                    expectedSha256 = bios.sha256,
-                    expectedCrc32 = bios.crc32,
-                    expectedBytes = bios.sizeBytes
-                ) { p -> onProgress("BIOS ${bios.filename}", p) }
-                biosInRoms.copyTo(biosInSys, overwrite = true)
-            }
-        }
-
-        // 2. ROM Parent si es un clon
+        // 1. ROM Parent si es un clon
         if (!game.parentGameId.isNullOrBlank()) {
             val parent = allGames.firstOrNull { it.id == game.parentGameId }
             if (parent != null) {

@@ -4,17 +4,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class GameBiosDto(
-    val id: String,
-    val system: String,
-    val filename: String,
-    @SerialName("ipfs_cid") val ipfsCid: String,
-    val sha256: String,
-    val crc32: String,
-    @SerialName("size_bytes") val sizeBytes: Long = 0L,
-)
-
-@Serializable
 data class GameDto(
     val id: String,
     val slug: String,
@@ -28,7 +17,6 @@ data class GameDto(
     @SerialName("max_players") val maxPlayers: Int = 2,
     @SerialName("is_coop") val isCoop: Boolean = true,
     @SerialName("parent_game_id") val parentGameId: String? = null,
-    @SerialName("bios_id") val biosId: String? = null,
     @SerialName("cover_url") val coverUrl: String? = null,
     @SerialName("download_count") val downloadCount: Long = 0L,
     @SerialName("total_play_seconds") val totalPlaySeconds: Long = 0L,

@@ -88,7 +88,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dog.bald.arcade.data.ArcadeRepository
-import dog.bald.arcade.data.GameBiosDto
 import dog.bald.arcade.data.GameDto
 import dog.bald.arcade.data.IpfsRomManager
 import dog.bald.arcade.data.RoomDto
@@ -141,7 +140,6 @@ fun RoomLobbyScreen(
     myAvatarSeed: String? = null,
     romManager: IpfsRomManager? = null,
     allGames: List<GameDto> = emptyList(),
-    allBios: List<GameBiosDto> = emptyList(),
     hasActiveOverlay: Boolean = false,
     onOpenUserProfile: (String) -> Unit = {},
     onOpenGameDetail: (GameDto) -> Unit = {},
@@ -181,7 +179,6 @@ fun RoomLobbyScreen(
             rm.ensureGameReady(
                 game = g,
                 allGames = allGames,
-                allBios = allBios,
             ) { stage, progress ->
                 romPrepStage = stage
                 romPrepProgress = progress.coerceIn(0f, 1f)

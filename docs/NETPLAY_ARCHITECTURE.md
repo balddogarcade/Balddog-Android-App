@@ -194,4 +194,4 @@ I balddog: Primer frame de emulación renderizado: 384x224
 4. **Métricas en vivo (`get_matchmaking_stats`) y Links Mágicos (`get_public_open_rooms`):**
    - `MainShellScreen` consulta `get_matchmaking_stats()` cada 12s en la pestaña Salas.
    - `AndroidManifest.xml` y `MainActivity` soportan Android App Links (`https://bald.dog/room/<uuid>` y `balddog://room/<uuid>`) validados con `MatchmakingPolicy`.
-   - `RoomLobbyScreen` descarga automáticamente BIOS + ROM en segundo plano mostrando una barra de avance en el botón **"MARCAR LISTO"**.
+   - `RoomLobbyScreen` descarga automáticamente la ROM en segundo plano mostrando una barra de avance en el botón **"MARCAR LISTO"**.

@@ -69,7 +69,7 @@ private val wikiSections =
         WikiSection(
             id = "catalog",
             title = "1. CATÁLOGO, ROMs IPFS Y PRIMEROS PASOS",
-            summary = "Cómo descargar juegos, BIOS y empezar a jugar en segundos.",
+            summary = "Cómo descargar juegos y empezar a jugar en segundos.",
             bullets =
                 listOf(
                     "En la pestaña Catálogo verás todos los juegos curados con soporte de sistema (CPS-1, CPS-2, Neo Geo, Konami, etc.).",
