@@ -482,7 +482,7 @@ mod tests {
     #[test]
     fn evaluates_snowbros_lifecycle_leaderboard() {
         let mut engine = LeaderboardEngine::new(
-            "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:0xH0D70*1000000_A:0xH0D71*10000_A:0xH0D72*100_M:0xH0D73",
+            "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:b0x 159E*10000_M:b0x 15A0",
         )
         .expect("snowbros lboard válido");
 
@@ -492,22 +492,22 @@ mod tests {
         assert!(!out.active);
         assert_eq!(out.triggered_score, None);
 
-        // 2. Inicio de partida: 0x0036=1, puntaje=7180 ([00, 00, 71 (0x47), 80 (0x50)])
+        // 2. Inicio de partida: 0x0036=1, puntaje=10400 (bcd4_sw @ 0x159E..0x15A1 = [0x01, 0x00, 0x00, 0x04])
         ram[0x0036] = 1;
-        ram[0x0D70] = 0x00;
-        ram[0x0D71] = 0x00;
-        ram[0x0D72] = 71; // 0x47
-        ram[0x0D73] = 80; // 0x50
+        ram[0x159E] = 0x01;
+        ram[0x159F] = 0x00;
+        ram[0x15A0] = 0x00;
+        ram[0x15A1] = 0x04;
         let out = engine.evaluate_frame(&ram);
         assert!(out.active);
-        assert_eq!(out.current_score, 7180);
+        assert_eq!(out.current_score, 10400);
         assert_eq!(out.triggered_score, None);
 
-        // 3. Game Over / Continue: 0x0036=0 -> dispara SUB con 7180
+        // 3. Game Over / Continue: 0x0036=0 -> dispara SUB con 10400
         ram[0x0036] = 0;
         let out = engine.evaluate_frame(&ram);
         assert!(!out.active);
-        assert_eq!(out.triggered_score, Some(7180));
+        assert_eq!(out.triggered_score, Some(10400));
     }
 
     #[test]
