@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,6 +87,8 @@ import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
 import java.text.NumberFormat
 import java.util.Locale
+
+val LocalOpenGameDetail = compositionLocalOf<((GameDto) -> Unit)?> { null }
 
 @Composable
 fun ArcadeAvatarOrPlaceholder(
@@ -587,12 +590,14 @@ fun ProfileRecordRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            val onOpenGameDetail = LocalOpenGameDetail.current
             Text(
                 text = game?.title ?: record.gameId,
                 color = PureWhite,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = if (game != null && onOpenGameDetail != null) Modifier.clickable { onOpenGameDetail(game) } else Modifier,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -696,12 +701,14 @@ fun ProfileActivityRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            val onOpenGameDetail = LocalOpenGameDetail.current
             Text(
                 text = game?.title ?: stat.gameId,
                 color = PureWhite,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = if (game != null && onOpenGameDetail != null) Modifier.clickable { onOpenGameDetail(game) } else Modifier,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -987,12 +994,14 @@ fun ProfileReplayRow(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                val onOpenGameDetail = LocalOpenGameDetail.current
                 Text(
                     text = game?.title ?: record.gameId,
                     color = PureWhite,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = if (game != null && onOpenGameDetail != null) Modifier.clickable { onOpenGameDetail(game) } else Modifier,
                 )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1153,12 +1162,14 @@ fun ProfileMatchHistoryRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            val onOpenGameDetail = LocalOpenGameDetail.current
             Text(
                 text = game?.title ?: match.gameId,
                 color = PureWhite,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = if (game != null && onOpenGameDetail != null) Modifier.clickable { onOpenGameDetail(game) } else Modifier,
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,

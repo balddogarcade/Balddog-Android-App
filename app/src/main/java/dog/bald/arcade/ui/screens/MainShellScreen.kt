@@ -815,7 +815,10 @@ fun MainShellScreen(
                                 )
 
                             MainTab.PROFILE ->
-                                ProfileScreen(
+                                androidx.compose.runtime.CompositionLocalProvider(
+                                    dog.bald.arcade.ui.components.LocalOpenGameDetail provides openGameDetail,
+                                ) {
+                                    ProfileScreen(
                                     profile = profile,
                                     userEmail = userEmail,
                                     myUserId = repo.currentUserId(),
@@ -910,6 +913,7 @@ fun MainShellScreen(
                                         performSignOut()
                                     },
                                 )
+                                }
                         }
                     }
                 }
