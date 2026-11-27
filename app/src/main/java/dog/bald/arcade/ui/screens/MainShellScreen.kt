@@ -206,6 +206,12 @@ fun MainShellScreen(
     var rankingSummaries by remember { mutableStateOf<Map<String, GameRankingSummaryDto>>(emptyMap()) }
     var myFollowingIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var overlayStack by remember { mutableStateOf<List<AppOverlay>>(emptyList()) }
+    val openGameDetail: (GameDto) -> Unit = { game ->
+        val top = overlayStack.lastOrNull()
+        if (top !is AppOverlay.GameDetail || top.game.id != game.id) {
+            overlayStack = overlayStack + AppOverlay.GameDetail(game)
+        }
+    }
     var replayLaunchState by remember { mutableStateOf<ReplayLaunchState?>(null) }
     var postMatchRecordBanner by remember { mutableStateOf<PostMatchRecordBannerData?>(null) }
     var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context, repo.currentUserId())) }
