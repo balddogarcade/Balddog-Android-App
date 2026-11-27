@@ -47,19 +47,27 @@ fun DiceBearPixelArtAvatar(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val fallbackLayers = remember(seed) { buildPixelArtLayers(seed) }
-    var layers by remember(seed) {
-        mutableStateOf(diceBearMemoryCache[seed] ?: fallbackLayers)
+    var layers by remember {
+        mutableStateOf(diceBearMemoryCache[seed] ?: emptyList())
     }
 
     LaunchedEffect(seed) {
-        if (seed.isBlank() || diceBearMemoryCache.containsKey(seed)) return@LaunchedEffect
+        if (seed.isBlank()) {
+            layers = emptyList()
+            return@LaunchedEffect
+        }
+        diceBearMemoryCache[seed]?.let { cached ->
+            layers = cached
+            return@LaunchedEffect
+        }
         val remoteLayers = withContext(Dispatchers.IO) {
             fetchOrLoadCachedDiceBearLayers(context.cacheDir, seed)
         }
         if (remoteLayers != null && remoteLayers.isNotEmpty()) {
             diceBearMemoryCache[seed] = remoteLayers
             layers = remoteLayers
+        } else {
+            layers = buildPixelArtLayers(seed)
         }
     }
 
