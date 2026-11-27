@@ -2,6 +2,7 @@ package dog.bald.arcade.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,7 +72,7 @@ fun DiceBearPixelArtAvatar(
         }
     }
 
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.clipToBounds()) {
         scale(
             scaleX = size.width / 16f,
             scaleY = size.height / 16f,
@@ -147,6 +148,8 @@ internal fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
         var inDefs = false
         var currentDefGroupId: String? = null
         var defGroupDepth = 0
+        var groupFill: String? = null
+        var groupOpacity: Float? = null
 
         var eventType = parser.eventType
         while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -156,6 +159,8 @@ internal fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
                     when (tag) {
                         "defs" -> inDefs = true
                         "g" -> {
+                            groupFill = parser.getAttributeValue(null, "fill") ?: groupFill
+                            groupOpacity = parser.getAttributeValue(null, "fill-opacity")?.toFloatOrNull() ?: groupOpacity
                             if (inDefs) {
                                 val id = parser.getAttributeValue(null, "id")
                                 if (currentDefGroupId == null && !id.isNullOrBlank()) {
@@ -169,10 +174,12 @@ internal fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
                         }
                         "path" -> {
                             val d = parser.getAttributeValue(null, "d")
-                            val fill = parser.getAttributeValue(null, "fill")
+                            val fill = parser.getAttributeValue(null, "fill") ?: groupFill
                             if (d != null && fill != null && !fill.equals("none", ignoreCase = true)) {
-                                val color = parseHexColor(fill)
-                                val alpha = parser.getAttributeValue(null, "fill-opacity")?.toFloatOrNull() ?: 1f
+                                val color = parseSvgColor(fill)
+                                val alpha = parser.getAttributeValue(null, "fill-opacity")?.toFloatOrNull()
+                                    ?: groupOpacity
+                                    ?: 1f
                                 val path = runCatching {
                                     PathParser().parsePathString(d).toPath().apply {
                                         fillType = PathFillType.EvenOdd
@@ -222,6 +229,8 @@ internal fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
                             defGroupDepth = 0
                         }
                         "g" -> {
+                            groupFill = null
+                            groupOpacity = null
                             if (inDefs && currentDefGroupId != null) {
                                 defGroupDepth--
                                 if (defGroupDepth <= 0) {
@@ -238,6 +247,19 @@ internal fun parseDiceBearSvgLayers(svg: String): List<ResolvedLayer> {
     }
 
     return result
+}
+
+private val rgbColorRegex = Regex("""rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)""", RegexOption.IGNORE_CASE)
+
+private fun parseSvgColor(raw: String): Color? {
+    val trimmed = raw.trim()
+    rgbColorRegex.matchEntire(trimmed)?.let { m ->
+        val r = m.groupValues[1].toIntOrNull()?.coerceIn(0, 255) ?: return null
+        val g = m.groupValues[2].toIntOrNull()?.coerceIn(0, 255) ?: return null
+        val b = m.groupValues[3].toIntOrNull()?.coerceIn(0, 255) ?: return null
+        return Color(r, g, b)
+    }
+    return parseHexColor(trimmed)
 }
 
 private fun parseHexColor(hex: String): Color? {
