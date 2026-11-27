@@ -721,6 +721,7 @@ fun MainShellScreen(
                                     onRefresh = { refreshAll() },
                                     onDownload = { downloadOnly(it) },
                                     onPlay = { onLaunchLocalRom(it) },
+                                    onGameDetail = openGameDetail,
                                     onLeaderboard = { leaderboardGame = it },
                                     onDeleteClick = { gamePendingDelete = it },
                                 )
@@ -1179,6 +1180,7 @@ private fun CatalogTab(
     onRefresh: () -> Unit,
     onDownload: (GameDto) -> Unit,
     onPlay: (GameDto) -> Unit,
+    onGameDetail: (GameDto) -> Unit,
     onLeaderboard: (GameDto) -> Unit,
     onDeleteClick: (GameDto) -> Unit,
 ) {
@@ -1353,6 +1355,7 @@ private fun CatalogTab(
                                 onDownload(game)
                             }
                         },
+                        onDetailClick = { onGameDetail(game) },
                         onLeaderboardClick =
                             if (hasLeaderboard) {
                                 { onLeaderboard(game) }

@@ -69,6 +69,7 @@ fun ArcadeGameCard(
     downloadProgress: Float = 0f,
     busy: Boolean = false,
     onPrimaryAction: () -> Unit,
+    onDetailClick: (() -> Unit)? = null,
     onLeaderboardClick: (() -> Unit)? = null,
     onDeleteClick: (() -> Unit)? = null,
     rankingSummary: GameRankingSummaryDto? = null,
@@ -89,7 +90,8 @@ fun ArcadeGameCard(
                     Modifier
                         .fillMaxWidth()
                         .aspectRatio(3f / 4f)
-                        .background(ObsidianBlack),
+                        .background(ObsidianBlack)
+                        .then(if (onDetailClick != null) Modifier.clickable(onClick = onDetailClick) else Modifier),
             ) {
                 GameCoverImage(
                     slug = game.slug,
