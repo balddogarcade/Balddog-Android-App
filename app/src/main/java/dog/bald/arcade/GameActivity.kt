@@ -178,7 +178,8 @@ class GameActivity : ComponentActivity() {
     private var currentFps by mutableFloatStateOf(0f)
     private var isNetplay by mutableStateOf(false)
     private var netplayPeerAddrs by mutableStateOf<List<String>>(emptyList())
-    private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u, false))
+    private var netplayHud by mutableStateOf(NetplayHudInfo(0u, 0u, false, 0u, false, false))
+    private var startupTrace: com.google.firebase.perf.metrics.Trace? = null
     private var netplayEndReason by mutableStateOf<String?>(null)
     private var netplayRoomId: String = ""
     private var netplayMode: String = "online"
@@ -348,7 +349,7 @@ class GameActivity : ComponentActivity() {
         )
         CrashlyticsHelper.log("GameActivity start: mode=$crashNetplayMode gameId=$gameId rom=$romSlug")
         AnalyticsHelper.logGameLaunch(gameId = gameId, romSlug = romSlug, mode = crashNetplayMode)
-        val startupTrace = PerformanceHelper.startTrace("rom_startup_trace")
+        startupTrace = PerformanceHelper.startTrace("rom_startup_trace")
         var netplaySyncTrace = if (isNetplay) PerformanceHelper.startTrace("netplay_sync_trace") else null
 
         try {
