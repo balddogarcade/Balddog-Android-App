@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added in-app **Eliminar cuenta** flow in `ProfileScreen` and legal links (`https://bald.dog/privacy`, `https://bald.dog/terms`).
 
 ### Changed
+- Simplified `ArcadeGameCard` in the catalog by moving player count (`SportsEsports` icon) and ROM size (`Storage` icon) into the cover image overlay, removing the `CO-OP` badge, and leaving only the ROM title and primary action button in the card body.
 - Added immediate loading indicator (`ABRIENDO...`) and double-tap protection on the catalog **JUGAR** button (`ArcadeGameCard` / `CatalogTab`) when launching a downloaded game.
 - Aligned `DiceBearPixelArtAvatar` with DiceBear `11.x/pixel-art` (`api.dicebear.com/11.x/pixel-art/svg`) using `ktor-client-okhttp` with in-memory + disk SVG caching and offline v9.4.2 fallback so avatars match `bald.dog` identically.
 - Migrated all game cover images (`cover_url`) from bundled `assets/covers/*.webp` to Pinata IPFS (`public.games.cover_url`), refactored `GameCoverImage` and `RemoteImage` to share a unified memory + disk cache (`RemoteImageCache`), and removed local cover assets from the APK.

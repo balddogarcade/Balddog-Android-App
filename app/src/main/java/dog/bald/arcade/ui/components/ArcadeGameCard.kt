@@ -7,8 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +23,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,7 +60,6 @@ import dog.bald.arcade.ui.theme.SpaceGroteskFamily
 import dog.bald.arcade.ui.theme.SteelBorder
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ArcadeGameCard(
     game: GameDto,
@@ -118,10 +117,23 @@ fun ArcadeGameCard(
                         style = ArcadeBadgeStyle.Overlay,
                     )
                     OverlayStatPill(
+                        icon = Icons.Default.SportsEsports,
+                        contentDescription = "Jugadores",
+                        text = "${game.maxPlayers}P",
+                    )
+                    OverlayStatPill(
                         icon = Icons.Default.Download,
                         contentDescription = "Descargas",
                         text = "${game.downloadCount}",
                     )
+                    if (game.sizeBytes > 0L) {
+                        val sizeMb = (game.sizeBytes / (1024.0 * 1024.0)).roundToInt().coerceAtLeast(1)
+                        OverlayStatPill(
+                            icon = Icons.Default.Storage,
+                            contentDescription = "Tamaño",
+                            text = "$sizeMb MB",
+                        )
+                    }
                     if (game.totalPlaySeconds > 0L) {
                         OverlayStatPill(
                             icon = Icons.Default.Schedule,
@@ -247,30 +259,6 @@ fun ArcadeGameCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    ArcadeBadge(
-                        text = "${game.maxPlayers}P",
-                        style = ArcadeBadgeStyle.Outline,
-                    )
-                    if (game.isCoop) {
-                        ArcadeBadge(
-                            text = "CO-OP",
-                            style = ArcadeBadgeStyle.Solid,
-                        )
-                    }
-                    if (game.sizeBytes > 0L) {
-                        val sizeMb = (game.sizeBytes / (1024.0 * 1024.0)).roundToInt().coerceAtLeast(1)
-                        ArcadeBadge(
-                            text = "$sizeMb MB",
-                            style = ArcadeBadgeStyle.Outline,
-                        )
-                    }
-                }
 
                 if (isDownloading) {
                     Column(
