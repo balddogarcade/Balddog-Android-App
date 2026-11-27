@@ -1178,6 +1178,26 @@ private fun CatalogTab(
     var searchQuery by remember { mutableStateOf("") }
     var selectedSort by remember { mutableStateOf(CatalogSortOption.NAME) }
     var downloadedOnly by remember { mutableStateOf(false) }
+    var launchingGameId by remember { mutableStateOf<String?>(null) }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                    launchingGameId = null
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(launchingGameId) {
+        if (launchingGameId != null) {
+            kotlinx.coroutines.delay(3000L)
+            launchingGameId = null
+        }
+    }
 
     val filtered =
         remember(games, searchQuery, selectedSort, downloadedOnly, downloadedFiles) {
@@ -1314,11 +1334,17 @@ private fun CatalogTab(
                         game = game,
                         isDownloaded = isDownloaded,
                         isDownloading = downloadingGameId == game.id,
+                        isLaunching = launchingGameId == game.id,
                         downloadProgress = if (downloadingGameId == game.id) downloadProgress else 0f,
                         busy = busy,
                         rankingSummary = rankingSummaries[game.id],
                         onPrimaryAction = {
-                            if (isDownloaded) onPlay(game) else onDownload(game)
+                            if (isDownloaded) {
+                                launchingGameId = game.id
+                                onPlay(game)
+                            } else {
+                                onDownload(game)
+                            }
                         },
                         onLeaderboardClick =
                             if (hasLeaderboard) {

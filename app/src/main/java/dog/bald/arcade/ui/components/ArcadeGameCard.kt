@@ -66,6 +66,7 @@ fun ArcadeGameCard(
     game: GameDto,
     isDownloaded: Boolean,
     isDownloading: Boolean = false,
+    isLaunching: Boolean = false,
     downloadProgress: Float = 0f,
     busy: Boolean = false,
     onPrimaryAction: () -> Unit,
@@ -311,7 +312,7 @@ fun ArcadeGameCard(
                     }
                 } else {
                     Button(
-                        enabled = !busy,
+                        enabled = !busy && !isLaunching,
                         onClick = onPrimaryAction,
                         shape = RectangleShape,
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
@@ -319,8 +320,8 @@ fun ArcadeGameCard(
                             ButtonDefaults.buttonColors(
                                 containerColor = if (isDownloaded) PureWhite else GraphiteSurface,
                                 contentColor = if (isDownloaded) PureBlack else PureWhite,
-                                disabledContainerColor = GraphiteSurface.copy(alpha = 0.5f),
-                                disabledContentColor = SilverGray.copy(alpha = 0.5f),
+                                disabledContainerColor = if (isLaunching && isDownloaded) PureWhite.copy(alpha = 0.85f) else GraphiteSurface.copy(alpha = 0.5f),
+                                disabledContentColor = if (isLaunching && isDownloaded) PureBlack else SilverGray.copy(alpha = 0.5f),
                             ),
                         border = if (isDownloaded) null else BorderStroke(1.dp, SteelBorder),
                         modifier =
@@ -328,19 +329,35 @@ fun ArcadeGameCard(
                                 .fillMaxWidth()
                                 .height(36.dp),
                     ) {
-                        Icon(
-                            imageVector = if (isDownloaded) Icons.Default.PlayArrow else Icons.Default.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(15.dp),
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = if (isDownloaded) "JUGAR" else "DESCARGAR",
-                            fontFamily = SpaceGroteskFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            letterSpacing = 0.5.sp,
-                        )
+                        if (isLaunching && isDownloaded) {
+                            CircularProgressIndicator(
+                                color = PureBlack,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "ABRIENDO...",
+                                fontFamily = SpaceGroteskFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                letterSpacing = 0.5.sp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (isDownloaded) Icons.Default.PlayArrow else Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isDownloaded) "JUGAR" else "DESCARGAR",
+                                fontFamily = SpaceGroteskFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                letterSpacing = 0.5.sp,
+                            )
+                        }
                     }
                 }
             }

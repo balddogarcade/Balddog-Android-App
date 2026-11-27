@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed P1 `rcheevos` leaderboard score extraction in `leaderboard.rs` and Supabase (`039`–`042`) for `ddragon2` (`0x03EB..0x03EC`), `mslug3` (`0xF04C..0xF04F`), `snowbros` (`0x0D70..0x0D73`), and `tumblep` (`0x3D04`), verified against real `.bsv.gz` replays and unit tests.
 - Fixed netplay NVRAM desync (`clear_deterministic_nvram`), stale `audio_scratch` replay in `take_audio_samples()`, `ReplayRecorder` cutoff after 1CC disqualification, `SeekReplay` leaderboard evaluation, `pending_submit_score` compare-exchange race, and `GgrsEvent::Synchronized` exposure for 0ms LAN sync.
 - Fixed `GameActivity` `configChanges` (`screenLayout|smallestScreenSize|uiMode|density`), `rom_startup_trace` leak, transient `fetchRoomById` netplay disconnects, and `LaunchedEffect(Unit)` polling.
 
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added in-app **Eliminar cuenta** flow in `ProfileScreen` and legal links (`https://bald.dog/privacy`, `https://bald.dog/terms`).
 
 ### Changed
+- Added immediate loading indicator (`ABRIENDO...`) and double-tap protection on the catalog **JUGAR** button (`ArcadeGameCard` / `CatalogTab`) when launching a downloaded game.
 - Aligned `DiceBearPixelArtAvatar` with DiceBear `11.x/pixel-art` (`api.dicebear.com/11.x/pixel-art/svg`) using `ktor-client-okhttp` with in-memory + disk SVG caching and offline v9.4.2 fallback so avatars match `bald.dog` identically.
 - Migrated all game cover images (`cover_url`) from bundled `assets/covers/*.webp` to Pinata IPFS (`public.games.cover_url`), refactored `GameCoverImage` and `RemoteImage` to share a unified memory + disk cache (`RemoteImageCache`), and removed local cover assets from the APK.
 
