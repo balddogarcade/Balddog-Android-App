@@ -157,16 +157,35 @@ fun ReplayHudOverlay(
             }
 
             // Indicador de tiempo
-            Text(
-                text = "${formatFramesTime(currentFrame)} / ${formatFramesTime(totalFrames)}",
-                fontFamily = JetBrainsMonoFamily,
-                fontSize = 10.sp,
-                color = SilverGray,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "${formatFramesTime(currentFrame)} / ${formatFramesTime(totalFrames)}",
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 10.sp,
+                    color = SilverGray,
+                )
+                if (replayHud.seeking) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(10.dp),
+                        strokeWidth = 1.5.dp,
+                        color = Color(0xFFFFD54F),
+                    )
+                    Text(
+                        text = "Avanzando...",
+                        fontFamily = JetBrainsMonoFamily,
+                        fontSize = 9.sp,
+                        color = Color(0xFFFFD54F),
+                    )
+                }
+            }
 
             // Barra de progreso interactiva (Seekbar táctil con adelantado manual)
             ReplaySeekBar(
                 progress = progress,
+                enabled = !replayHud.seeking,
                 onSeek = { p ->
                     val frame = (p * totalFrames).toLong().coerceIn(0L, totalFrames)
                     onSeekToFrame(frame)
@@ -180,6 +199,7 @@ fun ReplayHudOverlay(
             ) {
                 QuickSkipButton(
                     label = "+10s",
+                    enabled = !replayHud.seeking,
                     onClick = {
                         val target = (currentFrame + 600L).coerceIn(0L, totalFrames)
                         onSeekToFrame(target)
@@ -188,6 +208,7 @@ fun ReplayHudOverlay(
                 )
                 QuickSkipButton(
                     label = "+30s",
+                    enabled = !replayHud.seeking,
                     onClick = {
                         val target = (currentFrame + 1800L).coerceIn(0L, totalFrames)
                         onSeekToFrame(target)
@@ -300,6 +321,7 @@ private fun ReplaySeekBar(
     progress: Float,
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     var draggingProgress by remember { mutableStateOf<Float?>(null) }
     val displayProgress = (draggingProgress ?: progress).coerceIn(0f, 1f)
@@ -309,12 +331,14 @@ private fun ReplaySeekBar(
             modifier
                 .fillMaxWidth()
                 .height(26.dp)
-                .pointerInput(Unit) {
+                .pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
                     detectTapGestures { offset ->
                         val fraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
                         onSeek(fraction)
                     }
-                }.pointerInput(Unit) {
+                }.pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
                     detectHorizontalDragGestures(
                         onDragStart = { offset ->
                             val fraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
@@ -375,6 +399,7 @@ private fun QuickSkipButton(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Box(
         contentAlignment = Alignment.Center,
@@ -382,7 +407,7 @@ private fun QuickSkipButton(
             modifier
                 .background(CarbonSurface)
                 .border(1.dp, CharcoalBorder, RectangleShape)
-                .clickable(onClick = onClick)
+                .clickable(enabled = enabled, onClick = onClick)
                 .padding(vertical = 3.dp),
     ) {
         Row(

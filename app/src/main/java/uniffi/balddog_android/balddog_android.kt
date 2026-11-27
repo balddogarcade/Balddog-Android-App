@@ -1967,7 +1967,8 @@ data class ReplayHudInfo (
     var `totalFrames`: kotlin.ULong, 
     var `speed`: kotlin.UByte, 
     var `paused`: kotlin.Boolean, 
-    var `finished`: kotlin.Boolean
+    var `finished`: kotlin.Boolean, 
+    var `seeking`: kotlin.Boolean
 ) {
     
     companion object
@@ -1985,6 +1986,7 @@ public object FfiConverterTypeReplayHudInfo: FfiConverterRustBuffer<ReplayHudInf
             FfiConverterUByte.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -1994,7 +1996,8 @@ public object FfiConverterTypeReplayHudInfo: FfiConverterRustBuffer<ReplayHudInf
             FfiConverterULong.allocationSize(value.`totalFrames`) +
             FfiConverterUByte.allocationSize(value.`speed`) +
             FfiConverterBoolean.allocationSize(value.`paused`) +
-            FfiConverterBoolean.allocationSize(value.`finished`)
+            FfiConverterBoolean.allocationSize(value.`finished`) +
+            FfiConverterBoolean.allocationSize(value.`seeking`)
     )
 
     override fun write(value: ReplayHudInfo, buf: ByteBuffer) {
@@ -2004,6 +2007,7 @@ public object FfiConverterTypeReplayHudInfo: FfiConverterRustBuffer<ReplayHudInf
             FfiConverterUByte.write(value.`speed`, buf)
             FfiConverterBoolean.write(value.`paused`, buf)
             FfiConverterBoolean.write(value.`finished`, buf)
+            FfiConverterBoolean.write(value.`seeking`, buf)
     }
 }
 

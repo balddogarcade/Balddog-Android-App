@@ -203,7 +203,7 @@ class GameActivity : ComponentActivity() {
     private var replayPath: String = ""
     private var replayPlayerName by mutableStateOf("")
     private var replayTargetScore by mutableStateOf(0L)
-    private var replayHud by mutableStateOf(ReplayHudInfo(false, 0u, 0u, 1u, false, false))
+    private var replayHud by mutableStateOf(ReplayHudInfo(false, 0u, 0u, 1u, false, false, false))
     private var exportProgressPct by mutableStateOf<Int?>(null)
     private var voiceMicEnabled by mutableStateOf(false)
     private var voiceListenEnabled by mutableStateOf(false)
