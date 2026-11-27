@@ -70,8 +70,6 @@ import dog.bald.arcade.data.ExitSyncCoordinator
 import dog.bald.arcade.data.MatchHistoryPlayerDto
 import dog.bald.arcade.data.PendingMatchHistoryEntry
 import dog.bald.arcade.data.PendingMatchHistoryQueue
-import dog.bald.arcade.data.PendingScoreQueue
-import dog.bald.arcade.data.PendingScoreSubmission
 import dog.bald.arcade.diagnostics.AnalyticsHelper
 import dog.bald.arcade.diagnostics.CrashlyticsHelper
 import dog.bald.arcade.diagnostics.PerformanceHelper
@@ -1308,7 +1306,7 @@ class GameActivity : ComponentActivity() {
         )
 
         if (!hud.rankingEligible || credits > 1) return
-        submitOrQueueScore(score = pending, credits = credits, notifyUi = true)
+        submitScoreWithReplay(score = pending, credits = credits)
     }
 
     private fun flushBestScoreOnExit() {
@@ -1324,7 +1322,7 @@ class GameActivity : ComponentActivity() {
             "INFO",
             "Envío de score al salir: score=$candidate credits=$credits",
         )
-        submitOrQueueScore(score = candidate, credits = credits, notifyUi = false)
+        submitScoreWithReplay(score = candidate, credits = credits)
     }
 
     private fun recordMatchHistoryOnExit() {
@@ -1422,10 +1420,9 @@ class GameActivity : ComponentActivity() {
         ExitSyncCoordinator.register(syncJob)
     }
 
-    private fun submitOrQueueScore(
+    private fun submitScoreWithReplay(
         score: Long,
         credits: Int,
-        notifyUi: Boolean,
     ) {
         if (score <= 0L || gameId.isBlank() || romSha256.isBlank()) return
         if (score <= lastSubmittedSessionScore) return
@@ -1434,10 +1431,10 @@ class GameActivity : ComponentActivity() {
         val appCtx = applicationContext
         val gid = gameId
         val sha = romSha256
-        val pendingDir = File(filesDir, "pending_replays")
+        val tempDir = File(cacheDir, "temp_replays")
         val replayFile =
             File(
-                pendingDir,
+                tempDir,
                 "${gid}_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.bsv.zst",
             )
         val exportDone = CompletableDeferred<Unit>()
@@ -1450,7 +1447,7 @@ class GameActivity : ComponentActivity() {
                 val exportedReplay =
                     try {
                         runCatching {
-                            pendingDir.mkdirs()
+                            tempDir.mkdirs()
                             exportRecordedReplay(replayFile.absolutePath)
                             replayFile.takeIf { it.exists() && it.length() > 0L }
                         }.getOrNull()
@@ -1466,119 +1463,79 @@ class GameActivity : ComponentActivity() {
                     return@launch
                 }
 
-                val repo = ArcadeRepository(appCtx)
-                val uid = repo.currentUserId()
-                if (uid.isNullOrBlank()) {
-                    exportedReplay.delete()
-                    return@launch
-                }
+                try {
+                    val repo = ArcadeRepository(appCtx)
+                    val uid = repo.currentUserId()
+                    if (uid.isNullOrBlank()) return@launch
 
-                val rankResult = runCatching { repo.fetchMyGameRank(gid) }
-                if (rankResult.isSuccess) {
-                    val currentBest = rankResult.getOrNull()?.score
-                    if (currentBest != null && score < currentBest) {
-                        exportedReplay.delete()
-                        logFromAndroid("INFO", "Score $score < mejor online ($currentBest); replay descartado")
+                    val rankResult = runCatching { repo.fetchMyGameRank(gid) }
+                    if (rankResult.isSuccess) {
+                        val currentBest = rankResult.getOrNull()?.score
+                        if (currentBest != null && score < currentBest) {
+                            logFromAndroid("INFO", "Score $score < mejor online ($currentBest); replay descartado")
+                            return@launch
+                        }
+                    }
+
+                    val uploadedReplay = runCatching { repo.uploadReplay(gid, exportedReplay) }.getOrNull()
+                    if (uploadedReplay == null) {
+                        logFromAndroid("WARN", "uploadReplay falló para score=$score")
+                        AnalyticsHelper.logLeaderboardSubmit(
+                            romSlug = gid,
+                            score = score,
+                            creditsUsed = credits,
+                            outcome = "upload_failed",
+                        )
                         return@launch
                     }
-                }
 
-                val uploadedReplay = runCatching { repo.uploadReplay(gid, exportedReplay) }.getOrNull()
-                if (uploadedReplay == null) {
-                    logFromAndroid("WARN", "uploadReplay falló transitoriamente, encolando offline score=$score")
-                    PendingScoreQueue.enqueue(
-                        appCtx,
-                        PendingScoreSubmission(
-                            userId = uid,
-                            gameId = gid,
-                            score = score,
-                            romSha256 = sha,
-                            creditsUsed = credits,
-                            isHardcore = true,
-                            replayLocalPath = exportedReplay.absolutePath,
-                        ),
-                    )
-                    if (notifyUi && !isFinishing && !isDestroyed) {
-                        voiceNoticeMsg = "Récord guardado offline ($score)"
-                    }
-                    return@launch
-                }
-
-                val result =
-                    runCatching {
-                        repo.submitHighScore(
-                            gameId = gid,
-                            score = score,
-                            romSha256 = sha,
-                            creditsUsed = credits,
-                            isHardcore = true,
-                            replayPath = uploadedReplay.first,
-                            replaySizeBytes = uploadedReplay.second,
-                            replaySha256 = uploadedReplay.third,
-                        )
-                    }
-                val dto = result.getOrNull()
-                if (result.isSuccess && dto != null) {
-                    if (dto.accepted || PendingScoreQueue.isPermanentRejection(dto.reason)) {
-                        exportedReplay.delete()
-                    } else {
-                        PendingScoreQueue.enqueue(
-                            appCtx,
-                            PendingScoreSubmission(
-                                userId = uid,
+                    val result =
+                        runCatching {
+                            repo.submitHighScore(
                                 gameId = gid,
                                 score = score,
                                 romSha256 = sha,
                                 creditsUsed = credits,
                                 isHardcore = true,
-                                replayLocalPath = exportedReplay.absolutePath,
-                            ),
+                                replayPath = uploadedReplay.first,
+                                replaySizeBytes = uploadedReplay.second,
+                                replaySha256 = uploadedReplay.third,
+                            )
+                        }
+                    val dto = result.getOrNull()
+                    if (result.isSuccess && dto != null) {
+                        logFromAndroid(
+                            "INFO",
+                            "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}",
                         )
-                    }
-                    logFromAndroid(
-                        "INFO",
-                        "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}",
-                    )
-                    AnalyticsHelper.logLeaderboardSubmit(
-                        romSlug = gid,
-                        score = score,
-                        creditsUsed = credits,
-                        outcome = if (dto.accepted) "accepted" else "rejected:${dto.reason ?: "unknown"}",
-                    )
-                    if (dto.accepted && dto.isNewRecord) {
-                        AnalyticsHelper.logNewRecordAchieved(
+                        AnalyticsHelper.logLeaderboardSubmit(
                             romSlug = gid,
                             score = score,
-                            rank = dto.rank?.toInt(),
+                            creditsUsed = credits,
+                            outcome = if (dto.accepted) "accepted" else "rejected:${dto.reason ?: "unknown"}",
+                        )
+                        if (dto.accepted && dto.isNewRecord) {
+                            AnalyticsHelper.logNewRecordAchieved(
+                                romSlug = gid,
+                                score = score,
+                                rank = dto.rank?.toInt(),
+                            )
+                        }
+                        if (!dto.accepted) {
+                            Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
+                        }
+                    } else {
+                        val errMsg = result.exceptionOrNull()?.message ?: "unknown"
+                        logFromAndroid("WARN", "submit_high_score falló ($errMsg)")
+                        AnalyticsHelper.logLeaderboardSubmit(
+                            romSlug = gid,
+                            score = score,
+                            creditsUsed = credits,
+                            outcome = "error",
                         )
                     }
-                    if (!dto.accepted) {
-                        Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
-                    }
-                } else {
-                    val errMsg = result.exceptionOrNull()?.message ?: "unknown"
-                    logFromAndroid("WARN", "submit_high_score falló ($errMsg), encolando offline")
-                    AnalyticsHelper.logLeaderboardSubmit(
-                        romSlug = gid,
-                        score = score,
-                        creditsUsed = credits,
-                        outcome = "queued_offline",
-                    )
-                    PendingScoreQueue.enqueue(
-                        appCtx,
-                        PendingScoreSubmission(
-                            userId = uid,
-                            gameId = gid,
-                            score = score,
-                            romSha256 = sha,
-                            creditsUsed = credits,
-                            isHardcore = true,
-                            replayLocalPath = exportedReplay.absolutePath,
-                        ),
-                    )
-                    if (notifyUi && !isFinishing && !isDestroyed) {
-                        voiceNoticeMsg = "Récord guardado offline ($score)"
-                    }
+                } finally {
+                    exportedReplay.delete()
                 }
             }
         ExitSyncCoordinator.register(scoreJob)

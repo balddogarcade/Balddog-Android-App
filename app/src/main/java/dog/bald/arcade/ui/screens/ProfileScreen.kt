@@ -66,7 +66,6 @@ import dog.bald.arcade.data.toUserMessage
 import dog.bald.arcade.ui.components.ConfirmClearCacheDialog
 import dog.bald.arcade.ui.components.ConfirmSignOutDialog
 import dog.bald.arcade.ui.components.EditProfileDialog
-import dog.bald.arcade.ui.components.PendingScoresBanner
 import dog.bald.arcade.ui.components.ProfileActivityRow
 import dog.bald.arcade.ui.components.ProfileHeroCard
 import dog.bald.arcade.ui.components.ProfileMatchHistoryRow
@@ -108,11 +107,9 @@ fun ProfileScreen(
     myHighScores: List<MyHighScoreDto>,
     myMatchHistory: List<MatchHistoryDto>,
     myGameStats: List<UserGameStatDto>,
-    pendingScoreCount: Int,
     engineStatus: EngineStatus?,
     cacheBytes: Long,
     onUpdateUsername: suspend (String) -> Unit,
-    onFlushPendingScores: suspend () -> Unit,
     onOpenLeaderboard: (GameDto) -> Unit,
     replayLaunchState: ReplayLaunchState? = null,
     onWatchReplay: suspend (MyHighScoreDto, GameDto) -> Unit,
@@ -152,7 +149,6 @@ fun ProfileScreen(
     var deletingAccount by remember { mutableStateOf(false) }
     var deleteAccountError by remember { mutableStateOf<String?>(null) }
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-    var syncingScores by remember { mutableStateOf(false) }
     var loadingReplayGameId by remember { mutableStateOf<String?>(null) }
 
     val myReplays =
@@ -196,24 +192,6 @@ fun ProfileScreen(
                 onOpenFollowers = onOpenFollowers,
                 onOpenFollowing = onOpenFollowing,
             )
-        }
-
-        if (pendingScoreCount > 0) {
-            item(key = "pending_scores") {
-                PendingScoresBanner(
-                    pendingCount = pendingScoreCount,
-                    syncing = syncingScores,
-                    onSyncNow = {
-                        if (!syncingScores) {
-                            scope.launch {
-                                syncingScores = true
-                                runCatching { onFlushPendingScores() }
-                                syncingScores = false
-                            }
-                        }
-                    },
-                )
-            }
         }
 
         item(key = "section_toggle") {

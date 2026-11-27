@@ -21,7 +21,7 @@ En lugar de grabar y almacenar archivos de video pesados en la nube, **bald.dog 
    - Cada usuario conserva su replay de récord en Supabase Storage bajo la ruta:
      `<game_id>/<user_id>/<uuid>.bsv.gz` (dentro del bucket `replays`).
    - La verificación headless (`verify_replay` / `ReplayPlayer::from_gzip_file_strict`) aplica un límite de descompresión de 16 MiB y rechaza replays con `state_size > 0` o `rom_crc32 = 0`.
-   - Antes de subir un replay (tanto en `GameActivity.submitOrQueueScore` como en `PendingScoreQueue.flushAll`), el cliente consulta el mejor puntaje actual del jugador (`fetchMyGameRank(gameId)`). **Solo si `score >= currentBest`** se sube y reemplaza el archivo en Storage, evitando que una partida posterior con menor puntaje sobrescriba el replay del récord máximo.
+   - Antes de subir un replay (en `GameActivity.submitScoreWithReplay`), el cliente consulta el mejor puntaje actual del jugador (`fetchMyGameRank(gameId)`). **Solo si `score >= currentBest`** se sube y reemplaza el archivo en Storage, evitando que una partida posterior con menor puntaje sobrescriba el replay del récord máximo.
    - En PostgreSQL, `public.submit_high_score` aplica `on conflict (game_id, user_id) do update ... where excluded.score > public.high_scores.score ...`, actualizando `replay_path`, `replay_size_bytes` y `replay_sha256` únicamente cuando corresponde.
 
 ### 1.3 Determinismo en el motor Rust
@@ -103,7 +103,6 @@ El historial de partidas registra sesiones reales jugadas por el usuario en tres
 | :--- | :--- |
 | `app/src/main/java/dog/bald/arcade/data/Models.kt` | DTOs `MyHighScoreDto` (con `replayPath`, `replaySizeBytes`), `MatchHistoryPlayerDto`, `MatchHistoryDto`. |
 | `app/src/main/java/dog/bald/arcade/data/ArcadeRepository.kt` | Métodos `uploadReplay`, `downloadReplay`, `recordMatchHistory`, `fetchMyMatchHistory`. |
-| `app/src/main/java/dog/bald/arcade/data/PendingScoreQueue.kt` | Cola offline de puntajes y replays con validación de récord previo antes de sobrescribir Storage. |
 | `app/src/main/java/dog/bald/arcade/MainActivity.kt` | Envío de extras de replay (`EXTRA_REPLAY_*`) y metadatos de sala (`EXTRA_NETPLAY_MODE`, `EXTRA_ROOM_IS_PRIVATE`, `EXTRA_ROOM_PLAYERS_JSON`) hacia `GameActivity`. |
 | `app/src/main/java/dog/bald/arcade/GameActivity.kt` | Ciclo de vida de grabación/reproducción, envío de récord + replay, registro de `recordMatchHistoryOnExit()`. |
 | `app/src/main/java/dog/bald/arcade/ui/components/ProfileComponents.kt` | Filas `ProfileRecordRow`, `ProfileReplayRow`, `ProfileMatchHistoryRow`, `ProfileActivityRow`. |

@@ -102,7 +102,6 @@ import dog.bald.arcade.data.LeaderboardEntryDto
 import dog.bald.arcade.data.MatchHistoryDto
 import dog.bald.arcade.data.MyHighScoreDto
 import dog.bald.arcade.data.PendingMatchHistoryQueue
-import dog.bald.arcade.data.PendingScoreQueue
 import dog.bald.arcade.data.ProfileCache
 import dog.bald.arcade.data.PublicProfileDto
 import dog.bald.arcade.data.RoomDto
@@ -232,7 +231,6 @@ fun MainShellScreen(
     }
     var replayLaunchState by remember { mutableStateOf<ReplayLaunchState?>(null) }
     var postMatchRecordBanner by remember { mutableStateOf<PostMatchRecordBannerData?>(null) }
-    var pendingScoreCount by remember { mutableIntStateOf(PendingScoreQueue.pendingCount(context, repo.currentUserId())) }
     var showDiagnosticsSheet by remember { mutableStateOf(false) }
     var userMenuExpanded by remember { mutableStateOf(false) }
     val userEmail = remember(profile) { repo.currentUserEmail() }
@@ -289,7 +287,6 @@ fun MainShellScreen(
     fun performSignOut() {
         scope.launch {
             withContext(Dispatchers.IO) {
-                PendingScoreQueue.clear(context)
                 PendingMatchHistoryQueue.clear(context)
             }
             runCatching { repo.signOut() }
@@ -339,7 +336,6 @@ fun MainShellScreen(
                         rankingSummaries = summariesDef.await()
                         myFollowingIds = followingDef.await()
                     }
-                    pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                     refreshLocalState()
                 } catch (t: Throwable) {
                     val msg = t.toUserMessage("Error sincronizando catálogo")
@@ -427,9 +423,7 @@ fun MainShellScreen(
                     } else {
                         scope.launch {
                             repo.refreshSessionIfNeeded()
-                            runCatching { PendingScoreQueue.flushAll(context, repo) }
                             runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
-                            pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
                             runCatching { games = repo.fetchGames() }
                             runCatching { repo.fetchMyProfile() }.getOrNull()?.let { fetchedProfile ->
                                 profile = fetchedProfile
@@ -464,9 +458,7 @@ fun MainShellScreen(
                 null
             }
         ExitSyncCoordinator.awaitInFlight(timeoutMs = 8_000L)
-        runCatching { PendingScoreQueue.flushAll(context, repo) }
         runCatching { PendingMatchHistoryQueue.flushAll(context, repo) }
-        pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
         runCatching { games = repo.fetchGames() }
         runCatching { repo.fetchMyProfile() }.getOrNull()?.let { fetchedProfile ->
             profile = fetchedProfile
@@ -510,7 +502,6 @@ fun MainShellScreen(
             }
         } else if (MainTab.entries[pagerState.currentPage] == MainTab.PROFILE) {
             runCatching {
-                PendingScoreQueue.flushAll(context, repo)
                 PendingMatchHistoryQueue.flushAll(context, repo)
                 profile = repo.fetchMyProfile()
                 myHighScores = repo.fetchMyHighScores()
@@ -519,7 +510,6 @@ fun MainShellScreen(
                 repo.currentUserId()?.let { uid ->
                     myPublicProfile = repo.fetchPublicProfile(uid)
                 }
-                pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
             }
         }
     }
@@ -1073,7 +1063,6 @@ fun MainShellScreen(
                                     myHighScores = myHighScores,
                                     myMatchHistory = myMatchHistory,
                                     myGameStats = myGameStats,
-                                    pendingScoreCount = pendingScoreCount,
                                     engineStatus = engineStatus,
                                     cacheBytes = cacheBytes,
                                     onUpdateUsername = { newName ->
@@ -1097,13 +1086,6 @@ fun MainShellScreen(
                                         repo.currentUserId()?.let { uid ->
                                             runCatching { myPublicProfile = repo.fetchPublicProfile(uid) }
                                         }
-                                    },
-                                    onFlushPendingScores = {
-                                        PendingScoreQueue.flushAll(context, repo)
-                                        PendingMatchHistoryQueue.flushAll(context, repo)
-                                        pendingScoreCount = PendingScoreQueue.pendingCount(context, repo.currentUserId())
-                                        myHighScores = runCatching { repo.fetchMyHighScores() }.getOrDefault(myHighScores)
-                                        myMatchHistory = runCatching { repo.fetchMyMatchHistory() }.getOrDefault(myMatchHistory)
                                     },
                                     onOpenLeaderboard = { leaderboardGame = it },
                                     replayLaunchState = replayLaunchState,
