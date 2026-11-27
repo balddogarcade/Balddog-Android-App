@@ -540,6 +540,130 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_tmnt2_lifecycle_leaderboard() {
+        let mut engine =
+            LeaderboardEngine::new("STA:0xH00B0=1::CAN:0=1::SUB:0xH00B0=0::VAL:b0x 0104")
+                .expect("tmnt2 lboard válido");
+
+        let mut ram = vec![0u8; 43136];
+        // 1. Boot / Attract / Selección: 0x00B0=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x00B0=1, puntaje=5 (0x0005 BCD)
+        ram[0x00B0] = 1;
+        ram[0x0104] = 0x05;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 5);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Supera 9 -> 26 en BCD (0x26)
+        ram[0x0104] = 0x26;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 26);
+
+        // 4. Game Over: 0x00B0=0 -> dispara SUB con 26
+        ram[0x00B0] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(26));
+    }
+
+    #[test]
+    fn evaluates_tmnt_lifecycle_leaderboard() {
+        let mut engine =
+            LeaderboardEngine::new("STA:0xH00A0=1::CAN:0=1::SUB:0xH00A0=0::VAL:b0x 0104")
+                .expect("tmnt lboard válido");
+
+        let mut ram = vec![0u8; 22528];
+        // 1. Boot / Attract / Selección: 0x00A0=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x00A0=1, puntaje=9
+        ram[0x00A0] = 1;
+        ram[0x0104] = 0x09;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 9);
+
+        // 3. Supera 9 -> 12 en BCD (0x12)
+        ram[0x0104] = 0x12;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 12);
+        assert_eq!(out.triggered_score, None);
+
+        // 4. Game Over: 0x00A0=0 -> dispara SUB con 12
+        ram[0x00A0] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(12));
+    }
+
+    #[test]
+    fn evaluates_snowbro2_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xH00DE=1::CAN:0=1::SUB:0xH00DE=2::VAL:A:b0x 00DA*10000_M:b0x 00DC",
+        )
+        .expect("snowbro2 lboard válido");
+
+        let mut ram = vec![0u8; 86528];
+        // 1. Boot / Attract / Tutorial: 0x00DE=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x00DE=1, puntaje=3540 ([00, 00, 40, 35] word-swapped BCD)
+        ram[0x00DE] = 1;
+        ram[0x00DC] = 0x40;
+        ram[0x00DD] = 0x35;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 3540);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Continue / Game Over: 0x00DE=2 -> dispara SUB con 3540
+        ram[0x00DE] = 2;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(3540));
+    }
+
+    #[test]
+    fn evaluates_pbobble_lifecycle_leaderboard() {
+        let mut engine = LeaderboardEngine::new(
+            "STA:0xH26E4=1::CAN:0=1::SUB:0xH26E4=0::VAL:A:0x 7058*65536_M:0x 705A",
+        )
+        .expect("pbobble lboard válido");
+
+        let mut ram = vec![0u8; 614404];
+        // 1. Boot / Title: 0x26E4=0
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, None);
+
+        // 2. Inicio de partida: 0x26E4=1, puntaje=39570 (0x00009A92 -> word-swapped [00, 00, 92, 9A])
+        ram[0x26E4] = 1;
+        ram[0x705A] = 0x92;
+        ram[0x705B] = 0x9A;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 39570);
+        assert_eq!(out.triggered_score, None);
+
+        // 3. Game Over: 0x26E4=0 -> dispara SUB con 39570
+        ram[0x26E4] = 0;
+        let out = engine.evaluate_frame(&ram);
+        assert!(!out.active);
+        assert_eq!(out.triggered_score, Some(39570));
+    }
+
+    #[test]
     fn parses_all_cps_family_leaderboard_expressions() {
         let defs = [
             "STA:0xHB274=1_0xH84D1=12::CAN:0=1::SUB:0xH84D1=16::VAL:A:b0x B374*10000_M:b0x B376",
@@ -563,6 +687,10 @@ mod tests {
             "STA:0xH04A1=1::CAN:0=1::SUB:0xH04A1=0::VAL:A:b0x 3214*10000_M:b0x 3216",
             "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHF04C*1000000_A:b0xHF04D*10000_A:b0xHF04E*100_M:b0xHF04F",
             "STA:0xH0053=1::CAN:0=1::SUB:0xH0053=0::VAL:A:b0x 0810*10000_M:b0x 0812",
+            "STA:0xH00B0=1::CAN:0=1::SUB:0xH00B0=0::VAL:b0x 0104",
+            "STA:0xH00A0=1::CAN:0=1::SUB:0xH00A0=0::VAL:b0x 0104",
+            "STA:0xH00DE=1::CAN:0=1::SUB:0xH00DE=2::VAL:A:b0x 00DA*10000_M:b0x 00DC",
+            "STA:0xH26E4=1::CAN:0=1::SUB:0xH26E4=0::VAL:A:0x 7058*65536_M:0x 705A",
         ];
         for def in defs {
             LeaderboardEngine::new(def).unwrap_or_else(|e| panic!("Falló {def}: {e}"));
