@@ -514,6 +514,7 @@ fun MainShellScreen(
                 onOpenUserProfile = { uid ->
                     overlayStack = overlayStack + AppOverlay.PublicProfile(uid)
                 },
+                onOpenGameDetail = openGameDetail,
                 onLeave = { reason ->
                     overlayStack = emptyList()
                     activeRoom = null

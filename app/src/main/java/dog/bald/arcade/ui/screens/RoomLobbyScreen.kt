@@ -135,6 +135,7 @@ fun RoomLobbyScreen(
     myAvatarSeed: String? = null,
     hasActiveOverlay: Boolean = false,
     onOpenUserProfile: (String) -> Unit = {},
+    onOpenGameDetail: (GameDto) -> Unit = {},
     onLeave: (String?) -> Unit,
     onStartMatch: suspend (room: RoomDto, mySlot: Int) -> Result<Unit>,
 ) {
@@ -680,6 +681,7 @@ fun RoomLobbyScreen(
                     fontSize = 15.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = if (game != null) Modifier.clickable { onOpenGameDetail(game) } else Modifier,
                 )
 
                 Row(
