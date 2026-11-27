@@ -388,3 +388,17 @@ Al agregar nuevos juegos al catálogo (`public.games`), ejecuta el seeder para p
 ## Protocolo de Replays (`.bsv.zst` + `.bsv.gz`)
 - Todo replay nuevo se exporta y sube en formato **Zstandard** (`.bsv.zst`, `application/zstd`) desde `balddog-core` y `ArcadeRepository`.
 - La lectura/verificación (`ReplayPlayer::from_compressed_bytes`, `verify_replay`, Supabase Storage RLS `049_support_zstd_replays.sql`) debe mantener compatibilidad retroactiva con replays `.bsv.gz` mediante detección por *magic bytes*.
+
+---
+
+## Protocolo Obligatorio: Reinicio de Estadísticas y Replays
+
+Cuando el usuario solicite reiniciar, limpiar o poner en cero las estadísticas de juegos y jugadores (descargas, tiempo jugado, replays, récords, historial de partidas, salas o cola de matchmaking):
+
+1. **Skill y documentación:** Consulta `.agents/skills/reset-arcade-stats/SKILL.md` y [docs/DATABASE_MAINTENANCE.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/DATABASE_MAINTENANCE.md).
+2. **Ejecución programática (con `BypassSandbox: true`):**
+   ```bash
+   python3 scripts/reset-arcade-stats.py --yes
+   ```
+   *(Usa `--dry-run` si solo necesitas inspeccionar los conteos previos sin modificar datos).*
+3. **Invariante:** El script vacía el bucket `replays` en Storage, trunca las tablas de actividad (`high_scores`, `match_history`, `user_game_stats`, `matchmaking_queue`, `rooms`, `room_messages`, `room_session_snapshots`) y reinicia a `0` los contadores en `public.games` y `public.profiles`, **preservando** el catálogo de juegos y las cuentas de usuario.
