@@ -16,6 +16,10 @@ Toda la instrumentación de trazas personalizadas pasa por [`PerformanceHelper.k
 | :--- | :--- | :--- |
 | `rom_startup_trace` | Medir el tiempo de inicialización del juego y motor Libretro/FBNeo. | `rom_slug`, `mode` |
 | `netplay_sync_trace` | Medir el tiempo de sincronización P2P/GGRS hasta alcanzar `SessionState::Running`. | `rom_slug`, `mode` |
+| `matchmaking_enqueue_rpc` | Medir la latencia de la RPC `find_or_enqueue_match`. | `rom_slug`, `result_status`, `source` |
+| `matchmaking_wait_to_match` | Medir el tiempo total en cola hasta recibir el `room_id` por Realtime/poll. | `rom_slug`, `via` |
+| `matchmaking_stats_fetch` | Medir la latencia de `get_matchmaking_stats()`. | — |
+| `deeplink_room_join` | Medir la resolución y validación de ingreso vía Link Mágico / QR. | `outcome` |
 
 ## Verificación en Logcat
 

@@ -179,3 +179,19 @@ I balddog: Primer frame de emulación renderizado: 384x224
 ### Paso 3: Matriz de Pruebas Recomendadas
 - **Prueba 1 (Misma Wi-Fi):** Ambos celulares en la misma red local. Verifica que el resolver seleccione automáticamente los candidatos LAN (`192.168.x.x`).
 - **Prueba 2 (Redes Cruzadas):** Un celular en Wi-Fi y otro en Datos Móviles (4G/5G). Verifica que el resolver seleccione los endpoints públicos STUN (WAN).
+
+---
+
+## Emparejamiento Rápido, Relleno de Salas, Baneos y Links Mágicos (`048`)
+
+1. **Cola atómica y relleno (`find_or_enqueue_match`):**
+   - Prioriza el relleno (*backfill*) de salas públicas en `waiting` con actividad reciente (`< 2 min`), excluyendo salas donde el usuario esté en `banned_user_ids` y ordenando por `player_count DESC, created_at ASC` con `FOR UPDATE SKIP LOCKED`.
+   - Si no hay sala disponible, empareja al usuario con otro jugador activo en `public.matchmaking_queue` (`< 90 s` desde el último heartbeat) o realiza upsert de 1 búsqueda activa por `user_id`.
+2. **Promoción automática de anfitrión y cierre de salas vacías (`update_room_slot`):**
+   - Al salir el anfitrión (`leave`) en `waiting`, promueve al siguiente jugador sentado como `host_id` y `ready = true`. Si la sala queda con 0 jugadores, pasa automáticamente a `closed`.
+3. **Baneo por sala (`ban_room_player`):**
+   - Solo el anfitrión puede banear jugadores en `waiting`, eliminando su slot, borrando sus `room_messages` en esa sala y bloqueando su reingreso mediante `banned_user_ids`.
+4. **Métricas en vivo (`get_matchmaking_stats`) y Links Mágicos (`get_public_open_rooms`):**
+   - `MainShellScreen` consulta `get_matchmaking_stats()` cada 12s en la pestaña Salas.
+   - `AndroidManifest.xml` y `MainActivity` soportan Android App Links (`https://bald.dog/room/<uuid>` y `balddog://room/<uuid>`) validados con `MatchmakingPolicy`.
+   - `RoomLobbyScreen` descarga automáticamente BIOS + ROM en segundo plano mostrando una barra de avance en el botón **"MARCAR LISTO"**.

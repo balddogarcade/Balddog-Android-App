@@ -19,6 +19,12 @@ Toda la instrumentación pasa por [`AnalyticsHelper.kt`](../app/src/main/java/do
 | `netplay_room_created` | `rom_slug` | `AnalyticsHelper.logNetplayRoomCreated()` |
 | `netplay_room_joined` | `rom_slug` | `AnalyticsHelper.logNetplayRoomJoined()` |
 | `leaderboard_score_submit` | `rom_slug`, `score`, `credits_used` | `AnalyticsHelper.logLeaderboardSubmit()` |
+| `matchmaking_started` | `rom_slug` | `AnalyticsHelper.logMatchmakingStarted()` |
+| `matchmaking_matched` | `rom_slug`, `source` (`backfill`, `queue`), `wait_time_sec` | `AnalyticsHelper.logMatchmakingMatched()` |
+| `matchmaking_cancelled` | `rom_slug`, `wait_time_sec`, `reason` | `AnalyticsHelper.logMatchmakingCancelled()` |
+| `matchmaking_failed` | `rom_slug`, `error_type` | `AnalyticsHelper.logMatchmakingFailed()` |
+| `room_player_banned` | `rom_slug` | `AnalyticsHelper.logRoomPlayerBanned()` |
+| `room_deeplink_opened` | `room_id_present`, `outcome` | `AnalyticsHelper.logRoomDeepLinkOpened()` |
 
 ## Verificación en Tiempo Real (DebugView)
 

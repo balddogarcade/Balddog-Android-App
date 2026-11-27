@@ -368,3 +368,11 @@ Al agregar nuevos juegos al catálogo (`public.games`), ejecuta el seeder para p
    - `scripts/verify-replays-worker.py` descarga bajo demanda las ROMs faltantes desde `public.games.rom_url` y audita con `ONCE=1`.
    - Requiere `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` configurados en GitHub Secrets.
 3. **Referencia:** Consultar [docs/REPLAY_VERIFICATION.md](file:///media/carlos/DATA1/DEV/Balddog-Android-App/docs/REPLAY_VERIFICATION.md).
+
+---
+
+## Protocolo: Emparejamiento Rápido, Baneos y App Links (`048`)
+
+- **Cola y Backfill (`find_or_enqueue_match`):** Siempre priorizar el relleno de salas públicas `waiting` (`player_count DESC, created_at ASC`, excluyendo `banned_user_ids`) antes de crear salas nuevas desde `matchmaking_queue`.
+- **Invariante de Privacidad Web (`get_public_open_rooms`):** Nunca exponer IPs (`endpoint`, `local_ip`, `host_endpoint`) ni correos en RPCs anónimos; solo `room_id`, `code`, datos del juego y `username` + `avatar_seed`.
+- **App Links (`https://bald.dog/room/<uuid>`):** Mantener `assetlinks.json` sincronizado con el SHA-256 del keystore de release en `Balddog-Main-Webpage/public/.well-known/assetlinks.json`.

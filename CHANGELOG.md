@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved replay seeking UX with an in-memory keyframe cache (`ReplayKeyframeCache` every 300 frames, up to 60 states) in `balddog-core` for faster forward/backward jumps, plus an `Avanzando...` progress indicator in `ReplayHudOverlay` while seeking is active.
 
 ### Added
+- Quick Matchmaking system (`048_matchmaking_and_room_bans.sql`, `QuickMatchmakingCard`, `MatchmakingPolicy`) with atomic public `waiting`-room backfill (prioritizing most populated, then oldest), 25s heartbeat, Supabase Realtime + fallback queue matching, floating `MatchmakingMiniBanner` across tabs, and `GameDetailScreen` quick-match shortcut.
+- Live matchmaking and active-player metrics (`get_matchmaking_stats()`) refreshed every 12s in the Rooms tab and displayed alphabetically per game.
+- Per-room host ban support (`ban_room_player` RPC + `banned_user_ids`), automatic host promotion on waiting-room leave, automatic closing of empty rooms, and automatic background BIOS+ROM download with progress bar on the Lobby Ready button.
+- Android App Links (`https://bald.dog/room/<uuid>` and `balddog://room/<uuid>`) with eligibility checks, room-switch confirmation, and Firebase Analytics/Crashlytics/Performance instrumentation.
 - Global navigation links to `GameDetailScreen` from the game catalog (`ArcadeGameCard`), `RankingsScreen`, `GameRankingScreen`, `ProfileScreen`, `PublicProfileScreen`, and `RoomLobbyScreen` whenever a game cover or title is tapped.
 - Automated serverless replay verification pipeline via GitHub Actions (`.github/workflows/verify-replays.yml`), Linux deterministic FBNeo build script (`scripts/build-fbneo-linux.sh`), and on-demand ROM fetching in `scripts/verify-replays-worker.py`.
 - Comprehensive replay verification architecture and operations guide in `docs/REPLAY_VERIFICATION.md`.
