@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-27
+
 ### Added
 - Certified 1CC `rcheevos` leaderboard `score_config` expressions (`043_seed_tmnt_snowbro2_pbobble_score_configs.sql`) and lifecycle unit tests in `leaderboard.rs` for *TMNT: Turtles in Time* (`tmnt2`: `0x00B0` / `b0x 0104`), *Teenage Mutant Ninja Turtles* (`tmnt`: `0x00A0` / `b0x 0104`), *Snow Bros. 2: With New Elves* (`snowbro2`: `0x00DE` / `0x00DA..0x00DC`), and *Puzzle Bobble / Bust-A-Move* (`pbobble`: `0x26E4` / `0x7058..0x705A`), verified against headless `.bsv.gz` replays with `verify_replay`.
 
@@ -95,6 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - P2P Netplay with GGRS rollback, dual-candidate endpoint resolution, and voice chat.
 - 1CC leaderboards, replay recording/playback, and Firebase Crashlytics NDK diagnostics.
 
-[Unreleased]: https://github.com/balddogarcade/Balddog-Android-App/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/balddogarcade/Balddog-Android-App/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.4.0
+[0.3.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.3.0
 [0.2.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.2.0
 [0.1.0]: https://github.com/balddogarcade/Balddog-Android-App/releases/tag/v0.1.0
