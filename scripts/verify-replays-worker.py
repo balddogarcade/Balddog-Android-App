@@ -214,7 +214,8 @@ def verify_item(
 
     with tempfile.TemporaryDirectory(prefix="balddog_verify_") as tmp:
         tmp_dir = Path(tmp)
-        local_replay = tmp_dir / "replay.bsv.gz"
+        ext = ".bsv.zst" if replay_path.endswith(".bsv.zst") else ".bsv.gz"
+        local_replay = tmp_dir / f"replay{ext}"
         try:
             download_replay(base_url, service_key, replay_path, local_replay)
         except Exception as e:
