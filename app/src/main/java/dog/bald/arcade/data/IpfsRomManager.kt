@@ -1,6 +1,8 @@
 package dog.bald.arcade.data
 
 import android.content.Context
+import dog.bald.arcade.diagnostics.CrashlyticsHelper
+import dog.bald.arcade.diagnostics.PerformanceHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -96,7 +98,8 @@ class IpfsRomManager(context: Context) {
             val shaOk = expectedSha256.isBlank() || actualSha.equals(expectedSha256.trim(), ignoreCase = true)
             val crcOk = expectedCrc32.isBlank() || actualCrc.equals(expectedCrc32.trim(), ignoreCase = true)
             shaOk && crcOk
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            CrashlyticsHelper.logIpfsError(file.name, "local_verify", t)
             false
         }
     }
@@ -174,66 +177,83 @@ class IpfsRomManager(context: Context) {
     ) {
         val tmpFile = File(destFile.parentFile, "${destFile.name}.${UUID.randomUUID()}.tmp")
         var lastError: Throwable? = null
+        val trace = PerformanceHelper.startTrace("ipfs_rom_download_trace")
+        var attempts = 0L
+        var downloadedBytes = 0L
+        var outcome = "error"
 
-        for (gw in gateways) {
-            tmpFile.delete()
-            val url = "$gw$cid"
-            try {
-                val request = Request.Builder().url(url).build()
-                client.newCall(request).execute().use { resp ->
-                    if (!resp.isSuccessful) {
-                        throw RomIntegrityException("HTTP ${resp.code} en gateway IPFS")
-                    }
-                    val body = resp.body ?: throw RomIntegrityException("Respuesta vacía de IPFS")
-                    val contentLen = body.contentLength().takeIf { it > 0 } ?: expectedBytes
+        try {
+            for (gw in gateways) {
+                attempts++
+                tmpFile.delete()
+                val url = "$gw$cid"
+                try {
+                    val request = Request.Builder().url(url).build()
+                    client.newCall(request).execute().use { resp ->
+                        if (!resp.isSuccessful) {
+                            throw RomIntegrityException("HTTP ${resp.code} en gateway IPFS")
+                        }
+                        val body = resp.body ?: throw RomIntegrityException("Respuesta vacía de IPFS")
+                        val contentLen = body.contentLength().takeIf { it > 0 } ?: expectedBytes
 
-                    val sha = MessageDigest.getInstance("SHA-256")
-                    val crc = CRC32()
-                    val buf = ByteArray(64 * 1024)
-                    var totalRead = 0L
+                        val sha = MessageDigest.getInstance("SHA-256")
+                        val crc = CRC32()
+                        val buf = ByteArray(64 * 1024)
+                        var totalRead = 0L
 
-                    body.byteStream().use { input ->
-                        FileOutputStream(tmpFile).use { out ->
-                            while (true) {
-                                val read = input.read(buf)
-                                if (read <= 0) break
-                                out.write(buf, 0, read)
-                                sha.update(buf, 0, read)
-                                crc.update(buf, 0, read)
-                                totalRead += read
-                                if (contentLen > 0) {
-                                    onProgress((totalRead.toFloat() / contentLen.toFloat()).coerceIn(0f, 1f))
+                        body.byteStream().use { input ->
+                            FileOutputStream(tmpFile).use { out ->
+                                while (true) {
+                                    val read = input.read(buf)
+                                    if (read <= 0) break
+                                    out.write(buf, 0, read)
+                                    sha.update(buf, 0, read)
+                                    crc.update(buf, 0, read)
+                                    totalRead += read
+                                    if (contentLen > 0) {
+                                        onProgress((totalRead.toFloat() / contentLen.toFloat()).coerceIn(0f, 1f))
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    val actualSha256 = sha.digest().joinToString("") { "%02x".format(it) }
-                    val actualCrc32 = "%08x".format(crc.value)
+                        val actualSha256 = sha.digest().joinToString("") { "%02x".format(it) }
+                        val actualCrc32 = "%08x".format(crc.value)
 
-                    if (expectedSha256.isNotBlank() && !actualSha256.equals(expectedSha256.trim(), ignoreCase = true)) {
-                        tmpFile.delete()
-                        throw RomIntegrityException("SHA256 inválido para ${destFile.name}")
-                    }
-                    if (expectedCrc32.isNotBlank() && !actualCrc32.equals(expectedCrc32.trim(), ignoreCase = true)) {
-                        tmpFile.delete()
-                        throw RomIntegrityException("CRC32 inválido para ${destFile.name}")
-                    }
+                        if (expectedSha256.isNotBlank() && !actualSha256.equals(expectedSha256.trim(), ignoreCase = true)) {
+                            tmpFile.delete()
+                            throw RomIntegrityException("SHA256 inválido para ${destFile.name}")
+                        }
+                        if (expectedCrc32.isNotBlank() && !actualCrc32.equals(expectedCrc32.trim(), ignoreCase = true)) {
+                            tmpFile.delete()
+                            throw RomIntegrityException("CRC32 inválido para ${destFile.name}")
+                        }
 
-                    if (destFile.exists()) destFile.delete()
-                    if (!tmpFile.renameTo(destFile)) {
-                        tmpFile.copyTo(destFile, overwrite = true)
-                        tmpFile.delete()
+                        if (destFile.exists()) destFile.delete()
+                        if (!tmpFile.renameTo(destFile)) {
+                            tmpFile.copyTo(destFile, overwrite = true)
+                            tmpFile.delete()
+                        }
+                        downloadedBytes = totalRead
+                        outcome = "success"
+                        CrashlyticsHelper.logIpfsEvent(destFile.name, "download_ok", gw, "bytes=$totalRead")
+                        onProgress(1f)
+                        return
                     }
-                    onProgress(1f)
-                    return
+                } catch (t: Throwable) {
+                    tmpFile.delete()
+                    lastError = t
+                    CrashlyticsHelper.logIpfsError(destFile.name, gw, t)
                 }
-            } catch (t: Throwable) {
-                tmpFile.delete()
-                lastError = t
             }
-        }
 
-        throw lastError ?: RomIntegrityException("No se pudo descargar desde ningún gateway IPFS")
+            throw lastError ?: RomIntegrityException("No se pudo descargar desde ningún gateway IPFS")
+        } finally {
+            PerformanceHelper.stopTrace(
+                trace,
+                attributes = mapOf("rom_file" to destFile.name, "outcome" to outcome),
+                metrics = mapOf("bytes_downloaded" to downloadedBytes, "gateway_attempts" to attempts),
+            )
+        }
     }
 }

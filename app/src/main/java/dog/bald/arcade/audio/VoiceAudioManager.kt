@@ -96,7 +96,8 @@ class VoiceAudioManager internal constructor(
                         AudioFormat.ENCODING_PCM_16BIT,
                         minBufBytes,
                     )
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    dog.bald.arcade.diagnostics.CrashlyticsHelper.logNetError("voice_audio_capture", t)
                     return null
                 }
 
@@ -181,7 +182,8 @@ class VoiceAudioManager internal constructor(
                         .setTransferMode(AudioTrack.MODE_STREAM)
                         .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                         .build()
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    dog.bald.arcade.diagnostics.CrashlyticsHelper.logNetError("voice_audio_capture", t)
                     return null
                 }
 

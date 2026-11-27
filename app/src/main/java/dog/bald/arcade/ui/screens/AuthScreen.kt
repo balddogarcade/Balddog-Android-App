@@ -239,6 +239,10 @@ fun AuthScreen(
                                     onAuthenticated()
                                 }
                             } catch (t: Throwable) {
+                                dog.bald.arcade.diagnostics.CrashlyticsHelper.logAuthError(
+                                    if (isRecovery) "recovery" else if (isRegister) "email_signup" else "email_signin",
+                                    t,
+                                )
                                 val msg = t.toUserMessage("Error de autenticación")
                                 if (isRegister && msg.contains("verifica tu correo", ignoreCase = true)) {
                                     needsEmailVerification = true
@@ -283,6 +287,7 @@ fun AuthScreen(
                                     repo.resendVerificationEmail(email)
                                     infoMsg = "Correo de verificación reenviado."
                                 } catch (t: Throwable) {
+                                    dog.bald.arcade.diagnostics.CrashlyticsHelper.logAuthError("resend_verification", t)
                                     errorMsg = t.toUserMessage("No se pudo reenviar el correo")
                                 } finally {
                                     loading = false
@@ -314,6 +319,7 @@ fun AuthScreen(
                                     repo.signInWithGoogle()
                                     dog.bald.arcade.diagnostics.AnalyticsHelper.logAuthEvent("google", isSignUp = false)
                                 } catch (t: Throwable) {
+                                    dog.bald.arcade.diagnostics.CrashlyticsHelper.logAuthError("google_oauth", t)
                                     awaitingGoogleOAuth = false
                                     loading = false
                                     infoMsg = null

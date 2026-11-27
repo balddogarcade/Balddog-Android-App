@@ -1,6 +1,8 @@
 package dog.bald.arcade.ui.game
 
 import android.content.Context
+import dog.bald.arcade.diagnostics.CrashlyticsHelper
+import dog.bald.arcade.diagnostics.PerformanceHelper
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -38,6 +40,10 @@ object ReplayVideoExporter {
             var encoderStarted = false
             var muxer: MediaMuxer? = null
             var muxerStarted = false
+
+            val trace = PerformanceHelper.startTrace("replay_video_export_trace")
+            var exportOutcome = "error"
+            var exportedFrames = 0L
 
             try {
                 openOfflineReplayRenderer(
@@ -174,13 +180,22 @@ object ReplayVideoExporter {
                     }
 
                     val savedName = MediaExportHelper.saveMp4ToGallery(context, outTmp, gameTitle).getOrThrow()
+                    exportOutcome = "success"
+                    exportedFrames = totalFrames
                     Result.success(savedName)
                 }
             } catch (ce: CancellationException) {
+                exportOutcome = "cancelled"
                 throw ce
             } catch (t: Throwable) {
+                CrashlyticsHelper.logMediaExportError("replay_video", gameTitle, t)
                 Result.failure(t)
             } finally {
+                PerformanceHelper.stopTrace(
+                    trace,
+                    attributes = mapOf("game_title" to gameTitle, "outcome" to exportOutcome),
+                    metrics = mapOf("frames_exported" to exportedFrames),
+                )
                 if (muxerStarted) {
                     muxerStarted = false
                     runCatching { muxer?.stop() }

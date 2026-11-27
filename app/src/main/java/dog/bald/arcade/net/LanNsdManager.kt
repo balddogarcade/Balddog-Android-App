@@ -327,7 +327,8 @@ class LanNsdManager internal constructor(
                 try {
                     gateway.resolveService(next, resolveListener)
                     true
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    dog.bald.arcade.diagnostics.CrashlyticsHelper.logNetError("lan_nsd_resolve", t)
                     false
                 }
 

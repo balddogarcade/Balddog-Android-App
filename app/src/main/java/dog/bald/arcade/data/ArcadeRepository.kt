@@ -132,9 +132,11 @@ class ArcadeRepository(
     }
 
     suspend fun fetchGames(): List<GameDto> =
-        client.from("games").select().decodeList<GameDto>().also {
-            dog.bald.arcade.ui.components.CoverUrlRegistry
-                .registerAll(it)
+        PerformanceHelper.measureTraceSuspend("catalog_fetch_trace") {
+            client.from("games").select().decodeList<GameDto>().also {
+                dog.bald.arcade.ui.components.CoverUrlRegistry
+                    .registerAll(it)
+            }
         }
 
     suspend fun fetchBios(): List<GameBiosDto> = client.from("game_bios").select().decodeList<GameBiosDto>()
@@ -184,44 +186,58 @@ class ArcadeRepository(
         avatarSeed: String? = null,
     ): RoomDto {
         val uid = currentUserId() ?: throw IllegalStateException("Usuario no autenticado")
+        val trace = PerformanceHelper.startTrace("room_create_trace")
         var lastException: Throwable? = null
-        for (attempt in 1..5) {
-            val code = (1000..9999).random(Random).toString() + ('A'..'Z').random(Random)
-            val initialSlots =
-                mapOf(
-                    "0" to
-                        RoomSlotInfo(
-                            userId = uid,
-                            username = username,
-                            endpoint = endpoint,
-                            voiceEndpoint = voiceEndpoint?.ifBlank { null },
-                            ready = true,
-                            avatarSeed = avatarSeed?.ifBlank { null },
-                        ),
-                )
-            val payload =
-                buildJsonObject {
-                    put("code", code)
-                    put("host_id", uid)
-                    put("game_id", gameId)
-                    put("mode", mode)
-                    put("status", "waiting")
-                    put("max_players", maxPlayers.coerceIn(2, 4))
-                    put("slots_json", Json.encodeToJsonElement(initialSlots))
-                    put("host_endpoint", endpoint)
-                    put("is_private", isPrivate)
-                    if (localIp != null) put("local_ip", localIp)
-                    if (localPort != null) put("local_port", localPort)
+        var outcome = "error"
+        try {
+            for (attempt in 1..5) {
+                val code = (1000..9999).random(Random).toString() + ('A'..'Z').random(Random)
+                val initialSlots =
+                    mapOf(
+                        "0" to
+                            RoomSlotInfo(
+                                userId = uid,
+                                username = username,
+                                endpoint = endpoint,
+                                voiceEndpoint = voiceEndpoint?.ifBlank { null },
+                                ready = true,
+                                avatarSeed = avatarSeed?.ifBlank { null },
+                            ),
+                    )
+                val payload =
+                    buildJsonObject {
+                        put("code", code)
+                        put("host_id", uid)
+                        put("game_id", gameId)
+                        put("mode", mode)
+                        put("status", "waiting")
+                        put("max_players", maxPlayers.coerceIn(2, 4))
+                        put("slots_json", Json.encodeToJsonElement(initialSlots))
+                        put("host_endpoint", endpoint)
+                        put("is_private", isPrivate)
+                        if (localIp != null) put("local_ip", localIp)
+                        if (localPort != null) put("local_port", localPort)
+                    }
+                try {
+                    val created =
+                        client
+                            .from("rooms")
+                            .insert(payload) {
+                                select()
+                            }.decodeSingle<RoomDto>()
+                    outcome = "success"
+                    return created
+                } catch (t: Throwable) {
+                    lastException = t
                 }
-            try {
-                return client
-                    .from("rooms")
-                    .insert(payload) {
-                        select()
-                    }.decodeSingle<RoomDto>()
-            } catch (t: Throwable) {
-                lastException = t
             }
+            lastException?.let { CrashlyticsHelper.recordNonFatal(it) }
+            throw lastException ?: IllegalStateException("No se pudo crear la sala")
+        } finally {
+            PerformanceHelper.stopTrace(
+                trace,
+                attributes = mapOf("mode" to mode, "outcome" to outcome),
+            )
         }
         throw lastException ?: IllegalStateException("No se pudo crear la sala")
     }
@@ -398,6 +414,8 @@ class ArcadeRepository(
         val endpoint = "${BuildConfig.SUPABASE_URL.trimEnd('/')}/storage/v1/object/replays/$objectPath"
 
         return withContext(Dispatchers.IO) {
+            val trace = PerformanceHelper.startTrace("replay_upload_trace")
+            var outcome = "error"
             val conn =
                 (URL(endpoint).openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
@@ -412,6 +430,7 @@ class ArcadeRepository(
                 conn.outputStream.use { it.write(bytes) }
                 val code = conn.responseCode
                 if (code in 200..299) {
+                    outcome = "success"
                     Triple(objectPath, bytes.size, sha256)
                 } else {
                     val errBody =
@@ -419,10 +438,19 @@ class ArcadeRepository(
                             conn.errorStream?.bufferedReader()?.use { it.readText() }
                         }.getOrNull().orEmpty()
                     android.util.Log.w("BaldDogReplay", "uploadReplay failed HTTP $code: $errBody")
+                    CrashlyticsHelper.log("uploadReplay failed HTTP $code for game=$gameId")
                     null
                 }
+            } catch (t: Throwable) {
+                CrashlyticsHelper.recordNonFatal(t)
+                null
             } finally {
                 conn.disconnect()
+                PerformanceHelper.stopTrace(
+                    trace,
+                    attributes = mapOf("game_id" to gameId, "outcome" to outcome),
+                    metrics = mapOf("bytes_uploaded" to bytes.size.toLong()),
+                )
             }
         }
     }

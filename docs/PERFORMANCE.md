@@ -20,6 +20,12 @@ Toda la instrumentación de trazas personalizadas pasa por [`PerformanceHelper.k
 | `matchmaking_wait_to_match` | Medir el tiempo total en cola hasta recibir el `room_id` por Realtime/poll. | `rom_slug`, `via` |
 | `matchmaking_stats_fetch` | Medir la latencia de `get_matchmaking_stats()`. | — |
 | `deeplink_room_join` | Medir la resolución y validación de ingreso vía Link Mágico / QR. | `outcome` |
+| `ipfs_rom_download_trace` | Medir descarga y verificación SHA-256/CRC32 de ROMs/BIOS desde IPFS. | `rom_file`, `outcome` (+ métricas `bytes_downloaded`, `gateway_attempts`) |
+| `exit_sync_trace` | Medir la espera de sincronización de scores/replays al salir de partida. | `outcome` (+ métrica `jobs_count`) |
+| `catalog_fetch_trace` | Medir la carga inicial del catálogo de juegos desde Supabase. | — |
+| `room_create_trace` | Medir la creación de sala multijugador en Supabase. | `mode`, `outcome` |
+| `replay_upload_trace` | Medir la subida de archivos `.bsv.gz` a Supabase Storage. | `game_id`, `outcome` (+ métrica `bytes_uploaded`) |
+| `replay_video_export_trace` | Medir la exportación offline de replay a MP4 con `MediaCodec`. | `game_title`, `outcome` (+ métrica `frames_exported`) |
 
 ## Verificación en Logcat
 
