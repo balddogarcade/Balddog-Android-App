@@ -482,32 +482,41 @@ mod tests {
     #[test]
     fn evaluates_snowbros_lifecycle_leaderboard() {
         let mut engine = LeaderboardEngine::new(
-            "STA:0xH0036=1::CAN:0=1::SUB:0xH0036=0::VAL:A:b0x 159E*10000_M:b0x 15A0",
+            "STA:0xH0036=1_0x 1580=0_0x 1582=0::CAN:0=1::SUB:0xH0036=0::VAL:A:b0x 1580*10000_M:b0x 1582",
         )
         .expect("snowbros lboard válido");
 
         let mut ram = vec![0u8; 32768];
-        // 1. Boot / Attract: 0x0036=0
+        // 1. Boot / Attract: aunque 0x0036 parpadee a 1 durante el test de RAM, si 0x1580..0x1583 != 0 no inicia STA
+        ram[0x0036] = 1;
+        ram[0x1580] = 0x10;
+        ram[0x1582] = 0x80;
         let out = engine.evaluate_frame(&ram);
         assert!(!out.active);
         assert_eq!(out.triggered_score, None);
 
-        // 2. Inicio de partida: 0x0036=1, puntaje=10400 (bcd4_sw @ 0x159E..0x15A1 = [0x01, 0x00, 0x00, 0x04])
-        ram[0x0036] = 1;
-        ram[0x159E] = 0x01;
-        ram[0x159F] = 0x00;
-        ram[0x15A0] = 0x00;
-        ram[0x15A1] = 0x04;
+        // 2. Inicio de partida: 0x0036=1 con puntaje inicial 0
+        ram[0x1580] = 0x00;
+        ram[0x1582] = 0x00;
         let out = engine.evaluate_frame(&ram);
         assert!(out.active);
-        assert_eq!(out.current_score, 10400);
+        assert_eq!(out.current_score, 0);
+
+        // 3. Progreso en partida: puntaje=10450 (bcd4_sw @ 0x1580..0x1583 = [0x01, 0x00, 0x50, 0x04])
+        ram[0x1580] = 0x01;
+        ram[0x1581] = 0x00;
+        ram[0x1582] = 0x50;
+        ram[0x1583] = 0x04;
+        let out = engine.evaluate_frame(&ram);
+        assert!(out.active);
+        assert_eq!(out.current_score, 10450);
         assert_eq!(out.triggered_score, None);
 
-        // 3. Game Over / Continue: 0x0036=0 -> dispara SUB con 10400
+        // 4. Game Over / Continue: 0x0036=0 -> dispara SUB con 10450
         ram[0x0036] = 0;
         let out = engine.evaluate_frame(&ram);
         assert!(!out.active);
-        assert_eq!(out.triggered_score, Some(10400));
+        assert_eq!(out.triggered_score, Some(10450));
     }
 
     #[test]
