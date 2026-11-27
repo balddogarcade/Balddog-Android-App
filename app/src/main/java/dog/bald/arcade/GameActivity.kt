@@ -1535,10 +1535,7 @@ class GameActivity : ComponentActivity() {
                         "INFO",
                         "submit_high_score resp: accepted=${dto.accepted} new=${dto.isNewRecord} rank=${dto.rank} reason=${dto.reason}",
                     )
-                    if (notifyUi && !isFinishing && !isDestroyed && dto.accepted && dto.isNewRecord) {
-                        val rankText = dto.rank?.let { " · Puesto #$it" }.orEmpty()
-                        voiceNoticeMsg = "¡Nuevo récord personal: $score$rankText!"
-                    } else if (!dto.accepted) {
+                    if (!dto.accepted) {
                         Log.w("BaldDogScore", "Score rechazado por servidor: ${dto.reason}")
                     }
                 } else {
