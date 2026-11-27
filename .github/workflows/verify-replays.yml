@@ -20,7 +20,37 @@ permissions:
   contents: read
 
 jobs:
+  check-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      has_pending: ${{ steps.check.outputs.has_pending }}
+    steps:
+      - name: Check pending replay queue
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "has_pending=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          COUNT=$(curl -sS -G "${SUPABASE_URL%/}/rest/v1/high_scores" \
+            --data-urlencode "select=id" \
+            --data-urlencode "verification_status=in.(pending,verifying)" \
+            --data-urlencode "limit=1" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" | python3 -c "import sys, json; data = json.load(sys.stdin); print(len(data) if isinstance(data, list) else 0)")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pending=false" >> "$GITHUB_OUTPUT"
+          fi
+
   verify:
+    needs: check-queue
+    if: needs.check-queue.outputs.has_pending == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
