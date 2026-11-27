@@ -104,6 +104,23 @@ impl ReplayRecorder {
         file.write_all(&gz)?;
         Ok(gz.len())
     }
+
+    pub fn to_zstd_bytes(&self) -> Result<Vec<u8>, ReplayError> {
+        let raw = self.to_bsv_bytes();
+        let mut encoder = zstd::stream::write::Encoder::new(Vec::new(), 3)?;
+        encoder.write_all(&raw)?;
+        Ok(encoder.finish()?)
+    }
+
+    pub fn write_zstd_file(&self, path: &Path) -> Result<usize, ReplayError> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let zst = self.to_zstd_bytes()?;
+        let mut file = File::create(path)?;
+        file.write_all(&zst)?;
+        Ok(zst.len())
+    }
 }
 
 /// Reproduce un stream `.bsv` v1 (`BSV1`) descomprimido desde `.bsv.gz`.
@@ -161,17 +178,41 @@ impl ReplayPlayer {
         })
     }
 
-    pub fn from_gzip_bytes(
-        gz: &[u8],
+    pub fn from_compressed_bytes(
+        data: &[u8],
         expected_rom_crc32: Option<u32>,
     ) -> Result<Self, ReplayError> {
-        let mut decoder = GzDecoder::new(gz).take((MAX_DECOMPRESSED_BSV_BYTES + 1) as u64);
-        let mut raw = Vec::new();
-        decoder.read_to_end(&mut raw)?;
+        let raw = if data.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
+            let mut decoder = zstd::stream::read::Decoder::new(data)?
+                .take((MAX_DECOMPRESSED_BSV_BYTES + 1) as u64);
+            let mut buf = Vec::new();
+            decoder.read_to_end(&mut buf)?;
+            buf
+        } else if data.starts_with(&[0x1F, 0x8B]) {
+            let mut decoder = GzDecoder::new(data).take((MAX_DECOMPRESSED_BSV_BYTES + 1) as u64);
+            let mut buf = Vec::new();
+            decoder.read_to_end(&mut buf)?;
+            buf
+        } else if data.starts_with(&BSV_MAGIC) {
+            if data.len() > MAX_DECOMPRESSED_BSV_BYTES {
+                return Err(ReplayError::InvalidHeader);
+            }
+            return Self::from_bsv_bytes(data, expected_rom_crc32);
+        } else {
+            return Err(ReplayError::InvalidHeader);
+        };
+
         if raw.len() > MAX_DECOMPRESSED_BSV_BYTES {
             return Err(ReplayError::InvalidHeader);
         }
         Self::from_bsv_bytes(&raw, expected_rom_crc32)
+    }
+
+    pub fn from_gzip_bytes(
+        gz: &[u8],
+        expected_rom_crc32: Option<u32>,
+    ) -> Result<Self, ReplayError> {
+        Self::from_compressed_bytes(gz, expected_rom_crc32)
     }
 
     pub fn from_gzip_file_strict(
@@ -290,6 +331,38 @@ mod tests {
         let file_crc_2 = compute_file_crc32(&manifest_path).unwrap();
         assert_ne!(file_crc_1, 0);
         assert_eq!(file_crc_1, file_crc_2);
+    }
+
+    #[test]
+    fn roundtrip_bsv_zstd_compression_and_dual_playback() {
+        let mut rec = ReplayRecorder::new(0xCAFE_BABE);
+        for i in 0..3600u16 {
+            let mask = if i % 60 < 10 { 0x0081 } else { 0x0000 };
+            rec.push_frame([mask, 0, 0, 0]);
+        }
+        let zst = rec.to_zstd_bytes().expect("zstd encode");
+        assert!(zst.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]));
+        assert!(
+            zst.len() < 1500,
+            "zstd debe comprimir fuertemente (len={})",
+            zst.len()
+        );
+
+        let mut player =
+            ReplayPlayer::from_compressed_bytes(&zst, Some(0xCAFE_BABE)).expect("zstd decode");
+        assert_eq!(player.total_frames(), 3600);
+        assert_eq!(player.next_frame(), Some([0x0081, 0, 0, 0]));
+
+        // También debe aceptar gzip y BSV1 crudo
+        let gz = rec.to_gzip_bytes().expect("gzip encode");
+        let player_gz =
+            ReplayPlayer::from_compressed_bytes(&gz, Some(0xCAFE_BABE)).expect("gzip decode");
+        assert_eq!(player_gz.total_frames(), 3600);
+
+        let raw = rec.to_bsv_bytes();
+        let player_raw =
+            ReplayPlayer::from_compressed_bytes(&raw, Some(0xCAFE_BABE)).expect("raw decode");
+        assert_eq!(player_raw.total_frames(), 3600);
     }
 
     #[test]

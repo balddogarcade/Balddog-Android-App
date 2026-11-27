@@ -759,10 +759,21 @@ impl EmulationSession {
                             }
                             SessionCommand::ExportReplay { path, ack } => {
                                 let res = match recorder.as_ref() {
-                                    Some(rec) => rec
-                                        .write_gzip_file(&path)
-                                        .map(|bytes| bytes as u64)
-                                        .map_err(|e| CoreError::State(format!("Error exportando replay: {e}"))),
+                                    Some(rec) => {
+                                        let use_gzip = path
+                                            .extension()
+                                            .and_then(|e| e.to_str())
+                                            .map(|e| e.eq_ignore_ascii_case("gz"))
+                                            .unwrap_or(false);
+                                        let write_res = if use_gzip {
+                                            rec.write_gzip_file(&path)
+                                        } else {
+                                            rec.write_zstd_file(&path)
+                                        };
+                                        write_res
+                                            .map(|bytes| bytes as u64)
+                                            .map_err(|e| CoreError::State(format!("Error exportando replay: {e}")))
+                                    }
                                     None => Err(CoreError::State("No hay grabación de replay activa".into())),
                                 };
                                 let _ = ack.send(res);
