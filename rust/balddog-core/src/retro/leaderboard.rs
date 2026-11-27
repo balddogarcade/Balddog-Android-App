@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn evaluates_mslug3_lifecycle_leaderboard() {
         let mut engine = LeaderboardEngine::new(
-            "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHF04C*1000000_A:b0xHF04D*10000_A:b0xHF04E*100_M:b0xHF04F",
+            "STA:0xHED5C=1::CAN:0=1::SUB:0xHED5C=0::VAL:A:b0xHED19*1000000_A:b0xHED18*10000_A:b0xHED1B*100_M:b0xHED1A",
         )
         .expect("mslug3 lboard válido");
 
@@ -461,22 +461,22 @@ mod tests {
         assert!(!out.active);
         assert_eq!(out.triggered_score, None);
 
-        // 2. Inicio de partida: 0xED5C=1, puntaje=470600 ([00, 47, 06, 00])
+        // 2. Inicio de partida: 0xED5C=1, puntaje=13500 (bcd4_sw @ 0xED18: [01, 00, 00, 35])
         ram[0xED5C] = 1;
-        ram[0xF04C] = 0x00;
-        ram[0xF04D] = 0x47;
-        ram[0xF04E] = 0x06;
-        ram[0xF04F] = 0x00;
+        ram[0xED18] = 0x01;
+        ram[0xED19] = 0x00;
+        ram[0xED1A] = 0x00;
+        ram[0xED1B] = 0x35;
         let out = engine.evaluate_frame(&ram);
         assert!(out.active);
-        assert_eq!(out.current_score, 470600);
+        assert_eq!(out.current_score, 13500);
         assert_eq!(out.triggered_score, None);
 
-        // 3. Game Over / Continue: 0xED5C=0 -> dispara SUB con 470600
+        // 3. Game Over / Continue: 0xED5C=0 -> dispara SUB con 13500
         ram[0xED5C] = 0;
         let out = engine.evaluate_frame(&ram);
         assert!(!out.active);
-        assert_eq!(out.triggered_score, Some(470600));
+        assert_eq!(out.triggered_score, Some(13500));
     }
 
     #[test]
