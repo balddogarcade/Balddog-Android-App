@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added in-app **Eliminar cuenta** flow in `ProfileScreen` and legal links (`https://bald.dog/privacy`, `https://bald.dog/terms`).
 
 ### Changed
+- Redesigned the avatar card in `EditProfileDialog` by removing the redundant `"AVATAR PIXEL-ART"` / `"Generado al azar"` text block, enlarging the avatar preview (`76.dp` container / `66.dp` image), and updating the button to `"CAMBIAR AVATAR"` with a `"Genera un nuevo avatar al azar"` caption.
 - Removed the recurring in-game `"¡Nuevo récord personal: ...!"` floating notice in `GameActivity` during score submissions while keeping score submission, offline queuing, and logging intact.
 - Simplified `ArcadeGameCard` in the catalog by moving player count (`SportsEsports` icon) and ROM size (`Storage` icon) into the cover image overlay, removing the `CO-OP` badge, and leaving only the ROM title and primary action button in the card body.
 - Added immediate loading indicator (`ABRIENDO...`) and double-tap protection on the catalog **JUGAR** button (`ArcadeGameCard` / `CatalogTab`) when launching a downloaded game.

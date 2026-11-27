@@ -149,57 +149,55 @@ fun EditProfileDialog(
                             .fillMaxWidth()
                             .background(ObsidianBlack, RectangleShape)
                             .border(1.dp, CharcoalBorder, RectangleShape)
-                            .padding(10.dp),
+                            .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Box(
                         modifier =
                             Modifier
-                                .size(52.dp)
+                                .size(76.dp)
                                 .background(CarbonSurface, RectangleShape)
                                 .border(1.dp, SteelBorder, RectangleShape)
-                                .padding(4.dp),
+                                .padding(5.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         DiceBearPixelArtAvatar(
                             seed = avatarSeed,
-                            modifier = Modifier.size(44.dp),
+                            modifier = Modifier.size(66.dp),
                         )
                     }
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        OutlinedButton(
+                            enabled = !saving,
+                            onClick = { avatarSeed = randomAvatarSeed(avatarSeed) },
+                            shape = RectangleShape,
+                            border = BorderStroke(1.dp, SteelBorder),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Casino,
+                                contentDescription = null,
+                                tint = PureWhite,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "CAMBIAR AVATAR",
+                                color = PureWhite,
+                                fontFamily = JetBrainsMonoFamily,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                            )
+                        }
                         Text(
-                            text = "AVATAR PIXEL-ART",
-                            color = PureWhite,
-                            fontFamily = JetBrainsMonoFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                        )
-                        Text(
-                            text = "Generado al azar",
+                            text = "Genera un nuevo avatar al azar",
                             color = MutedGray,
                             fontSize = 11.sp,
-                        )
-                    }
-                    OutlinedButton(
-                        enabled = !saving,
-                        onClick = { avatarSeed = randomAvatarSeed(avatarSeed) },
-                        shape = RectangleShape,
-                        border = BorderStroke(1.dp, SteelBorder),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Casino,
-                            contentDescription = null,
-                            tint = PureWhite,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "ALEATORIO",
-                            color = PureWhite,
-                            fontFamily = JetBrainsMonoFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
                         )
                     }
                 }
