@@ -16,6 +16,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.PlayArrow
@@ -262,6 +268,7 @@ fun GameLeaderboardSheet(
                             val itemLaunchState = replayLaunchState?.takeIf { it.replayPath == entry.replayPath }
                             LeaderboardRow(
                                 entry = entry,
+                                gameTitle = game.title,
                                 isMe = entry.userId == currentUid,
                                 formattedScore = numberFmt.format(entry.score),
                                 onClick = { onOpenUserProfile(entry.userId) },
@@ -319,6 +326,7 @@ fun GameLeaderboardSheet(
 @Composable
 private fun LeaderboardRow(
     entry: LeaderboardEntryDto,
+    gameTitle: String = "",
     isMe: Boolean,
     formattedScore: String,
     onClick: () -> Unit = {},
@@ -432,6 +440,42 @@ private fun LeaderboardRow(
                 color = PureWhite,
             )
             if (onWatchReplay != null) {
+                if (!entry.id.isNullOrBlank()) {
+                    val clipboardManager = LocalClipboardManager.current
+                    val context = LocalContext.current
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString("https://bald.dog/replays/${entry.id}"))
+                            Toast.makeText(context, "Enlace de repetición copiado", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = "Copiar enlace de repetición",
+                            tint = SilverGray,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            shareReplayLink(
+                                context = context,
+                                replayId = entry.id,
+                                gameTitle = gameTitle,
+                                formattedScore = formattedScore,
+                            )
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = "Compartir enlace de repetición",
+                            tint = SilverGray,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

@@ -43,8 +43,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -928,6 +931,22 @@ fun formatPlayDuration(totalSeconds: Long): String {
     }
 }
 
+fun shareReplayLink(
+    context: Context,
+    replayId: String,
+    gameTitle: String,
+    formattedScore: String,
+) {
+    val url = "https://bald.dog/replays/$replayId"
+    val shareText = "¡Mira esta repetición en $gameTitle ($formattedScore pts) en bald.dog ARCADE!\n$url"
+    val sendIntent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+        }
+    context.startActivity(Intent.createChooser(sendIntent, "Compartir repetición"))
+}
+
 @Composable
 fun ProfileReplayRow(
     record: MyHighScoreDto,
@@ -938,8 +957,6 @@ fun ProfileReplayRow(
     modifier: Modifier = Modifier,
 ) {
     val numberFmt = remember { NumberFormat.getIntegerInstance(Locale.US) }
-    val sizeKb = record.replaySizeBytes?.let { (it / 1024.0) }
-    val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
     Column(
@@ -994,31 +1011,28 @@ fun ProfileReplayRow(
                         fontFamily = JetBrainsMonoFamily,
                         fontSize = 10.sp,
                     )
-                    if (sizeKb != null && sizeKb > 0) {
-                        Text(
-                            text = "• ${"%.1f".format(sizeKb)} KB",
-                            color = MutedGray,
-                            fontFamily = JetBrainsMonoFamily,
-                            fontSize = 10.sp,
-                        )
-                    }
                 }
             }
 
             if (!record.id.isNullOrBlank()) {
+                val formattedScore = numberFmt.format(record.score)
+                val gameTitle = game?.title ?: record.gameId
                 OutlinedButton(
                     onClick = {
-                        val url = "https://bald.dog/replays/${record.id}"
-                        clipboardManager.setText(AnnotatedString(url))
-                        Toast.makeText(context, "Enlace de repetición copiado", Toast.LENGTH_SHORT).show()
+                        shareReplayLink(
+                            context = context,
+                            replayId = record.id,
+                            gameTitle = gameTitle,
+                            formattedScore = formattedScore,
+                        )
                     },
                     shape = RectangleShape,
                     border = BorderStroke(1.dp, CharcoalBorder),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.ContentCopy,
-                        contentDescription = "Copiar enlace web de repetición",
+                        imageVector = Icons.Outlined.Share,
+                        contentDescription = "Compartir enlace web de repetición",
                         tint = SilverGray,
                         modifier = Modifier.size(16.dp),
                     )

@@ -20,6 +20,13 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Share
+import dog.bald.arcade.ui.components.shareReplayLink
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
@@ -454,6 +461,42 @@ fun GameRankingScreen(
                                     fontSize = 13.sp,
                                 )
                                 if (mode == "1cc" && !entry.replayPath.isNullOrBlank()) {
+                                    if (!entry.id.isNullOrBlank()) {
+                                        val clipboardManager = LocalClipboardManager.current
+                                        val context = LocalContext.current
+                                        IconButton(
+                                            onClick = {
+                                                clipboardManager.setText(AnnotatedString("https://bald.dog/replays/${entry.id}"))
+                                                Toast.makeText(context, "Enlace de repetición copiado", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.ContentCopy,
+                                                contentDescription = "Copiar enlace de repetición",
+                                                tint = SilverGray,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                shareReplayLink(
+                                                    context = context,
+                                                    replayId = entry.id,
+                                                    gameTitle = game.title,
+                                                    formattedScore = numberFmt.format(entry.score),
+                                                )
+                                            },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Share,
+                                                contentDescription = "Compartir enlace de repetición",
+                                                tint = SilverGray,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    }
                                     val isReplayLoading = itemLaunchState != null
                                     IconButton(
                                         onClick = {

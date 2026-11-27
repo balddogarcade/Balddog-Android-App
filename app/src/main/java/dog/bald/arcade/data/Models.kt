@@ -149,6 +149,7 @@ data class HighScoreDto(
 
 @Serializable
 data class LeaderboardEntryDto(
+    @SerialName("id") val id: String? = null,
     val rank: Long,
     @SerialName("user_id") val userId: String,
     val username: String,
@@ -225,6 +226,7 @@ data class GlobalLeaderboardEntryDto(
 
 @Serializable
 data class GameLeaderboardV2EntryDto(
+    @SerialName("id") val id: String? = null,
     val rank: Long,
     @SerialName("user_id") val userId: String,
     val username: String,
