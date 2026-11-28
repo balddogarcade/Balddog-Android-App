@@ -53,4 +53,27 @@ class MatchmakingModelsTest {
         assertEquals("sf2ce", stats.byGame.first().gameSlug)
         assertTrue(stats.byGame.first().openRooms == 1)
     }
+
+    @Test
+    fun `MatchmakingQueueRowDto deserializes full Supabase row with extra columns`() {
+        val rowRaw =
+            """
+            {
+              "id": "q1",
+              "user_id": "u1",
+              "game_id": "g1",
+              "game_slug": "tmnt2",
+              "endpoint": "1.2.3.4:7000|192.168.1.10:7000",
+              "voice_endpoint": "1.2.3.4:8000|192.168.1.10:8000",
+              "status": "matched",
+              "room_id": "550e8400-e29b-41d4-a716-446655440000",
+              "created_at": "2026-11-27T21:00:00Z",
+              "updated_at": "2026-11-27T21:00:05Z"
+            }
+            """.trimIndent()
+        val row = json.decodeFromString<MatchmakingQueueRowDto>(rowRaw)
+        assertEquals("matched", row.status)
+        assertEquals("550e8400-e29b-41d4-a716-446655440000", row.roomId)
+        assertEquals("tmnt2", row.gameSlug)
+    }
 }

@@ -2,6 +2,24 @@ package dog.bald.arcade.net
 
 import dog.bald.arcade.data.RoomDto
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Thread-safe one-shot gate ensuring a single matchmaking transition is processed
+ * even if Realtime and fallback polling emit the matched room concurrently.
+ */
+class MatchmakingTransitionGate {
+    private val consumed = AtomicBoolean(false)
+
+    fun tryConsume(isCurrentlySearching: Boolean): Boolean {
+        if (!isCurrentlySearching) return false
+        return consumed.compareAndSet(false, true)
+    }
+
+    fun reset() {
+        consumed.set(false)
+    }
+}
 
 sealed class RoomJoinEligibility {
     data object Eligible : RoomJoinEligibility()

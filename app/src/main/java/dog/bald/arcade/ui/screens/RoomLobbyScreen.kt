@@ -432,7 +432,7 @@ fun RoomLobbyScreen(
                     if (updated.updatedAt != lastUpdatedAt) {
                         lastUpdatedAt = updated.updatedAt
                         lastHeartbeatChangeMs = SystemClock.elapsedRealtime()
-                    } else if (SystemClock.elapsedRealtime() - lastHeartbeatChangeMs > 12_500L) {
+                    } else if (SystemClock.elapsedRealtime() - lastHeartbeatChangeMs > 20_500L) {
                         if (!leftRoom && (!matchLaunched || preparingMatch)) {
                             leftRoom = true
                             runCatching { repo.updateRoomSlot(room.id, "close_stale") }

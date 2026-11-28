@@ -73,6 +73,7 @@ import dog.bald.arcade.diagnostics.AnalyticsHelper
 import dog.bald.arcade.diagnostics.CrashlyticsHelper
 import dog.bald.arcade.diagnostics.PerformanceHelper
 import dog.bald.arcade.net.MatchmakingPolicy
+import dog.bald.arcade.net.MatchmakingTransitionGate
 import dog.bald.arcade.net.RoomJoinEligibility
 import dog.bald.arcade.ui.components.MatchmakingMiniBanner
 import dog.bald.arcade.ui.components.QuickMatchmakingCard
@@ -221,6 +222,7 @@ fun MainShellScreen(
     var matchmakingElapsedSec by remember { mutableStateOf(0L) }
     var matchmakingStats by remember { mutableStateOf<MatchmakingStatsDto?>(null) }
     var lastMatchmakingClickMs by remember { mutableStateOf(0L) }
+    val matchmakingGate = remember { MatchmakingTransitionGate() }
     var deepLinkErrorDialog by remember { mutableStateOf<Pair<String, GameDto?>?>(null) }
     var pendingRoomSwitchConfirm by remember { mutableStateOf<RoomDto?>(null) }
     val openGameDetail: (GameDto) -> Unit = { game ->
@@ -536,9 +538,33 @@ fun MainShellScreen(
                     endpoint = freshEndpoint,
                     voiceEndpoint = freshVoiceEndpoint,
                 )
+            }.onFailure { t ->
+                if (t is CancellationException) throw t
+                CrashlyticsHelper.recordNonFatal(t)
             }.getOrDefault(room)
         overlayStack = emptyList()
         activeRoom = updatedRoom
+    }
+
+    fun completeMatchmakingTransition(
+        roomId: String,
+        via: String,
+        slug: String,
+    ): Boolean {
+        if (!matchmakingGate.tryConsume(isMatchmaking)) return false
+        isMatchmaking = false
+        AnalyticsHelper.logMatchmakingMatched(slug, via, matchmakingElapsedSec)
+        CrashlyticsHelper.setMatchmakingContext("matched", slug)
+        scope.launch {
+            runCatching {
+                enterMatchedRoom(roomId)
+            }.onFailure { t ->
+                if (t is CancellationException) throw t
+                CrashlyticsHelper.logMatchmakingError(slug, "enter_room", t)
+                roomNoticeMsg = "Se encontró partida, pero no se pudo abrir la sala: ${t.toUserMessage()}"
+            }
+        }
+        return true
     }
 
     fun startQuickMatch(game: GameDto) {
@@ -548,6 +574,7 @@ fun MainShellScreen(
         if (isMatchmaking) return
 
         roomNoticeMsg = null
+        matchmakingGate.reset()
         matchmakingGame = game
         matchmakingElapsedSec = 0L
         isMatchmaking = true
@@ -568,12 +595,11 @@ fun MainShellScreen(
 
                 val res = repo.findOrEnqueueMatch(game.slug, endpoint, voiceEndpoint)
                 if (res.status == "matched" && !res.roomId.isNullOrBlank()) {
-                    isMatchmaking = false
-                    AnalyticsHelper.logMatchmakingMatched(game.slug, res.source, matchmakingElapsedSec)
-                    CrashlyticsHelper.setMatchmakingContext("matched", game.slug)
-                    enterMatchedRoom(res.roomId)
+                    completeMatchmakingTransition(res.roomId, res.source, game.slug)
                 }
             }.onFailure { t ->
+                if (t is CancellationException) throw t
+                matchmakingGate.reset()
                 isMatchmaking = false
                 AnalyticsHelper.logMatchmakingFailed(game.slug, t::class.simpleName ?: "error")
                 CrashlyticsHelper.setMatchmakingContext("error", game.slug)
@@ -586,6 +612,7 @@ fun MainShellScreen(
         if (!isMatchmaking) return
         val slug = matchmakingGame?.slug.orEmpty()
         val elapsed = matchmakingElapsedSec
+        matchmakingGate.reset()
         isMatchmaking = false
         AnalyticsHelper.logMatchmakingCancelled(slug, elapsed, reason)
         CrashlyticsHelper.setMatchmakingContext("cancelled", slug)
@@ -612,18 +639,16 @@ fun MainShellScreen(
         if (!isMatchmaking) return@LaunchedEffect
         val waitTrace = PerformanceHelper.startTrace("matchmaking_wait_to_match")
         val slug = matchmakingGame?.slug.orEmpty()
+        var traceStopped = false
 
         val realtimeJob =
             launch {
                 runCatching {
                     repo.observeMatchmakingMatch(currentUserId).collect { row ->
                         val matchedRoomId = row.roomId ?: return@collect
-                        if (isMatchmaking) {
-                            isMatchmaking = false
+                        if (completeMatchmakingTransition(matchedRoomId, "queue", slug)) {
+                            traceStopped = true
                             PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "realtime"))
-                            AnalyticsHelper.logMatchmakingMatched(slug, "queue", matchmakingElapsedSec)
-                            CrashlyticsHelper.setMatchmakingContext("matched", slug)
-                            enterMatchedRoom(matchedRoomId)
                         }
                     }
                 }
@@ -639,20 +664,28 @@ fun MainShellScreen(
                     repo.touchMatchmakingHeartbeat()
                 }
                 if (ticks % 4L == 0L) {
-                    val row = runCatching { repo.fetchMyMatchmakingRow() }.getOrNull()
+                    val rowResult = runCatching { repo.fetchMyMatchmakingRow() }
+                    val row = rowResult.getOrNull()
                     if (row != null && row.status == "matched" && !row.roomId.isNullOrBlank()) {
+                        if (completeMatchmakingTransition(row.roomId, "queue", slug)) {
+                            traceStopped = true
+                            PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "poll"))
+                        }
+                        break
+                    } else if (rowResult.isSuccess && row == null && ticks >= 8L) {
                         isMatchmaking = false
-                        PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "poll"))
-                        AnalyticsHelper.logMatchmakingMatched(slug, "queue", matchmakingElapsedSec)
-                        CrashlyticsHelper.setMatchmakingContext("matched", slug)
-                        enterMatchedRoom(row.roomId)
+                        matchmakingGate.reset()
+                        traceStopped = true
+                        PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "expired"))
+                        CrashlyticsHelper.setMatchmakingContext("expired", slug)
+                        roomNoticeMsg = "La búsqueda expiró. Intenta nuevamente."
                         break
                     }
                 }
             }
         } finally {
             realtimeJob.cancel()
-            if (isMatchmaking) {
+            if (!traceStopped) {
                 PerformanceHelper.stopTrace(waitTrace, mapOf("rom_slug" to slug, "via" to "cancelled"))
             }
         }

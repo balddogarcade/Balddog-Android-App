@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed quick-match Player 1 failing to enter the matched room and leaving the room to expire via `close_stale` while Player 2 waited inside: decoupled `enterMatchedRoom` from the cancellable `LaunchedEffect(isMatchmaking, currentUserId)` into `MainShellScreen`'s composition `scope` with an atomic `MatchmakingTransitionGate`, handled queue expiration when `fetchMyMatchmakingRow()` returns `null`, and extended the stale-host grace window from 12.5s to 20.5s in `RoomLobbyScreen` and 20s in `update_room_slot` (`053_harden_matchmaking_room_grace.sql`).
 - Fixed QR/deep-link room joins (`https://bald.dog/room/<room_id>`) failing with `"The coroutine was canceled because it left the composition"` and leaving the user on the Catalog tab by launching the room lookup/join inside `MainShellScreen`'s composition `scope`, rethrowing `CancellationException`, reusing the preloaded `RoomDto` in `enterMatchedRoom`, and surfacing failures via `deepLinkErrorDialog`.
 
 ### Changed

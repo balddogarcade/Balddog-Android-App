@@ -3,6 +3,7 @@ package dog.bald.arcade.net
 import dog.bald.arcade.data.RoomDto
 import dog.bald.arcade.data.RoomSlotInfo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -74,5 +75,15 @@ class MatchmakingPolicyTest {
         assertEquals("00:09", MatchmakingPolicy.formatElapsedMmSs(9))
         assertEquals("01:05", MatchmakingPolicy.formatElapsedMmSs(65))
         assertEquals("10:00", MatchmakingPolicy.formatElapsedMmSs(600))
+    }
+
+    @Test
+    fun `MatchmakingTransitionGate allows only one transition per search cycle`() {
+        val gate = MatchmakingTransitionGate()
+        assertFalse(gate.tryConsume(isCurrentlySearching = false))
+        assertTrue(gate.tryConsume(isCurrentlySearching = true))
+        assertFalse(gate.tryConsume(isCurrentlySearching = true))
+        gate.reset()
+        assertTrue(gate.tryConsume(isCurrentlySearching = true))
     }
 }
