@@ -45,7 +45,7 @@ fun GameDetailHistoryCard(
             ) {
                 Icon(Icons.Default.PlayCircle, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Ver gameplay en YouTube")
+                Text("Ver gameplay")
             }
             Spacer(modifier = Modifier.height(12.dp))
         }

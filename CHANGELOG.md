@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Replaced the external YouTube browser intent in `GameDetailScreen` with an in-app 16:9 embedded player dialog (`YouTubeEmbedPlayerDialog` using `youtube-nocookie.com/embed`) with automatic `WebView` cleanup on dismiss and a secondary "Abrir en YouTube" fallback button.
+
 ## [0.5.0] - 2026-11-27
 
 ### Fixed
