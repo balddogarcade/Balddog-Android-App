@@ -163,6 +163,7 @@ fun GameDetailHeader(
         ) {
             Button(
                 onClick = onPlayClick,
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
@@ -171,6 +172,7 @@ fun GameDetailHeader(
             }
             OutlinedButton(
                 onClick = onRankingClick,
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(Icons.Default.EmojiEvents, contentDescription = null)

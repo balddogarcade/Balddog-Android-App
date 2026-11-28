@@ -42,7 +42,6 @@ import dog.bald.arcade.ui.components.GameDetailGallery
 import dog.bald.arcade.ui.components.GameDetailHeader
 import dog.bald.arcade.ui.components.GameDetailHistoryCard
 import dog.bald.arcade.ui.components.GameDetailSpecsCard
-import dog.bald.arcade.ui.components.YouTubeEmbedPlayerDialog
 import dog.bald.arcade.ui.components.SkeletonBox
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,6 +113,7 @@ fun GameDetailScreen(
                 if (onQuickMatchClick != null) {
                     androidx.compose.material3.OutlinedButton(
                         onClick = { onQuickMatchClick(game) },
+                        shape = androidx.compose.material3.MaterialTheme.shapes.small,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("BUSCAR PARTIDA RÁPIDA (ONLINE)")
@@ -126,36 +126,22 @@ fun GameDetailScreen(
                     },
                 )
                 GameDetailSpecsCard(game = game)
-                var activeVideoId by remember { mutableStateOf<String?>(null) }
-
                 GameDetailHistoryCard(
                     game = game,
                     onWatchTrailer = { videoId ->
                         AnalyticsHelper.logGameTrailerOpened(game.slug)
-                        activeVideoId = videoId
+                        runCatching {
+                            val intent =
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://www.youtube.com/watch?v=$videoId"),
+                                )
+                            context.startActivity(intent)
+                        }.onFailure { err ->
+                            CrashlyticsHelper.logGameDetailError(game.slug, err)
+                        }
                     },
                 )
-
-                activeVideoId?.let { videoId ->
-                    YouTubeEmbedPlayerDialog(
-                        videoId = videoId,
-                        gameTitle = game.title,
-                        onDismiss = { activeVideoId = null },
-                        onOpenExternal = {
-                            activeVideoId = null
-                            runCatching {
-                                val intent =
-                                    Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse("https://www.youtube.com/watch?v=$videoId"),
-                                    )
-                                context.startActivity(intent)
-                            }.onFailure { err ->
-                                CrashlyticsHelper.logGameDetailError(game.slug, err)
-                            }
-                        },
-                    )
-                }
             }
         }
     }
