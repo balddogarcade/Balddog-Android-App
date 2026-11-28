@@ -514,8 +514,11 @@ fun MainShellScreen(
         }
     }
 
-    suspend fun enterMatchedRoom(roomId: String) {
-        val room = repo.fetchRoomById(roomId) ?: return
+    suspend fun enterMatchedRoom(
+        roomId: String,
+        preloadedRoom: RoomDto? = null,
+    ) {
+        val room = preloadedRoom ?: repo.fetchRoomById(roomId) ?: return
         val port = (7000..7099).random()
         val voicePort = port + 1000
         myUdpPort = port
@@ -674,32 +677,38 @@ fun MainShellScreen(
         if (isInitialLoading) return@LaunchedEffect
         onConsumePendingDeepLinkRoomId()
 
-        val dlTrace = PerformanceHelper.startTrace("deeplink_room_join")
-        runCatching {
-            val targetRoom = repo.fetchRoomById(roomId)
-            when (val eligibility = MatchmakingPolicy.evaluateRoomJoinEligibility(targetRoom, currentUserId)) {
-                is RoomJoinEligibility.Ineligible -> {
-                    PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to eligibility.reasonCode))
-                    AnalyticsHelper.logRoomDeepLinkOpened(true, eligibility.reasonCode)
-                    val targetGame = targetRoom?.let { r -> games.firstOrNull { it.id == r.gameId } }
-                    deepLinkErrorDialog = eligibility.userMessage to targetGame
-                }
-                is RoomJoinEligibility.Eligible -> {
-                    val room = targetRoom!!
-                    PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "eligible"))
-                    AnalyticsHelper.logRoomDeepLinkOpened(true, "eligible")
-                    if (activeRoom != null && activeRoom?.id != room.id) {
-                        pendingRoomSwitchConfirm = room
-                    } else {
-                        enterMatchedRoom(room.id)
+        scope.launch {
+            val dlTrace = PerformanceHelper.startTrace("deeplink_room_join")
+            try {
+                val targetRoom = repo.fetchRoomById(roomId)
+                when (val eligibility = MatchmakingPolicy.evaluateRoomJoinEligibility(targetRoom, currentUserId)) {
+                    is RoomJoinEligibility.Ineligible -> {
+                        PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to eligibility.reasonCode))
+                        AnalyticsHelper.logRoomDeepLinkOpened(true, eligibility.reasonCode)
+                        val targetGame = targetRoom?.let { r -> games.firstOrNull { it.id == r.gameId } }
+                        deepLinkErrorDialog = eligibility.userMessage to targetGame
+                    }
+                    is RoomJoinEligibility.Eligible -> {
+                        val room = targetRoom!!
+                        PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "eligible"))
+                        AnalyticsHelper.logRoomDeepLinkOpened(true, "eligible")
+                        if (activeRoom != null && activeRoom?.id != room.id) {
+                            pendingRoomSwitchConfirm = room
+                        } else {
+                            enterMatchedRoom(room.id, preloadedRoom = room)
+                        }
                     }
                 }
+            } catch (ce: CancellationException) {
+                PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "cancelled"))
+                throw ce
+            } catch (t: Throwable) {
+                PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "error"))
+                CrashlyticsHelper.logDeepLinkEvent("error", t.message ?: "unknown")
+                CrashlyticsHelper.recordNonFatal(t)
+                AnalyticsHelper.logRoomDeepLinkOpened(true, "error")
+                deepLinkErrorDialog = "No se pudo abrir la sala desde el enlace: ${t.toUserMessage()}" to null
             }
-        }.onFailure { t ->
-            PerformanceHelper.stopTrace(dlTrace, mapOf("outcome" to "error"))
-            CrashlyticsHelper.logDeepLinkEvent("error", t.message ?: "unknown")
-            AnalyticsHelper.logRoomDeepLinkOpened(true, "error")
-            roomNoticeMsg = "No se pudo abrir la sala desde el enlace: ${t.toUserMessage()}"
         }
     }
 

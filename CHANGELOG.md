@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed QR/deep-link room joins (`https://bald.dog/room/<room_id>`) failing with `"The coroutine was canceled because it left the composition"` and leaving the user on the Catalog tab by launching the room lookup/join inside `MainShellScreen`'s composition `scope`, rethrowing `CancellationException`, reusing the preloaded `RoomDto` in `enterMatchedRoom`, and surfacing failures via `deepLinkErrorDialog`.
+
 ### Changed
 - Replaced the external YouTube browser intent in `GameDetailScreen` with an in-app 16:9 embedded player dialog (`YouTubeEmbedPlayerDialog` using `youtube-nocookie.com/embed`) with automatic `WebView` cleanup on dismiss and a secondary "Abrir en YouTube" fallback button.
 
